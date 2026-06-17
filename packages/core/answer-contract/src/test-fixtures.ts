@@ -27,7 +27,7 @@ export function evidenceFixture(id: string): Evidence {
 export function unblockFixture(): UnblockPath {
   return {
     whatsMissing: [
-      { kind: 'unverified_mapping', description: 'usage.account_id ↔ invoices.customer_id is Suggested' },
+      { kind: 'unverified_mapping', description: 'invoices.customer_ref → accounts.id is Suggested' },
     ],
     nextSteps: [
       { kind: 'notify_admin_verify', label: 'Notify an Admin to verify', createsSuggestion: true },

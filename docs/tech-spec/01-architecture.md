@@ -79,6 +79,17 @@ export interface SafetyGate {
   check(sql: string, ctx: SafetyContext): SafetyDecision;   // deterministic, sync
 }
 
+export interface Policy {
+  rowLimit: number;               // hard cap; executor appends a LIMIT when absent
+  timeoutMs: number;              // per-statement, application-enforced
+  statementTimeoutMs?: number;    // optional DB-level timeout (defense in depth)
+  confirmation: {                 // PRD default-strict triggers
+    onBroadScan: boolean;         // unfiltered scan of a large table
+    onSensitiveAccess: boolean;   // a sensitive column is touched
+  };
+  largeTables?: ReadonlySet<string>; // empty/omitted ⇒ any unfiltered scan is "broad"
+}
+
 export interface SafetyContext {
   policy: Policy;                 // M0: the Sample's default Policy
   allowedTables: ReadonlySet<string>;
@@ -90,21 +101,22 @@ export type SafetyDecision =
   | { verdict: 'reject'; reason: SafetyRejectReason; detail: string };
 
 export type SafetyRejectReason =
-  | 'not_read_only'        // INSERT/UPDATE/DELETE/DDL/etc.
+  | 'not_read_only'        // non-SELECT, incl. data-modifying CTE, EXPLAIN ANALYZE
   | 'multiple_statements'
   | 'unauthorized_table'
-  | 'admin_or_maintenance' // VACUUM, COPY, SET ROLE, ...
-  | 'unparseable';
+  | 'admin_or_maintenance' // denylisted functions (pg_read_file, dblink, lo_*, ...)
+  | 'unparseable';         // also: unmodelled admin stmts (VACUUM/COPY/SET) → fail-closed
 ```
 
-The gate parses SQL with `pgsql-ast-parser` and decides on the AST, never on regex. See `03-agent-and-safety.md` for the full rule list. **The AgentProvider cannot override a `reject`.**
+The gate parses SQL with `pgsql-ast-parser` and decides on the AST, never on regex. It **fails closed**: anything it cannot parse or recognise is rejected. See `03-agent-and-safety.md` for the full rule list, the parser caveats, and how `EXPLAIN` is handled. **The AgentProvider cannot override a `reject`.**
 
 ### 2.3 Redactor
 
 ```ts
 export interface Redactor {
   // Bounds and redacts a raw QueryRunResult before it is (a) recorded as Evidence
-  // and (b) summarized back to the AgentProvider.
+  // (redacted; raw rows are never persisted — see 10 §3) and (b) summarized back
+  // to the AgentProvider.
   redact(result: QueryRunResult, ctx: RedactionContext): RedactedResult;
 }
 
@@ -170,7 +182,7 @@ In M0 both the MetadataStore and the Sample data live in **pglite** (separate lo
 3. **AgentRunner ↔ AgentProvider.** The provider streams `reasoning` steps (forwarded to the client as SSE `reasoning` events) and eventually a `propose_sql` step.
 4. **SafetyGate.check.** Deterministic. On `reject` → the runner converts it to an Unblock Path / Answer status (no execution). On `allow` → continue.
 5. **QueryExecutor.run** against the single target Connector, with `rowLimit`/`timeoutMs` from Policy.
-6. **Redactor.redact.** Produces the bounded result. The raw result is recorded by **EvidenceRecorder**; the bounded result is fed back to the provider as a `toolResult`.
+6. **Redactor.redact.** Produces the bounded, redacted result. **EvidenceRecorder** then records the `QueryRun` (execution metadata) and the *redacted* Evidence — raw rows are never persisted (`10 §3`). The same bounded result is fed back to the provider as a `toolResult`.
 7. Steps 3–6 repeat until the provider emits `final` (or `need_clarification`).
 8. **AgentRunner validates** the `final` draft against the Answer Contract (every Key Finding cites a recorded Evidence ref; Status × Confidence legal; non-`Answered` carries an Unblock Path). Invalid drafts are rejected/repaired, never shown raw.
 9. **MetadataStore.appendAnswerVersion** persists the Answer as a new version; the SSE stream emits a final `answer` event and closes.

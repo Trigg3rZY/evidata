@@ -141,7 +141,7 @@ export interface UnblockAction {
 
 export interface MissingInfo {
   kind: MissingKind;
-  /** Precise, named blocker, e.g. "usage.account_id ↔ invoices.customer_id is Suggested". */
+  /** Precise, named blocker, e.g. "invoices.customer_ref → accounts.id is Suggested". */
   description: LocalizedText;
 }
 

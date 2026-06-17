@@ -46,7 +46,7 @@ The `AgentRunner` (in `packages/core/agent`) drives one turn. The provider is a 
 
 - **THINKING** — consume `AgentStep`s from `AgentProvider.runInvestigation`. `reasoning` steps are forwarded to the client as SSE and (on success) collapse into `whatIDid`.
 - **SAFETY_GATE** — on `propose_sql`, run `SafetyGate.check` (sync, deterministic). `reject` → UNBLOCK or BlockedByPolicy. `allow` with `needsConfirmation` → emit a confirmation request (M0 auto-confirms low-risk per Sample Policy; the confirmation UI path is stubbed and exercised by one scenario).
-- **EXECUTE** — `QueryExecutor.run` (single connection, Policy `rowLimit`/`timeoutMs`) → `Redactor.redact` → `EvidenceRecorder.record` (raw, bound to the pending version) → feed the **bounded** result back to the provider as a `toolResult`.
+- **EXECUTE** — `QueryExecutor.run` (single connection, Policy `rowLimit`/`timeoutMs`) → `Redactor.redact` → `EvidenceRecorder.record` (the `QueryRun` metadata + the *redacted* Evidence, bound to the pending version; raw rows are never persisted — `10 §3`) → feed the **bounded** result back to the provider as a `toolResult`.
 - **UNBLOCK** — build an `UnblockPath` from the reject reason / clarification (mapping in §5); produce a non-`Answered` Answer.
 - **FINALIZE** — assemble the `Answer`, run `validateAnswer`. If violations: re-prompt the provider once with the violation list; if still invalid, downgrade to `NoReliableAnswer` + Unblock Path (never show an invalid answer). Persist as a new version; emit SSE `answer`.
 
@@ -73,25 +73,38 @@ M0 implements this as a lightweight classifier (heuristics + a cheap provider ca
 
 Rules (M0):
 
+0. **EXPLAIN** — `EXPLAIN <select>` is permitted (it does not execute the query). The gate recognises a leading `EXPLAIN` lexically, strips it (and any `(…)` / bare option list), and validates the **inner** statement through the full AST pipeline below. `EXPLAIN ANALYZE` actually executes the statement → `reject: not_read_only`. This lexical strip is the gate's *only* non-AST step and makes no safety decision: a mis-strip can only yield a statement that fails to parse (→ rejected), never an unsafe execution.
 1. **Parse** — unparseable → `reject: unparseable`.
-2. **Single statement** — more than one → `reject: multiple_statements`.
-3. **Read-only only** — statement must be `SELECT` (or `WITH … SELECT`, `EXPLAIN` of a select). Any `INSERT/UPDATE/DELETE/MERGE/DDL/DCL/TRUNCATE/COPY` → `reject: not_read_only`.
-4. **No admin/maintenance** — `SET ROLE`, `VACUUM`, `ANALYZE`, `COPY … TO/FROM`, function calls on a denylist (e.g. `pg_read_file`, `dblink`, `lo_*`) → `reject: admin_or_maintenance`.
-5. **Authorized tables** — every referenced relation must be in `allowedTables` → else `reject: unauthorized_table`.
-6. **Sensitive columns** — record touched sensitive columns; the Redactor enforces masking (the Gate flags, the Redactor acts).
+2. **Single statement** — more than one → `reject: multiple_statements` (empty input → `unparseable`).
+3. **Read-only only** — the statement and **every CTE body and UNION arm it contains** must be `SELECT`/`VALUES`/`WITH … SELECT`. The check recurses, so a data-modifying CTE (`WITH x AS (DELETE … RETURNING …) SELECT …`) is caught → `reject: not_read_only`. Any `INSERT/UPDATE/DELETE/MERGE/DDL/DCL/TRUNCATE` likewise → `reject: not_read_only`.
+4. **No admin/maintenance functions** — function calls on a denylist → `reject: admin_or_maintenance`. The denylist covers filesystem/remote/stateful functions: `pg_read_file*`, `pg_read_binary_file`, `pg_ls_dir`, `pg_stat_file`, `pg_read_server_files`, `dblink*`, `lo_*`, `pg_sleep`, `pg_terminate_backend`, `pg_reload_conf`, `set_config`.
+5. **Authorized tables** — every referenced relation (CTE names excluded — they are not real relations) must be in `allowedTables`, matched bare or as `schema.table` → else `reject: unauthorized_table`.
+6. **Sensitive columns** — record touched sensitive columns (conservatively: flagged when the table is touched and the query selects `*` or names the column); the Redactor enforces masking (the Gate flags, the Redactor acts; precise alias→table resolution is deferred to the Redactor, §4).
 7. **Bounds** — if no `LIMIT`, the executor appends the Policy `rowLimit`; a statement timeout is always set.
-8. **Confirmation triggers** — broad scans (no `WHERE` on a large table), sensitive-column access, or missing time window set `needsConfirmation: true` (PRD default-strict Policy).
+8. **Confirmation triggers** — broad scans (no top-level `WHERE` on a large table per Policy `largeTables`) or sensitive-column access set `needsConfirmation: true` (PRD default-strict Policy).
 
 Output: `SafetyDecision` (`allow` with touched tables/sensitive + `needsConfirmation`, or `reject` with reason + product-level detail). The detail is product-level text; raw parser errors never reach the client.
 
+**Parser caveats (fail-closed).** With `pgsql-ast-parser@12`, several admin/maintenance statements are *not modelled* — `SET ROLE`, `VACUUM`, `ANALYZE`, `COPY … TO/FROM`, `WITH RECURSIVE`, `SELECT INTO`. These fail to parse and are therefore rejected as `unparseable`. That is the desired outcome (fail-closed: an unrecognised statement never executes), so `admin_or_maintenance` is reserved specifically for denylisted *functions* inside otherwise-valid SQL. If a future parser version models these, rule 4 gains explicit statement-type rejections without weakening the boundary.
+
 ## 4. Redactor & bounded context
 
-`packages/core/redaction`. Between execution and both (a) Evidence recording and (b) the provider feedback:
+`packages/core/redaction`. A single, deterministic pass over the raw `QueryRunResult` that produces the `RedactedResult` (shape in `01 §2.3`). Its output is the **only** thing that flows onward — to both (a) Evidence recording and (b) the provider feedback. The raw result exists only in-process during this pass; it is never persisted (`10 §3`) and never sent to the model.
 
-- Mask sensitive column **values** per Policy; mask/omit out-of-scope identifiers (PRD D4) for the role that will view the Evidence.
-- Truncate to `rowLimit`; prefer an `aggregateSummary` + a small `sampleRows` set over full rows.
-- Never emit credentials, secrets, or unauthorized fields.
-- The provider only ever receives `RedactedResult` — the single crossing point to the (externally-treated) model.
+**Two phases with the Gate.** The Gate flags sensitive columns *conservatively* (any column whose table is touched and that appears via `*` or by name) without resolving aliases — over-flagging is safe because it cannot cause a leak. The Redactor is where precise action happens: it resolves `alias → table → column`, then masks exactly the sensitive values. The Gate decides *whether*; the Redactor decides *what* and *how*.
+
+**Masking strategy.**
+- Mask sensitive column **values in place** (e.g. `j•••@acme.com` / `▒▒▒`) rather than dropping the column, so row shape and structural context are preserved for both the viewer and the provider.
+- Mask/omit out-of-scope identifiers per the **viewing role** (PRD D4). M0 runs as a single local dev identity, but `RedactionContext` already carries the role so the M2 capability matrix slots in unchanged.
+- Every column whose values were masked or omitted is listed in `redactedColumns`.
+
+**Bounding.**
+- Truncate to Policy `rowLimit`; set `truncated` and the true `rowCount`.
+- Prefer an `aggregateSummary` plus a **small** capped `sampleRows` set over returning full rows — the provider reasons over the summary, not the raw dataset.
+
+**Surfacing.** `redactedColumns` is carried into the recorded Evidence (`10 §4`) and drives a redaction Caveat on the Answer (Sample scenario `sensitive-field`, `05 §4.6`), so masking is visible, not silent.
+
+**Guarantee.** The Redactor never emits credentials, secrets, or unauthorized fields. Its `RedactedResult` is the single crossing point to the (externally-treated) model — the boundary holds even though the Sample has no real secrets, so it is real and tested before M1 brings real data.
 
 ## 5. Decision Boundaries → Unblock Path mapping
 
@@ -130,7 +143,7 @@ Rules from PRD `Transient Investigation Updates`: steps show while active, colla
 
 - read-only: enforced in SAFETY_GATE (rule 3) — any execute path requires `allow`.
 - no secrets to provider: enforced in Redactor (§4) — provider input is `RedactedResult` only.
-- every Key Finding cites Evidence: enforced in FINALIZE via `validateAnswer`.
-- every query recorded: EXECUTE always calls `EvidenceRecorder.record` before feeding back.
+- every Key Finding cites Evidence: enforced in FINALIZE via `validateAnswer` before persist (`10 §9`, G3).
+- every query recorded: EXECUTE always calls `EvidenceRecorder.record` before feeding back — one `QueryRun` row per execution (`10 §9`, G4).
 
 Each has a corresponding smoke assertion in spec 06.
