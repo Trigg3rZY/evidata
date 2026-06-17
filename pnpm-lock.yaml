@@ -120,7 +120,36 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
 
-  packages/core/ports: {}
+  packages/core/investigation:
+    dependencies:
+      '@evidata/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../answer-contract
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+    devDependencies:
+      '@evidata/connector-sample':
+        specifier: workspace:*
+        version: link:../../connectors/sample
+      '@evidata/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@evidata/redaction':
+        specifier: workspace:*
+        version: link:../redaction
+      '@evidata/safety':
+        specifier: workspace:*
+        version: link:../safety
+
+  packages/core/ports:
+    dependencies:
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../answer-contract
 
   packages/core/redaction:
     dependencies:
@@ -142,6 +171,12 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.2.17
         version: 0.2.17
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../core/answer-contract
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../core/ports
       drizzle-orm:
         specifier: ^0.38.3
         version: 0.38.4(@electric-sql/pglite@0.2.17)(@types/react@19.2.17)(react@19.2.7)

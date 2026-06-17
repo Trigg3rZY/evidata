@@ -25,7 +25,7 @@ import type {
   AgentProvider,
   AgentRunEvent,
   AnswerDraft,
-  RecordedQueryRun,
+  QueryRunRecord,
   RunResult,
   ToolResult,
 } from './types';
@@ -75,7 +75,7 @@ export class AgentRunner {
 
     const history: AgentHistory = { toolResults: [], reasoning: [] };
     const evidence: Evidence[] = [];
-    const queryRuns: RecordedQueryRun[] = [];
+    const queryRuns: QueryRunRecord[] = [];
 
     for (let iter = 0; iter < maxIterations; iter++) {
       const decision = await this.deps.provider.next(input, history);
@@ -257,7 +257,7 @@ export class AgentRunner {
     input: AgentInput,
     draft: Answer,
     evidence: Evidence[],
-    queryRuns: RecordedQueryRun[],
+    queryRuns: QueryRunRecord[],
     now: () => Date,
   ): RunResult {
     // Every status carries the evidence actually gathered this turn: an answered

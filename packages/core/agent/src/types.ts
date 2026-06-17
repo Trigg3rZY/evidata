@@ -10,6 +10,7 @@
  * boundary identical while avoiding the bidirectional-generator typing pitfalls.
  */
 import type {
+  Answer,
   AssumptionItem,
   Chart,
   Confidence,
@@ -18,7 +19,7 @@ import type {
   LocalizedText,
   MissingInfo,
 } from '@evidata/answer-contract';
-import type { ColumnMeta, SchemaSnapshot } from '@evidata/ports';
+import type { ColumnMeta, QueryRunRecord, SchemaSnapshot } from '@evidata/ports';
 
 /** Verified-only Data Source context handed to the provider (spec 09 §2.3). */
 export interface AgentContext {
@@ -87,20 +88,11 @@ export type AgentRunEvent =
   | { type: 'query'; purpose: string; status: 'running' }
   | { type: 'query'; purpose: string; status: 'ok'; rowCount: number; elapsedMs: number };
 
-/** Audit record of one executed query (G4). Gate-rejected proposals never execute → no record. */
-export interface RecordedQueryRun {
-  id: string;
-  connectorId: string;
-  sql: string;
-  status: 'ok';
-  rowCount: number;
-  truncated: boolean;
-  elapsedMs: number;
-  evidenceRef: string;
-}
+/** Audit record of one executed query (G4); canonical shape lives in ports. */
+export type { QueryRunRecord };
 
 export interface RunResult {
-  answer: import('@evidata/answer-contract').Answer;
+  answer: Answer;
   /** Every executed query, in order (basis of the G4 count). */
-  queryRuns: RecordedQueryRun[];
+  queryRuns: QueryRunRecord[];
 }
