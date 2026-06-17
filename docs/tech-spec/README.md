@@ -92,10 +92,11 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `07-v1-blueprint.md` | Full-V1 umbrella: system at end of V1, milestone→capability map, data-model evolution, trust boundary. |
 | `08-m1-real-postgres-and-execution.md` | M1 architecture skeleton: real PostgreSQL, introspection, credentials, auth, metadata store. |
 | `09-m2-calibration-publishing-and-roles.md` | M2 architecture skeleton: calibration, Suggested→Verified, Policy, lifecycle, roles, correction loop. |
+| `10-m0-data-model-and-persistence.md` | M0 MetadataStore entities, contract-as-document + normalized provenance, Drizzle schema draft, Answer versioning, guardrail traceability. |
 | `packages/core/answer-contract/src/answer-contract.ts` | Source-of-truth TypeScript types (moved out of `docs/` into the package once code landed). |
 | `packages/core/answer-contract/src/answer-contract.schema.json` | JSON Schema kept in lockstep with the types (C1 schema-sync test enforces no drift). |
 
-Depth: M0 (01–06) is implementation-level; M1/M2 (08, 09) are architecture-skeleton; `07` is the umbrella blueprint.
+Depth: M0 (01–06, 10) is implementation-level; M1/M2 (08, 09) are architecture-skeleton; `07` is the umbrella blueprint.
 
 ## PRD traceability (M0)
 
@@ -105,6 +106,7 @@ Depth: M0 (01–06) is implementation-level; M1/M2 (08, 09) are architecture-ske
 | Interaction Model (Thread, composer, streamed reasoning, follow-up vs new) | `03-agent-and-safety.md`, `04-api-and-frontend.md` |
 | Unblock Path | `02` (types), `03` (mapping), `06` (test) |
 | AI Execution Boundary, Safety Gate, Redaction, Evidence Recorder | `03-agent-and-safety.md` |
+| Metadata persistence, Answer versioning, Evidence/QueryRun audit | `10-m0-data-model-and-persistence.md` |
 | Sample Data Source | `05-sample-data-source.md` |
 | Bilingual + theme + a11y baseline | `04-api-and-frontend.md` |
 | Guardrail Signals (read-only, no secrets to provider, every finding cites evidence) | `03` (enforcement), `06` (assertions) |

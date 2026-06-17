@@ -161,7 +161,7 @@ export interface MetadataStore {
 }
 ```
 
-In M0 both the MetadataStore and the Sample data live in **pglite** (separate logical databases / schemas), satisfying the PRD rule that product metadata is never written into the business database while keeping zero external dependencies.
+In M0 both the MetadataStore and the Sample data live in **pglite** (separate logical databases / schemas), satisfying the PRD rule that product metadata is never written into the business database while keeping zero external dependencies. The relational schema behind these interfaces — the tables, how the Answer Contract is stored without drift, how each `QueryRun`/`Evidence` row binds to an Answer version, and the append-only versioning — is specified in `10-m0-data-model-and-persistence.md`.
 
 ## 3. Data flow of one Investigation turn
 
