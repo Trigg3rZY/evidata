@@ -13,9 +13,11 @@ import { Button } from '@/components/ui/button';
 export function UnblockPathView({
   unblock,
   onFollowup,
+  labels,
 }: {
   unblock: UnblockPath;
   onFollowup: (question: string) => void;
+  labels: { whatsMissing: string; recordedForAdmin: string };
 }) {
   const [noted, setNoted] = useState<Set<number>>(new Set());
 
@@ -30,7 +32,7 @@ export function UnblockPathView({
 
   return (
     <div className="rounded-md border border-border bg-secondary px-4 py-3">
-      <div className="text-sm font-medium">What's missing</div>
+      <div className="text-sm font-medium">{labels.whatsMissing}</div>
       <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
         {unblock.whatsMissing.map((m, i) => (
           <li key={i}>{m.description}</li>
@@ -44,7 +46,7 @@ export function UnblockPathView({
               className="inline-flex items-center gap-1.5 rounded-md bg-status-answered-bg px-3 py-1.5 text-xs font-medium text-status-answered"
             >
               <Check className="h-3.5 w-3.5" aria-hidden />
-              Recorded for an Admin
+              {labels.recordedForAdmin}
             </span>
           ) : (
             <Button key={i} variant="outline" size="sm" onClick={() => handle(action, i)}>

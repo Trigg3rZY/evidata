@@ -1,5 +1,6 @@
 import { TriangleAlert } from 'lucide-react';
 import type { Answer } from '@evidata/answer-contract';
+import type { AnswerLabels } from '@/lib/i18n';
 import { ConfidenceMeter } from './confidence-meter';
 import { EvidenceItem } from './evidence-item';
 import { StatusBadge } from './status-badge';
@@ -7,20 +8,28 @@ import { UnblockPathView } from './unblock-path';
 
 /**
  * Renders one Answer Contract document (spec 04 §2). A pure function of `answer`
- * plus a follow-up callback — the same object the smoke tests validate.
+ * plus a follow-up callback and resolved chrome `labels` — the same object the
+ * smoke tests validate. It never calls `useI18n`; labels are threaded in so the
+ * component (and its children) stay presentational.
  */
 export function AnswerView({
   answer,
   onFollowup,
+  labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
+  labels: AnswerLabels;
 }) {
   return (
     <article className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <StatusBadge status={answer.status} />
-        <ConfidenceMeter confidence={answer.confidence} reason={answer.confidenceReason} />
+        <StatusBadge status={answer.status} labels={labels.status} />
+        <ConfidenceMeter
+          confidence={answer.confidence}
+          reason={answer.confidenceReason}
+          labels={labels.confidence}
+        />
         <span className="ml-auto text-xs text-muted-foreground">
           v{answer.meta.version}
           {answer.meta.isLatest ? ' · latest' : ''}
@@ -31,7 +40,7 @@ export function AnswerView({
 
       {answer.whatIDid && (
         <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer">What I did</summary>
+          <summary className="cursor-pointer">{labels.whatIDid}</summary>
           <p className="mt-1 leading-relaxed">{answer.whatIDid}</p>
         </details>
       )}
@@ -62,7 +71,7 @@ export function AnswerView({
 
       {answer.evidence.length > 0 && (
         <section className="flex flex-col gap-2">
-          <div className="text-xs font-medium text-muted-foreground">Evidence</div>
+          <div className="text-xs font-medium text-muted-foreground">{labels.evidence}</div>
           {answer.evidence.map((e) => (
             <EvidenceItem key={e.id} evidence={e} />
           ))}
@@ -71,7 +80,7 @@ export function AnswerView({
 
       {answer.assumptions.length > 0 && (
         <section className="text-sm">
-          <div className="font-medium">Assumptions</div>
+          <div className="font-medium">{labels.assumptions}</div>
           <ul className="mt-1 list-disc pl-5 text-muted-foreground">
             {answer.assumptions.map((a, i) => (
               <li key={i}>{a.text}</li>
@@ -94,7 +103,9 @@ export function AnswerView({
         </section>
       )}
 
-      {answer.unblock && <UnblockPathView unblock={answer.unblock} onFollowup={onFollowup} />}
+      {answer.unblock && (
+        <UnblockPathView unblock={answer.unblock} onFollowup={onFollowup} labels={labels.unblock} />
+      )}
 
       {answer.recommendedFollowups.length > 0 && (
         <section className="flex flex-wrap gap-2">

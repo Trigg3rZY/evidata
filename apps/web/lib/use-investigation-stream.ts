@@ -75,10 +75,25 @@ export interface UseInvestigationStream extends StreamState {
   reset: () => void;
 }
 
+/**
+ * Localized text for the two client-side stream failures. Passed in (not held as
+ * English literals) so the messages follow the active language; the catalog in
+ * `lib/i18n` is the single source. The server's own `error` frame is separate.
+ */
+export interface StreamErrorMessages {
+  requestFailed: string;
+  networkError: string;
+}
+
 /** Drives one Ask Data turn over the SSE endpoint, accumulating progress + the final Answer. */
-export function useInvestigationStream(): UseInvestigationStream {
+export function useInvestigationStream(errorMessages: StreamErrorMessages): UseInvestigationStream {
   const [state, setState] = useState<StreamState>(INITIAL);
   const controllerRef = useRef<AbortController | null>(null);
+  // Keep the latest localized messages reachable from the stable `ask` callback
+  // without rebuilding it on every language change. (Local `messages` below is
+  // the parsed SSE batch — distinct from these failure strings.)
+  const errorMessagesRef = useRef(errorMessages);
+  errorMessagesRef.current = errorMessages;
 
   // Abort any in-flight stream on unmount (no state updates after unmount).
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -102,7 +117,11 @@ export function useInvestigationStream(): UseInvestigationStream {
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
-          setState((s) => ({ ...s, status: 'error', error: 'The request could not be started.' }));
+          setState((s) => ({
+            ...s,
+            status: 'error',
+            error: errorMessagesRef.current.requestFailed,
+          }));
           return;
         }
         const reader = res.body.getReader();
@@ -126,7 +145,7 @@ export function useInvestigationStream(): UseInvestigationStream {
         setState((s) => ({
           ...s,
           status: 'error',
-          error: 'A network error interrupted the answer.',
+          error: errorMessagesRef.current.networkError,
         }));
       }
     },

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Answer } from '@evidata/answer-contract';
-import { useI18n } from '@/lib/i18n';
+import { answerLabels, useI18n } from '@/lib/i18n';
 import { useInvestigationStream } from '@/lib/use-investigation-stream';
 import { AnswerView } from './answer-view';
 import { Composer } from './composer';
@@ -35,7 +35,11 @@ function ErrorBlock({ error }: { error: string }) {
 
 export function Thread() {
   const { t, lang } = useI18n();
-  const stream = useInvestigationStream();
+  const labels = useMemo(() => answerLabels(t), [t]);
+  const stream = useInvestigationStream({
+    requestFailed: t('errorRequestFailed'),
+    networkError: t('errorNetworkInterrupted'),
+  });
   const { status, question, progress, answer, error, ask, reset } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
 
@@ -63,7 +67,7 @@ export function Thread() {
           <div key={i} className="flex flex-col gap-4">
             <UserBubble text={ex.question} />
             {ex.answer ? (
-              <AnswerView answer={ex.answer} onFollowup={submit} />
+              <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
             ) : (
               <ErrorBlock error={ex.error ?? t('genericError')} />
             )}
@@ -76,7 +80,7 @@ export function Thread() {
           <div className="flex flex-col gap-4">
             <UserBubble text={question} />
             {answer ? (
-              <AnswerView answer={answer} onFollowup={submit} />
+              <AnswerView answer={answer} onFollowup={submit} labels={labels} />
             ) : status === 'error' ? (
               <ErrorBlock error={error ?? t('genericError')} />
             ) : (
