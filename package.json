@@ -1,0 +1,25 @@
+{
+  "name": "evidata",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Self-hosted AI Data Portal — trusted, evidence-backed Answers over controlled Data Sources.",
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "lint": "pnpm -r --if-present run lint"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.19.21",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
