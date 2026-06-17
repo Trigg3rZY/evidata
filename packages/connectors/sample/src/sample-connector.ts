@@ -84,6 +84,27 @@ export const SAMPLE_CONTEXT: SampleDataSourceContext = {
   ],
 };
 
+/**
+ * The Sample's **Verified-only** context, in the shape the agent expects
+ * (Suggested entries withheld — which is what makes the cross-area scenario
+ * block). Structurally compatible with `@evidata/agent`'s `AgentContext`.
+ */
+export function sampleVerifiedContext(): {
+  overview: string;
+  glossary: Array<{ term: string; definition: string }>;
+  mappings: Array<{ from: string; to: string }>;
+} {
+  return {
+    overview: SAMPLE_CONTEXT.overview,
+    glossary: SAMPLE_CONTEXT.glossary
+      .filter((g) => g.status === 'verified')
+      .map((g) => ({ term: g.term, definition: g.definition })),
+    mappings: SAMPLE_CONTEXT.mappings
+      .filter((m) => m.status === 'verified')
+      .map((m) => ({ from: m.from, to: m.to })),
+  };
+}
+
 // --- Connector factory -----------------------------------------------------
 
 export interface SampleConnectorHandle {
