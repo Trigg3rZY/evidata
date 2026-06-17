@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "//": "Phase 1 skeleton: type-checks the test suite directly. Once packages exist this becomes a solution-style config with one `references` entry per composite package.",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["tests/**/*.ts"]
+}
