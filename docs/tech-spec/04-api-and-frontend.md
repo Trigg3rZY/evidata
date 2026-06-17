@@ -42,7 +42,7 @@ event: done
 data: {}
 ```
 
-`need_input` (clarification/Unblock) and `error` (product-level) are also valid terminal-ish events. The client renders `reasoning`/`query` as the transient progress block, then replaces it with the `answer` payload. Aborting the request (`AbortController`) cancels the turn server-side via the `signal` passed to `AgentProvider`.
+`need_input` (clarification/Unblock) and `error` (product-level) are also valid terminal-ish events. **M0 note:** the route does not emit a separate `need_input` event — a non-`Answered` result (incl. its `UnblockPath`) is carried in the final `answer` payload, which the client renders accordingly; `need_input` is reserved for a future interactive-pause flow. The client renders `reasoning`/`query` as the transient progress block, then replaces it with the `answer` payload. Aborting the request (`AbortController`) should cancel the turn server-side via a `signal` passed to `AgentProvider` — the M0 route is disconnect-safe (writes stop on cancel) but does not yet abort the in-flight runner (the agent contract has no `AbortSignal` yet; tracked as a follow-up).
 
 ## 2. Frontend component tree
 

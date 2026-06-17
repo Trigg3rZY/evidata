@@ -26,9 +26,13 @@ export interface CreateMetadataDbOptions {
 }
 
 /**
- * Creates the metadata DB and applies the schema. M0 default is a fresh
- * in-memory instance; passing `dataDir` is for local persistence (the schema is
- * applied once on an empty store — incremental migration is an M1 concern).
+ * Creates the metadata DB and applies the schema by exec-ing `SCHEMA_SQL`.
+ *
+ * M0 default is a fresh in-memory instance (always empty → always safe).
+ * WARNING: the DDL is not idempotent (no `IF NOT EXISTS`, no migration journal),
+ * so calling this against a non-empty `dataDir` throws ("… already exists").
+ * Reusing a persisted `dataDir` is unsupported until the file-based migrator
+ * returns for the M1 real-Postgres path.
  */
 export async function createMetadataDb(
   opts: CreateMetadataDbOptions = {},
