@@ -20,6 +20,8 @@ const dict = {
     tryAsking: 'Try asking',
     demoNote:
       'Demo answers are scripted (no live model yet) — see the status, evidence, and SQL behind each one.',
+    answerReady: 'Answer ready.',
+    genericError: 'Something went wrong.',
   },
   'zh-CN': {
     brand: 'evidata',
@@ -33,6 +35,8 @@ const dict = {
       '一个演示用的"广告平台":账户投放营销活动、产生每日广告消费,并按月开具账单。适合看消费趋势、按活动拆解、以及客户排名。',
     tryAsking: '试着问',
     demoNote: '演示答案是脚本化的(尚未接入实时模型)——重点看每条回答背后的状态、证据与 SQL。',
+    answerReady: '回答已就绪。',
+    genericError: '出了点问题。',
   },
 } as const;
 
