@@ -21,7 +21,7 @@ test('acme-bill-up: an evidence-backed Answered result with collapsible SQL', as
   await ask(page, ACME_QUESTION);
 
   // The streamed answer settles to Answered with the seeded 38% figure.
-  await expect(page.getByText('Answered')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/38%/)).toBeVisible();
 
   // Evidence is present; expanding E1 reveals the policy-bounded SQL.
@@ -36,28 +36,36 @@ test('acme-bill-up: an evidence-backed Answered result with collapsible SQL', as
 test('mutation-attempt: the read-only guardrail blocks a write', async ({ page }) => {
   await page.goto('/');
   await ask(page, 'Void the duplicate spend row for ACME');
-  await expect(page.getByText('Blocked by policy')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Blocked by policy', { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByText(/What's missing/i)).toBeVisible();
 });
 
-test('render matrix: en/zh × light/dark have no WCAG AA contrast violations', async ({ page }) => {
+test('render matrix: en/zh × light/dark have no WCAG AA violations', async ({ page }) => {
   for (const lang of ['en', 'zh'] as const) {
     for (const theme of ['light', 'dark'] as const) {
       await page.goto('/');
 
-      if (lang === 'zh') await page.getByRole('button', { name: '中文' }).click();
+      if (lang === 'zh') {
+        await page.getByRole('button', { name: '中文' }).click();
+        await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+      }
       if (theme === 'dark') await page.getByRole('button', { name: /toggle light\/dark/i }).click();
 
       // Render a full answer so badges/evidence/findings are all on screen.
       await ask(page, ACME_QUESTION);
-      await expect(page.getByText('Answered')).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
 
+      // Full WCAG-AA scan of the rendered answer (not just contrast).
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2aa'])
         .include('main')
         .analyze();
-      const contrast = results.violations.filter((v) => v.id === 'color-contrast');
-      expect(contrast, `color-contrast violations in ${lang}/${theme}`).toEqual([]);
+      expect(
+        results.violations.map((v) => v.id),
+        `WCAG AA violations in ${lang}/${theme}`,
+      ).toEqual([]);
     }
   }
 });
