@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evidata.dev/schemas/answer-contract.schema.json",
+  "title": "Answer",
+  "description": "Answer Contract for the AI Data Portal (PRD v0.3). Kept in lockstep with contracts/answer-contract.ts.",
+  "type": "object",
+  "required": [
+    "investigationId",
+    "status",
+    "directAnswer",
+    "confidence",
+    "confidenceReason",
+    "keyFindings",
+    "evidence",
+    "assumptions",
+    "caveats",
+    "recommendedFollowups",
+    "meta"
+  ],
+  "properties": {
+    "investigationId": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["Answered", "Partial", "NeedsClarification", "BlockedByPolicy", "NoReliableAnswer"]
+    },
+    "directAnswer": { "type": "string", "minLength": 1 },
+    "confidence": { "type": "string", "enum": ["High", "Medium", "Low", "CannotDetermine"] },
+    "confidenceReason": { "type": "string", "minLength": 1 },
+    "whatIDid": { "type": "string" },
+    "keyFindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/keyFinding" }
+    },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+    "caveats": { "type": "array", "items": { "type": "string" } },
+    "charts": { "type": "array", "items": { "$ref": "#/$defs/chart" } },
+    "recommendedFollowups": {
+      "type": "array",
+      "items": { "type": "object", "required": ["question"], "properties": { "question": { "type": "string" } } }
+    },
+    "unblock": { "$ref": "#/$defs/unblockPath" },
+    "meta": { "$ref": "#/$defs/versionMeta" }
+  },
+  "allOf": [
+    {
+      "$comment": "Status x Confidence legality.",
+      "oneOf": [
+        { "properties": { "status": { "const": "Answered" }, "confidence": { "enum": ["High", "Medium", "Low"] } } },
+        { "properties": { "status": { "const": "Partial" }, "confidence": { "enum": ["Medium", "Low", "CannotDetermine"] } } },
+        { "properties": { "status": { "const": "NeedsClarification" }, "confidence": { "const": "CannotDetermine" } } },
+        { "properties": { "status": { "const": "BlockedByPolicy" }, "confidence": { "const": "CannotDetermine" } } },
+        { "properties": { "status": { "const": "NoReliableAnswer" }, "confidence": { "enum": ["CannotDetermine", "Low"] } } }
+      ]
+    },
+    {
+      "$comment": "Any non-Answered status MUST carry an Unblock Path.",
+      "if": { "not": { "properties": { "status": { "const": "Answered" } } } },
+      "then": { "required": ["unblock"] }
+    },
+    {
+      "$comment": "Answered MUST have at least one Key Finding.",
+      "if": { "properties": { "status": { "const": "Answered" } } },
+      "then": { "properties": { "keyFindings": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "keyFinding": {
+      "type": "object",
+      "required": ["text", "evidenceIds"],
+      "properties": {
+        "text": { "type": "string" },
+        "evidenceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "chartRef": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "purpose", "dataSourceId", "connectorId", "tables", "sql", "resultSummary", "execution", "safety", "policyNotes"],
+      "properties": {
+        "id": { "type": "string" },
+        "purpose": { "type": "string" },
+        "dataSourceId": { "type": "string" },
+        "dataSourceName": { "type": "string" },
+        "connectorId": { "type": "string" },
+        "tables": { "type": "array", "items": { "type": "string" } },
+        "sql": { "type": "string" },
+        "resultSummary": { "type": "string" },
+        "sampleRows": { "type": "array", "items": { "type": "object" } },
+        "execution": {
+          "type": "object",
+          "required": ["status", "elapsedMs", "rowCount", "truncated"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "timeout", "connection_lost", "zero_rows", "error"] },
+            "elapsedMs": { "type": "number" },
+            "rowCount": { "type": "integer" },
+            "truncated": { "type": "boolean" }
+          }
+        },
+        "safety": { "type": "string", "enum": ["auto_executed", "confirmed_by_user", "rejected"] },
+        "policyNotes": { "type": "string" },
+        "redactedColumns": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "assumption": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" },
+        "verifiedRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "chart": {
+      "type": "object",
+      "required": ["ref", "kind", "evidenceIds", "spec"],
+      "properties": {
+        "ref": { "type": "string" },
+        "kind": { "type": "string", "enum": ["table", "bar", "line", "comparison"] },
+        "evidenceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "spec": {}
+      }
+    },
+    "missingInfo": {
+      "type": "object",
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["business_object", "time_range", "authorization", "mutation_required", "ambiguous_definition", "unverified_mapping", "insufficient_results"]
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "unblockAction": {
+      "type": "object",
+      "required": ["kind", "label"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["specify_object", "pick_candidate", "set_time_range", "pick_definition", "request_access", "notify_admin_verify", "narrow_question", "view_mutation_draft"]
+        },
+        "label": { "type": "string" },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": { "id": { "type": "string" }, "label": { "type": "string" }, "followupQuestion": { "type": "string" } }
+          }
+        },
+        "createsSuggestion": { "type": "boolean" }
+      }
+    },
+    "unblockPath": {
+      "type": "object",
+      "required": ["whatsMissing", "nextSteps"],
+      "properties": {
+        "whatsMissing": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/missingInfo" } },
+        "nextSteps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/unblockAction" } }
+      }
+    },
+    "versionMeta": {
+      "type": "object",
+      "required": ["version", "createdAt", "isLatest"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdAfter": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["clarification", "followup", "rerun", "definition_correction"] },
+            "fromVersion": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "isLatest": { "type": "boolean" }
+      }
+    }
+  }
+}
