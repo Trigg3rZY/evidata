@@ -1,0 +1,127 @@
+@import 'tailwindcss';
+
+/* Design tokens (spec 11 §3). Light is the default; [data-theme="dark"] swaps. */
+:root {
+  --radius: 0.625rem;
+
+  --background: #f7f8fa;
+  --foreground: #1a1d21;
+  --card: #ffffff;
+  --card-foreground: #1a1d21;
+  --popover: #ffffff;
+  --popover-foreground: #1a1d21;
+  --primary: #2f6df0;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f4;
+  --secondary-foreground: #1a1d21;
+  --muted: #eef1f4;
+  --muted-foreground: #5b626b;
+  --accent: #eef1f4;
+  --accent-foreground: #1a1d21;
+  --destructive: #c0392b;
+  --destructive-foreground: #ffffff;
+  --border: #e5e8ec;
+  --input: #d2d7dd;
+  --ring: #2f6df0;
+  --code-bg: #f3f4f6;
+
+  --status-answered: #1a8f5a;
+  --status-answered-bg: #e4f5ec;
+  --status-clarify: #2f6df0;
+  --status-clarify-bg: #e9f0fe;
+  --status-partial: #b07d0a;
+  --status-partial-bg: #fbf3df;
+  --status-blocked: #c0392b;
+  --status-blocked-bg: #fbeae8;
+  --status-unreliable: #5b626b;
+  --status-unreliable-bg: #eef1f4;
+}
+
+[data-theme='dark'] {
+  --background: #0f1114;
+  --foreground: #e9ecef;
+  --card: #181b1f;
+  --card-foreground: #e9ecef;
+  --popover: #181b1f;
+  --popover-foreground: #e9ecef;
+  --primary: #5e93f7;
+  --primary-foreground: #0f1114;
+  --secondary: #20242a;
+  --secondary-foreground: #e9ecef;
+  --muted: #20242a;
+  --muted-foreground: #aab2bb;
+  --accent: #20242a;
+  --accent-foreground: #e9ecef;
+  --destructive: #e57368;
+  --destructive-foreground: #0f1114;
+  --border: #282d33;
+  --input: #39414a;
+  --ring: #5e93f7;
+  --code-bg: #13161a;
+
+  --status-answered: #4cc38a;
+  --status-answered-bg: #15331f;
+  --status-clarify: #5e93f7;
+  --status-clarify-bg: #1a2a47;
+  --status-partial: #e0b04a;
+  --status-partial-bg: #382d12;
+  --status-blocked: #e57368;
+  --status-blocked-bg: #381d1a;
+  --status-unreliable: #aab2bb;
+  --status-unreliable-bg: #20242a;
+}
+
+/* Expose tokens to Tailwind v4 utilities (bg-background, text-muted-foreground, …). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-status-answered: var(--status-answered);
+  --color-status-answered-bg: var(--status-answered-bg);
+  --color-status-clarify: var(--status-clarify);
+  --color-status-clarify-bg: var(--status-clarify-bg);
+  --color-status-partial: var(--status-partial);
+  --color-status-partial-bg: var(--status-partial-bg);
+  --color-status-blocked: var(--status-blocked);
+  --color-status-blocked-bg: var(--status-blocked-bg);
+  --color-status-unreliable: var(--status-unreliable);
+  --color-status-unreliable-bg: var(--status-unreliable-bg);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    sans-serif;
+}
