@@ -170,4 +170,21 @@ describe('openAIConfigFromEnv', () => {
       }),
     ).toMatchObject({ baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini' });
   });
+
+  it('ignores a non-numeric AGENT_MAX_TOKENS (no max_tokens: NaN)', () => {
+    expect(
+      openAIConfigFromEnv({
+        AGENT_PROVIDER: 'openai',
+        DEEPSEEK_API_KEY: 'k',
+        AGENT_MAX_TOKENS: 'lots',
+      }),
+    ).not.toHaveProperty('maxTokens');
+    expect(
+      openAIConfigFromEnv({
+        AGENT_PROVIDER: 'openai',
+        DEEPSEEK_API_KEY: 'k',
+        AGENT_MAX_TOKENS: '2048',
+      }),
+    ).toMatchObject({ maxTokens: 2048 });
+  });
 });
