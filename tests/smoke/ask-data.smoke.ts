@@ -53,9 +53,11 @@ test('render matrix: en/zh × light/dark have no WCAG AA violations', async ({ p
       }
       if (theme === 'dark') await page.getByRole('button', { name: /toggle light\/dark/i }).click();
 
-      // Render a full answer so badges/evidence/findings are all on screen.
+      // Render a full answer so badges/evidence/findings are all on screen. The
+      // status badge is chrome, so its label follows the active language.
+      const answeredLabel = lang === 'zh' ? '已回答' : 'Answered';
       await ask(page, ACME_QUESTION);
-      await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(answeredLabel, { exact: true })).toBeVisible({ timeout: 20_000 });
 
       // Full WCAG-AA scan of the rendered answer (not just contrast).
       const results = await new AxeBuilder({ page })
