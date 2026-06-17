@@ -31,6 +31,13 @@ import type {
 } from './types';
 import { gateRejectToMissing, resolveUnblock, type UnblockResolution } from './unblock';
 import type { Connector, Redactor, SafetyGate } from './deps';
+import {
+  type Lang,
+  nonAnswerReason,
+  nonAnswerSentence,
+  policyNotes,
+  resultSummary,
+} from './messages';
 
 export interface AgentRunnerDeps {
   provider: AgentProvider;
@@ -53,28 +60,6 @@ export interface AgentRunnerDeps {
 }
 
 type AllowDecision = Extract<SafetyDecision, { verdict: 'allow' }>;
-
-function nonAnswerSentence(status: Answer['status']): string {
-  switch (status) {
-    case 'BlockedByPolicy':
-      return "I can't run that — it's blocked by the read-only policy.";
-    case 'NeedsClarification':
-      return 'I need a bit more detail before I can answer reliably.';
-    default:
-      return "I can't give a reliable answer to this yet.";
-  }
-}
-
-function nonAnswerReason(status: Answer['status']): string {
-  switch (status) {
-    case 'BlockedByPolicy':
-      return 'The proposed action is outside the read-only safety policy.';
-    case 'NeedsClarification':
-      return 'The question is missing information needed to answer it.';
-    default:
-      return 'The available, verified data does not support a reliable answer.';
-  }
-}
 
 export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
@@ -155,7 +140,9 @@ export class AgentRunner {
         elapsedMs: raw.elapsedMs,
         evidenceRef,
       });
-      evidence.push(this.buildEvidence(evidenceRef, purpose, sql, raw, redacted, gate));
+      evidence.push(
+        this.buildEvidence(evidenceRef, purpose, sql, raw, redacted, gate, input.language),
+      );
 
       const toolResult: ToolResult = {
         evidenceRef,
@@ -193,6 +180,7 @@ export class AgentRunner {
     raw: QueryRunResult,
     redacted: RedactedResult,
     gate: AllowDecision,
+    lang: Lang,
   ): Evidence {
     const policy = this.deps.safetyContext.policy;
     const confirmed = gate.needsConfirmation;
@@ -204,9 +192,7 @@ export class AgentRunner {
       connectorId: this.deps.connector.id,
       tables: gate.touchedTables,
       sql,
-      resultSummary: redacted.truncated
-        ? `${raw.rowCount} rows (sampled)`
-        : `${raw.rowCount} row(s)`,
+      resultSummary: resultSummary(raw.rowCount, redacted.truncated, lang),
       sampleRows: redacted.sampleRows,
       execution: {
         status: 'ok',
@@ -215,7 +201,7 @@ export class AgentRunner {
         truncated: raw.truncated,
       },
       safety: confirmed ? 'confirmed_by_user' : 'auto_executed',
-      policyNotes: `Read-only · row limit ${policy.rowLimit} · ${confirmed ? 'sensitive/broad — confirmed' : 'auto-executed (low risk)'}`,
+      policyNotes: policyNotes(policy.rowLimit, confirmed, lang),
       redactedColumns: redacted.redactedColumns,
     };
   }
@@ -249,9 +235,9 @@ export class AgentRunner {
     return {
       investigationId: input.investigationId,
       status: res.status,
-      directAnswer: nonAnswerSentence(res.status),
+      directAnswer: nonAnswerSentence(res.status, input.language),
       confidence: 'CannotDetermine',
-      confidenceReason: nonAnswerReason(res.status),
+      confidenceReason: nonAnswerReason(res.status, input.language),
       keyFindings: [],
       evidence: [],
       assumptions: [],
@@ -274,10 +260,10 @@ export class AgentRunner {
     queryRuns: RecordedQueryRun[],
     now: () => Date,
   ): RunResult {
-    // Non-answers carry no evidence in the answer body; answered ones carry the recorded evidence.
-    const withEvidence: Answer =
-      draft.status === 'Answered' || draft.status === 'Partial' ? { ...draft, evidence } : draft;
-    const answer = this.applyVersion(withEvidence, now);
+    // Every status carries the evidence actually gathered this turn: an answered
+    // result cites it, and a NoReliableAnswer/Partial still shows the work it did
+    // before blocking (NeedsClarification/BlockedByPolicy that ran nothing get []).
+    const answer = this.applyVersion({ ...draft, evidence }, now);
 
     const violations = validateAnswer(answer);
     const schema = validateAnswerSchema(answer);

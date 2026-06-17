@@ -114,6 +114,8 @@ describe('cross-area-reconcile — Unblock Path (spec 05 §4.3)', () => {
     expect(answer.status).toBe('NoReliableAnswer');
     expect(answer.confidence).toBe('CannotDetermine');
     expect(queryRuns).toHaveLength(2);
+    // the non-answer still shows the work it did before blocking
+    expect(answer.evidence.map((e) => e.id)).toEqual(['E1', 'E2']);
     expect(answer.unblock?.whatsMissing[0]?.kind).toBe('unverified_mapping');
     const notify = answer.unblock?.nextSteps.find((a) => a.kind === 'notify_admin_verify');
     expect(notify?.createsSuggestion).toBe(true);
@@ -128,6 +130,21 @@ describe('needs-timerange — clarification (spec 05 §4.4)', () => {
     );
     expect(answer.status).toBe('NeedsClarification');
     expect(answer.unblock?.nextSteps.some((a) => a.kind === 'set_time_range')).toBe(true);
+    expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
+describe('localization', () => {
+  it('produces non-answer text in the question language (zh-CN)', async () => {
+    const { answer } = await new AgentRunner(deps(fixtureFor('needs-timerange'))).run({
+      investigationId: 'inv_zh',
+      question: '最近花费趋势如何?',
+      language: 'zh-CN',
+      schema: SAMPLE_SCHEMA_SNAPSHOT,
+      context: verifiedContext(),
+    });
+    expect(answer.status).toBe('NeedsClarification');
+    expect(answer.directAnswer).toBe('我需要更多信息才能可靠地回答。');
     expect(validateAnswer(answer)).toEqual([]);
   });
 });
