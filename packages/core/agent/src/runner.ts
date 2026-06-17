@@ -52,7 +52,9 @@ export interface AgentRunnerDeps {
   newId?: (prefix: string) => string;
   /** Domain-event sink (phase 6 adapts to SSE). */
   sink?: (e: AgentRunEvent) => void;
-  /** Per-turn step budget (spec 03 §1 limits). */
+  /** Per-turn step budget (provider↔execute turns). Default 16 — generous enough
+   *  for a real model to explore multi-step before finalizing; fixtures use far
+   *  fewer. Tighten per data source/policy if cost matters. */
   maxIterations?: number;
   /** Prior versions for a follow-up turn; empty ⇒ this is v1. */
   priorAnswers?: ReadonlyArray<Answer>;
@@ -69,7 +71,7 @@ export class AgentRunner {
     let seq = 0;
     const newId = this.deps.newId ?? ((p: string) => `${p}_${(seq += 1)}`);
     const sink = this.deps.sink ?? (() => {});
-    const maxIterations = this.deps.maxIterations ?? 8;
+    const maxIterations = this.deps.maxIterations ?? 16;
     const policy = this.deps.safetyContext.policy;
     const executor = this.deps.connector.getExecutor();
 

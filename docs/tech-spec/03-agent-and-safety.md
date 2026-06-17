@@ -54,8 +54,7 @@ The `AgentRunner` (in `packages/core/agent`) drives one turn. The runner is the 
 
 ### Limits (M0 defaults; tunable, see Policy)
 
-- Max provider↔execute iterations per turn: 4.
-- Max queries per turn: 6.
+- Max provider↔execute iterations per turn: 16 by default (a real model explores multiple queries before finalizing; fixtures use far fewer). Tunable per Policy/data source if cost matters.
 - Per-query `timeoutMs`: 5000; `rowLimit`: 1000.
 - Whole-turn budget: 60s, then `Partial`/`NoReliableAnswer` with a Caveat.
 
