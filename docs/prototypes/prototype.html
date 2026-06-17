@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Data Portal — Prototype</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #f3f4f6;
+    --surface-3: #ecedf0;
+    --border: #e5e8ec;
+    --border-strong: #d2d7dd;
+    --text: #1a1d21;
+    --text-2: #565f6a;
+    --text-3: #8b939d;
+    --accent: #2f6df0;
+    --accent-soft: #e9f0fe;
+    --good: #1a8f5a; --good-soft: #e4f5ec;
+    --warn: #b07d0a; --warn-soft: #fbf3df;
+    --danger: #c0392b; --danger-soft: #fbeae8;
+    --code-bg: #f3f4f6;
+    --shadow: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,.10);
+  }
+  html[data-theme="dark"] {
+    --bg: #0f1114;
+    --surface: #181b1f;
+    --surface-2: #20242a;
+    --surface-3: #282d34;
+    --border: #282d33;
+    --border-strong: #39414a;
+    --text: #e9ecef;
+    --text-2: #a4adb7;
+    --text-3: #6b7480;
+    --accent: #5e93f7;
+    --accent-soft: #1a2a47;
+    --good: #4cc38a; --good-soft: #15331f;
+    --warn: #e0b04a; --warn-soft: #382d12;
+    --danger: #e57368; --danger-soft: #381d1a;
+    --code-bg: #13161a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3);
+    --shadow-lg: 0 10px 36px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ---------- Sidebar (history) ---------- */
+  .sidebar {
+    width: 252px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 12px 10px;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 12px; }
+  .brand .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; }
+  .brand .name { font-weight: 650; font-size: 14px; }
+  .new-btn {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 12px; margin-bottom: 6px;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 10px;
+    cursor: pointer; font-weight: 600; font-size: 13.5px; font-family: inherit;
+  }
+  .new-btn:hover { background: var(--surface-2); }
+  .new-btn .plus { font-size: 16px; line-height: 1; color: var(--accent); }
+  .hist-wrap { flex: 1; overflow-y: auto; margin-top: 6px; }
+  .hist-group { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 12px 10px 5px; }
+  .hist-item {
+    display: block; width: 100%; text-align: left; border: none; background: none; color: var(--text-2);
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .hist-item:hover { background: var(--surface-2); color: var(--text); }
+  .hist-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
+  .hist-item .hi-st { font-size: 10px; margin-right: 5px; }
+  .side-foot { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+  .side-link { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: none; color: var(--text-2); padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; }
+  .side-link:hover { background: var(--surface-2); color: var(--text); }
+  .side-link .ic { width: 16px; text-align: center; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 52px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 16px; }
+  .crumb { font-size: 13px; color: var(--text-2); }
+  .crumb b { color: var(--text); font-weight: 600; }
+  .controls { display: flex; align-items: center; gap: 8px; }
+  .toggle { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+  .toggle button { border: none; background: var(--surface); color: var(--text-2); padding: 5px 11px; cursor: pointer; font-size: 12.5px; font-family: inherit; font-weight: 500; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+
+  .scroll-area { flex: 1; overflow-y: auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .pad { max-width: 1060px; margin: 0 auto; padding: 26px 30px 60px; }
+
+  /* generic */
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 680; }
+  h2 { font-size: 16px; margin: 26px 0 12px; font-weight: 640; }
+  .sub { color: var(--text-2); margin: 0 0 22px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+  .btn { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); padding: 9px 16px; border-radius: 9px; font-size: 13.5px; cursor: pointer; font-weight: 550; font-family: inherit; }
+  .btn:hover { border-color: var(--text-3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { opacity: .92; }
+  .btn.sm { padding: 5px 11px; font-size: 12.5px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.7; }
+  .badge.good { background: var(--good-soft); color: var(--good); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.danger { background: var(--danger-soft); color: var(--danger); }
+  .badge.neutral { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  /* ---------- Composer ---------- */
+  .composer { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s; }
+  .composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .composer textarea { width: 100%; border: none; background: none; resize: none; outline: none; font-family: inherit; font-size: 15px; color: var(--text); padding: 16px 18px 6px; line-height: 1.5; max-height: 160px; }
+  .composer textarea::placeholder { color: var(--text-3); }
+  .composer-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 10px; gap: 10px; }
+  .ds-pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit; font-weight: 550; position: relative; }
+  .ds-pill:hover { border-color: var(--border-strong); color: var(--text); }
+  .ds-pill .car { font-size: 9px; opacity: .7; }
+  .ds-menu { position: absolute; bottom: calc(100% + 6px); left: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 5px; min-width: 220px; z-index: 30; }
+  .ds-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; border: none; background: none; color: var(--text); padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; font-family: inherit; }
+  .ds-menu button:hover { background: var(--surface-2); }
+  .send-btn { width: 34px; height: 34px; border-radius: 9px; border: none; background: var(--accent); color: #fff; cursor: pointer; font-size: 16px; display: grid; place-items: center; }
+  .send-btn:hover { opacity: .9; }
+  .send-btn:disabled { background: var(--surface-3); color: var(--text-3); cursor: default; }
+
+  /* ---------- Empty state ---------- */
+  .ask-empty { max-width: 720px; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; justify-content: center; min-height: 100%; }
+  .greet { text-align: center; margin: 0 auto 22px; }
+  .greet .star { font-size: 24px; color: var(--accent); }
+  .greet h1 { font-size: 26px; font-weight: 600; margin: 8px 0 4px; }
+  .greet p { color: var(--text-2); margin: 0; }
+  .safety-mini { text-align: center; font-size: 11.5px; color: var(--text-3); margin-top: 12px; }
+  .sample-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 22px; }
+  .sample-card { text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 11px; padding: 13px 15px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+  .sample-card:hover { border-color: var(--accent); color: var(--text); }
+  .sample-card .sc-ic { font-size: 15px; margin-bottom: 6px; }
+  .recent-h { display: flex; align-items: center; justify-content: space-between; margin: 40px 0 12px; }
+  .recent-h .t { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .recent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .recent-card { text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 11px; padding: 13px 15px; cursor: pointer; }
+  .recent-card:hover { border-color: var(--accent); }
+  .recent-card .rq { font-size: 13.5px; font-weight: 550; color: var(--text); margin-bottom: 8px; line-height: 1.4; }
+  .recent-card .rm { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-3); }
+
+  /* ---------- Thread ---------- */
+  .ask-thread { display: none; flex-direction: column; height: 100%; }
+  .ask-thread.active { display: flex; }
+  .thread-scroll { flex: 1; overflow-y: auto; }
+  .thread-inner { max-width: 760px; margin: 0 auto; padding: 26px 24px 30px; }
+  .msg { margin-bottom: 22px; }
+  .msg-user { display: flex; justify-content: flex-end; }
+  .msg-user .bubble { background: var(--accent-soft); color: var(--text); padding: 11px 15px; border-radius: 14px 14px 4px 14px; font-size: 14.5px; max-width: 80%; }
+  .msg-ai { display: flex; gap: 12px; }
+  .msg-ai .av { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .msg-ai .ai-body { flex: 1; min-width: 0; padding-top: 2px; }
+  .thread-composer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg); padding: 14px 24px 18px; }
+  .thread-composer .composer { max-width: 760px; margin: 0 auto; }
+
+  /* progress */
+  .pstep { display: flex; align-items: center; gap: 10px; padding: 6px 0; color: var(--text-2); font-size: 13px; }
+  .pstep .mk { width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--border-strong); flex-shrink: 0; }
+  .pstep.done { color: var(--text); }
+  .pstep.done .mk { border-color: var(--good); background: var(--good); position: relative; }
+  .pstep.done .mk::after { content: "✓"; color: #fff; font-size: 10px; position: absolute; inset: 0; display: grid; place-items: center; }
+  .pstep.active .mk { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Answer (inside ai message) */
+  .a-status { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .direct { font-size: 16px; font-weight: 600; line-height: 1.5; margin-bottom: 16px; }
+  .sec { border-top: 1px solid var(--border); padding: 14px 0; }
+  .sec h3 { font-size: 13px; margin: 0 0 9px; font-weight: 640; display: flex; align-items: center; gap: 8px; }
+  .sec h3 .n { color: var(--text-3); font-weight: 500; }
+  .finding { display: flex; gap: 9px; padding: 6px 0; font-size: 13.5px; align-items: flex-start; }
+  .finding .fb { color: var(--accent); }
+  .ev-ref { font-size: 11px; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 5px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+  details.collapse { border: 1px solid var(--border); border-radius: 9px; margin: 8px 0; background: var(--surface-2); }
+  details.collapse > summary { cursor: pointer; padding: 10px 13px; font-weight: 600; font-size: 12.5px; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  details.collapse > summary::-webkit-details-marker { display: none; }
+  details.collapse > summary::after { content: "▾"; color: var(--text-3); }
+  details.collapse[open] > summary::after { content: "▴"; }
+  details.collapse .cbody { padding: 0 13px 13px; }
+  .evidence-item { border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; margin: 9px 0; background: var(--surface); }
+  .evidence-item .eh { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .evidence-item .eh .id { font-weight: 600; font-size: 12.5px; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 12.5px; color: var(--text-2); margin: 6px 0; }
+  .kv b { color: var(--text); font-weight: 550; }
+  pre.sql { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; overflow-x: auto; font-size: 11.5px; line-height: 1.6; margin: 8px 0 0; font-family: "SF Mono", Menlo, Consolas, monospace; color: var(--text); }
+  pre.sql .kw { color: var(--accent); font-weight: 600; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  .tbl th, .tbl td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .tbl th { background: var(--surface-2); font-weight: 600; }
+  ul.tidy { margin: 4px 0; padding-left: 18px; color: var(--text-2); font-size: 13px; line-height: 1.8; }
+  ul.tidy b { color: var(--text); font-weight: 550; }
+  .followups { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 13px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* sources / overview / admin reuse */
+  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .ds-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); cursor: pointer; }
+  .ds-card:hover { border-color: var(--accent); }
+  .ds-card .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .ds-card .ds-name { font-weight: 640; font-size: 15px; margin-bottom: 3px; }
+  .ds-card .ds-desc { color: var(--text-2); font-size: 12.5px; min-height: 34px; }
+  .ds-card .meta { display: flex; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
+  .ds-card .meta b { color: var(--text-2); font-weight: 600; }
+  .steps { display: flex; margin-bottom: 24px; flex-wrap: wrap; }
+  .step { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 12.5px; color: var(--text-3); border-bottom: 2px solid var(--border); cursor: pointer; flex: 1; min-width: 110px; justify-content: center; }
+  .step.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .step.done { color: var(--good); }
+  .step .sn { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+  .field select, .field input { width: 100%; font-family: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; }
+  .gloss-item, .policy-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; background: var(--surface-2); }
+  .gloss-item .g-term { font-weight: 600; font-size: 13px; min-width: 120px; }
+  .gloss-item .g-def { flex: 1; color: var(--text-2); font-size: 12.5px; }
+  .policy-row { justify-content: space-between; }
+  .policy-row .p-label b { font-size: 13px; }
+  .policy-row .p-label small { display: block; color: var(--text-3); font-size: 11.5px; }
+  .switch { width: 38px; height: 22px; border-radius: 999px; background: var(--good); position: relative; cursor: pointer; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 3px; left: 19px; }
+  .switch.off { background: var(--border-strong); }
+  .switch.off::after { left: 3px; }
+  .config-foot { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .ds-can { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; font-size: 13px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR: history ============ -->
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">Q</div><div class="name" data-i="brand">数据门户</div></div>
+    <button class="new-btn" onclick="newInvestigation()"><span class="plus">+</span><span data-i="new_inv">新建排查</span></button>
+    <div class="hist-wrap" id="histWrap"></div>
+    <div class="side-foot">
+      <button class="side-link" data-view="sources"><span class="ic">🗂️</span><span data-i="navSources">数据源</span></button>
+      <button class="side-link" data-view="firstrun"><span class="ic">✨</span><span data-i="navFirst">首屏 / 空状态</span></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb"></div>
+      <div class="controls">
+        <div class="toggle" id="langToggle"><button data-lang="zh" class="on">中文</button><button data-lang="en">EN</button></div>
+        <div class="toggle" id="themeToggle"><button data-theme="light" class="on" data-i="themeLight">浅色</button><button data-theme="dark" data-i="themeDark">深色</button></div>
+      </div>
+    </header>
+
+    <div class="scroll-area" id="scrollArea">
+
+      <!-- ============ ASK (main) ============ -->
+      <section class="view active" id="view-ask" style="height:100%">
+        <!-- empty state -->
+        <div class="ask-empty" id="askEmpty">
+          <div class="greet">
+            <div class="star">✳</div>
+            <h1 data-i="greet_h">想从数据里了解什么?</h1>
+            <p data-i="greet_p">选择一个数据源,用自然语言提问 — 你会得到带证据的可信答案。</p>
+          </div>
+          <div id="composerHero"></div>
+          <div class="safety-mini" data-i="safety_mini">🔒 凭证留在本实例 · AI 不直接执行 SQL · 查询只读并记录证据</div>
+          <div class="sample-cards" id="sampleCards"></div>
+          <div class="recent-h"><span class="t" data-i="recent_t">最近的排查</span></div>
+          <div class="recent-grid" id="recentGrid"></div>
+        </div>
+        <!-- thread -->
+        <div class="ask-thread" id="askThread">
+          <div class="thread-scroll" id="threadScroll"><div class="thread-inner" id="threadMsgs"></div></div>
+          <div class="thread-composer" id="composerDockWrap"></div>
+        </div>
+      </section>
+
+      <!-- ============ FIRST RUN ============ -->
+      <section class="view" id="view-firstrun"><div class="pad">
+        <div style="text-align:center;padding:40px 10px">
+          <div style="display:inline-block;background:var(--accent-soft);color:var(--accent);padding:5px 13px;border-radius:999px;font-size:12.5px;font-weight:600;margin-bottom:18px" data-i="fr_pill">首次部署 · 尚无真实数据源</div>
+          <h1 style="font-size:27px;max-width:620px;margin:0 auto 14px;line-height:1.3" data-i="fr_title">用于可信数据排查的自托管 AI 数据门户</h1>
+          <p class="sub" style="max-width:540px;margin:0 auto 26px;font-size:15px" data-i="fr_sub">连接数据库、校准业务语义,用对话完成可追溯的数据排查。</p>
+          <div class="row" style="justify-content:center;margin-bottom:32px">
+            <button class="btn primary" onclick="go('ask')" data-i="fr_try">试用示例数据源</button>
+            <button class="btn" onclick="go('admin')" data-i="fr_create">创建数据源</button>
+          </div>
+          <div class="card" style="max-width:560px;margin:0 auto;text-align:left">
+            <div style="font-weight:600;font-size:12.5px;margin-bottom:8px">🔒 <span data-i="fr_safety_t">安全说明</span></div>
+            <ul class="tidy"><li data-i="fr_s1">凭证仅保存在本实例,不上传。</li><li data-i="fr_s2">AI 不直接执行 SQL,只提计划与草稿。</li><li data-i="fr_s3">后端校验后只读执行,并记录证据。</li></ul>
+          </div>
+        </div>
+      </div></section>
+
+      <!-- ============ SOURCES ============ -->
+      <section class="view" id="view-sources"><div class="pad">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div><h1 data-i="src_title">数据源</h1><p class="sub" data-i="src_sub">把业务系统包装成受控的数据源。</p></div>
+          <button class="btn primary" onclick="go('admin')" data-i="src_new">+ 新建数据源</button>
+        </div>
+        <div class="ds-grid" id="ds-grid"></div>
+      </div></section>
+
+      <!-- ============ OVERVIEW ============ -->
+      <section class="view" id="view-overview"><div class="pad" id="overview-pad"></div></section>
+
+      <!-- ============ ADMIN ============ -->
+      <section class="view" id="view-admin"><div class="pad">
+        <h1 data-i="adm_title">配置数据源</h1>
+        <p class="sub" data-i="adm_sub">校准业务语义并配置策略,然后发布。</p>
+        <div class="steps" id="adm-steps">
+          <div class="step done" data-astep="0"><span class="sn">1</span><span data-i="adm_t1">连接</span></div>
+          <div class="step done" data-astep="1"><span class="sn">2</span><span data-i="adm_t2">Schema</span></div>
+          <div class="step active" data-astep="2"><span class="sn">3</span><span data-i="adm_t3">业务语义</span></div>
+          <div class="step" data-astep="3"><span class="sn">4</span><span data-i="adm_t4">策略</span></div>
+          <div class="step" data-astep="4"><span class="sn">5</span><span data-i="adm_t5">发布</span></div>
+        </div>
+        <div class="card" id="adm-panel"></div>
+      </div></section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- i18n ---------------- */
+const I = {
+  brand:["数据门户","Data Portal"],
+  new_inv:["新建排查","New investigation"],
+  navSources:["数据源","Data Sources"],
+  navFirst:["首屏 / 空状态","First Run"],
+  themeLight:["浅色","Light"], themeDark:["深色","Dark"],
+  published:["已发布","Published"], draft:["草稿","Draft"],
+  role_querier:["提问者","Querier"],
+
+  crumb_ask:["<b>提问数据</b>","<b>Ask Data</b>"],
+  crumb_src:["<b>数据源</b>","<b>Data Sources</b>"],
+  crumb_admin:["数据源 / <b>配置广告平台</b>","Data Sources / <b>Configure Advertising Platform</b>"],
+  crumb_first:["<b>首屏 / 空状态</b>","<b>First Run</b>"],
+  crumb_over:["数据源 / <b>广告平台</b>","Data Sources / <b>Advertising Platform</b>"],
+
+  fr_pill:["首次部署 · 尚无真实数据源","First deployment · no real Data Source yet"],
+  fr_title:["用于可信数据排查的自托管 AI 数据门户","Self-hosted AI Data Portal for trusted data investigations"],
+  fr_sub:["连接数据库、校准业务语义,用对话完成可追溯的数据排查。","Connect databases, calibrate business semantics, and investigate data through conversation."],
+  fr_try:["试用示例数据源","Try Sample Data Source"],
+  fr_create:["创建数据源","Create Data Source"],
+  fr_safety_t:["安全说明","Safety notes"],
+  fr_s1:["凭证仅保存在本实例,不上传。","Credentials stay in this instance and are never uploaded."],
+  fr_s2:["AI 不直接执行 SQL,只提计划与草稿。","AI does not execute SQL directly — only plans and drafts."],
+  fr_s3:["后端校验后只读执行,并记录证据。","Backend validates, runs read-only, and records evidence."],
+
+  /* empty state */
+  greet_h:["想从数据里了解什么?","What do you want to find out?"],
+  greet_p:["选择一个数据源,用自然语言提问 — 你会得到带证据的可信答案。","Pick a Data Source and ask in natural language — you'll get a trusted, evidence-backed answer."],
+  safety_mini:["🔒 凭证留在本实例 · AI 不直接执行 SQL · 查询只读并记录证据","🔒 Credentials stay local · AI never runs SQL directly · queries are read-only and recorded"],
+  recent_t:["最近的排查","Recent investigations"],
+  composer_ph:["问问这个数据源…","Ask this Data Source anything…"],
+
+  /* sample cards */
+  sc1:["为什么 ACME 这个月的广告账单比上月高?","Why is ACME's ad bill higher this month?"],
+  sc2:["上季度花费最高的 5 个客户是谁?","Top 5 customers by spend last quarter?"],
+  sc3:["哪些活动的花费超出了预算?","Which campaigns exceeded their budget?"],
+  sc4:["最近 7 天有异常退款吗?","Any unusual refunds in the last 7 days?"],
+  sc5:["A 库用量和 B 库账单为什么对不上?","Why don't usage (DB A) and billing (DB B) reconcile?"],
+
+  /* unblock path (non-answer) */
+  b_status_label:["需要澄清","Needs Clarification"],
+  b_conf:["无法判定","Cannot Determine"],
+  b_direct:["我暂时无法可靠回答——这个问题需要一条目前未验证的跨连接映射。下面是缺什么、以及你可以怎么推进。","I can't reliably answer this yet — it needs a cross-Connection mapping that isn't verified. Here's what's missing and how to move forward."],
+  b_what_partial:["我已分别确认两个库各自的合计,但在映射验证前不能把它们关联起来。","I confirmed each DB's totals separately, but can't relate them until the mapping is verified."],
+  b_missing_t:["缺什么","What's missing"],
+  b_missing_1:["跨连接映射未验证:usage.account_id(用量库)↔ invoices.customer_id(计费库)目前为「AI 建议」,未经 Admin 确认。","Unverified cross-Connection mapping: usage.account_id (usage DB) ↔ invoices.customer_id (billing DB) is still Suggested, not Admin-verified."],
+  b_missing_2:["口径分歧:「对账差异」可按发票日或用量日计算,两者结果不同。","Definition ambiguity: the reconciliation gap can be computed by invoice date or usage date, which give different results."],
+  b_next_t:["你可以怎么推进","How to move forward"],
+  act_pickdef:["选择口径","Pick a definition"],
+  act_notify:["通知 Admin 验证映射","Notify Admin to verify mapping"],
+  act_narrow:["改用更窄的问题","Try a narrower question"],
+  b_notified:["✓ 已创建给 Admin 的待验证建议","✓ Created a Suggested item for Admin"],
+  b_pick_q:["按哪种口径?","By which definition?"],
+  b_def_usage:["按用量日计算","Compute by usage date"],
+  b_def_invoice:["按发票日计算","Compute by invoice date"],
+  b_narrow_q:["只看计费库:本月发票总额是多少?","Billing DB only: what's this month's total invoiced?"],
+
+  /* data sources */
+  ds_ads:["广告平台","Advertising Platform"],
+  ds_billing:["计费系统","Billing System"],
+  ds_sample:["示例数据源","Sample Data Source"],
+
+  /* progress */
+  ask_running:["正在排查…","Investigating…"],
+  step1:["识别客户身份(ACME)","Resolving customer identity (ACME)"],
+  step2:["生成只读 SQL","Generating read-only SQL"],
+  step3:["执行账单查询","Running billing query"],
+  step4:["汇总结果","Summarizing results"],
+
+  /* answer */
+  a_status_answered:["已回答","Answered"],
+  a_conf:["中等可信","Medium confidence"],
+  a_conf_reason:["花费与发票数据来自不同连接,发票时间可能滞后。","spend and invoice data come from separate Connections; invoice timing may lag."],
+  a_direct:["ACME 本月广告账单上涨约 38%,主要由「夏季促销」活动在 6 月 1–9 日的花费激增驱动,而非计价错误。","ACME's ad bill is up ~38% this month, driven mainly by a spend surge on the \"Summer Sale\" campaign during Jun 1–9, not a billing error."],
+  a_whatdid:["排查过程","What I Did"],
+  a_whatdid_b:["解析客户身份 → 对比两个账单周期 → 检查各活动花费 → 核对发票与调整项。","Resolved customer identity → compared two billing periods → checked per-campaign spend → reconciled invoices."],
+  a_findings:["关键发现","Key Findings"],
+  f1:["6 月花费 ¥48,200,5 月为 ¥34,900,环比 +38.1%。","June spend ¥48,200 vs May ¥34,900, +38.1% MoM."],
+  f2:["「夏季促销」活动贡献了 71% 的增量花费。","\"Summer Sale\" accounts for 71% of the increase."],
+  f3:["未发现重复计费或费率变更;发票与花费一致(±0.3%)。","No duplicate charges or rate changes; invoice matches spend (±0.3%)."],
+  a_evidence:["证据","Evidence"],
+  ev_ds:["数据源","Data Source"], ev_conn:["连接","Connection"], ev_tables:["表","Tables"],
+  ev_summary:["结果摘要","Result summary"], ev_policy:["策略说明","Policy notes"],
+  ev1_purpose:["对比两个账单周期的总花费","Compare total spend across periods"],
+  ev1_summary:["2 行;5 月 ¥34,900,6 月 ¥48,200。","2 rows; May ¥34,900, June ¥48,200."],
+  ev1_policy:["只读 · 行数上限 1000 · 自动执行(低风险)","Read-only · row limit 1000 · auto (low risk)"],
+  ev2_purpose:["按活动拆解 6 月花费","Break down June spend by campaign"],
+  ev2_summary:["6 行;Summer Sale 占增量 71%。","6 rows; Summer Sale = 71% of increase."],
+  ev2_policy:["只读 · 已聚合 · 自动执行","Read-only · aggregated · auto"],
+  show_sql:["查看 SQL","View SQL"],
+  a_assume:["假设与定义","Assumptions & Definitions"],
+  as1:["时间窗:账单周期按自然月(Asia/Shanghai)。","Time window: calendar month (Asia/Shanghai)."],
+  as2:["「花费」= campaign_spend.amount,排除 status='void'。","\"Spend\" = campaign_spend.amount, excl. status='void'."],
+  as3:["使用已验证映射:Customer → accounts.id(Verified)。","Used Verified mapping: Customer → accounts.id."],
+  a_caveat:["注意 / 不确定性","Caveats / Uncertainty"],
+  cv1:["跨连接对账为近似(误差 ±0.3%)。","Cross-Connection reconciliation is approximate (±0.3%)."],
+  cv2:["6 月 10 日后的发票可能尚未入账。","Invoices after Jun 10 may not be posted yet."],
+  a_followups:["建议追问","Recommended Follow-ups"],
+  fu1:["Summer Sale 的每日花费曲线是怎样的?","What's Summer Sale's daily spend curve?"],
+  fu2:["哪些广告组贡献了最多增量?","Which ad groups drove the most increase?"],
+  fu3:["涨幅是否超过账户预算上限?","Does it exceed the account budget cap?"],
+  a_prev:["查看历史回答","Previous answers"],
+  act_rerun:["重新运行","Rerun"],
+  act_handoff:["交接","Hand off"],
+  act_copy:["复制","Copy"],
+  act_playbook:["存为 Playbook","Save as Playbook"],
+
+  /* sources */
+  src_title:["数据源","Data Sources"],
+  src_sub:["把业务系统包装成受控的数据源。提问者只能看到已发布的数据源。","Wrap business systems into controlled Data Sources. Queriers only see Published sources."],
+  src_new:["+ 新建数据源","+ New Data Source"],
+  m_conns:["连接","Connections"], m_members:["成员","Members"], m_qs:["近 7 天提问","Questions / 7d"],
+
+  /* overview */
+  ov_ask:["在此提问","Ask here"], ov_cfg:["配置","Configure"],
+  ov_can:["可回答的问题","What it can answer"], ov_cannot:["不适合的问题","Not suitable for"],
+  ov_ex:["示例问题","Example questions"], ov_conns:["连接","Connections"],
+  ov_about_b:["广告平台数据源,围绕客户、活动、花费与发票的只读排查入口。","The Advertising Platform Data Source — a read-only investigation entry point around customers, campaigns, spend, and invoices."],
+  ov_can_b:["客户广告花费、活动表现、账单与发票对账、月度环比。","Ad spend, campaign performance, invoice reconciliation, MoM changes."],
+  ov_cannot_b:["跨库强一致分析、数据变更、未授权字段访问。","Cross-database strong consistency, mutations, unauthorized fields."],
+
+  /* admin */
+  adm_title:["配置数据源","Configure Data Source"],
+  adm_sub:["校准业务语义并配置策略,然后发布。AI 起草、你确认。","Calibrate semantics, configure policy, then publish. AI drafts, you verify."],
+  adm_t1:["连接","Connections"], adm_t2:["Schema","Schema"], adm_t3:["业务语义","Semantics"], adm_t4:["策略","Policy"], adm_t5:["发布","Publish"],
+  adm3_h:["业务语义校准","Business Semantics Calibration"],
+  adm3_desc:["AI 已根据 Schema 起草术语表与实体映射。只有「已验证」的条目才作为可靠上下文。","AI drafted a glossary and mappings from the schema. Only Verified entries become reliable context."],
+  adm3_gloss:["业务术语表","Business Glossary"], adm3_map:["实体映射","Entity Mapping"],
+  g1_term:["花费 (Spend)","Spend"], g1_def:["campaign_spend.amount,排除 void","campaign_spend.amount, excl. void"],
+  g2_term:["活跃账户","Active Account"], g2_def:["近 30 天有花费的 account","account with spend in last 30 days"],
+  g3_term:["结算日","Settlement Date"], g3_def:["invoices.settled_at(可能滞后)","invoices.settled_at (may lag)"],
+  m1:["Customer → accounts.id","Customer → accounts.id"],
+  m2:["Campaign → campaigns.id","Campaign → campaigns.id"],
+  m3:["Invoice → invoices.id(跨连接键)","Invoice → invoices.id (cross-Connection)"],
+  verify:["确认","Verify"], verified:["已验证","Verified"], suggested:["AI 建议","Suggested"],
+  adm4_h:["数据源策略","Data Source Policy"],
+  adm4_desc:["默认严格、安全、低意外。提问者无需理解这些即可提问。","Strict, safe, low-surprise by default. Queriers never need to understand these."],
+  p1:["只读访问","Read-only access"], p1s:["禁止变更 / DDL / 管理命令","Block mutations / DDL / admin"],
+  p2:["行数上限 1000","Row limit 1000"], p2s:["超出则截断并提示","Truncate and warn"],
+  p3:["敏感字段脱敏","Sensitive-field redaction"], p3s:["邮箱、电话默认脱敏","Email, phone redacted"],
+  p4:["低风险只读自动执行","Auto-execute low-risk read-only"], p4s:["高风险查询需确认","High-risk queries need confirmation"],
+  p5:["缺时间范围需澄清","Clarify when time range missing"], p5s:["避免全表扫描","Avoid broad scans"],
+  q_timeout:["查询超时","Query timeout"],
+  adm5_h:["发布前检查","Pre-publish Checklist"],
+  adm5_desc:["满足以下条件即可从草稿发布。","Meet the following to publish from Draft."],
+  c_ok1:["至少一个可用连接","At least one available Connection"],
+  c_ok2:["名称与简介","Name and short description"],
+  c_ok3:["已生成 Schema 快照","Schema Snapshot generated"],
+  c_ok4:["已生成 AI 草稿","AI draft generated"],
+  c_warn:["待确认:2 条术语 / 映射仍为「AI 建议」","Pending: 2 entries still Suggested"],
+  c_ok6:["已配置策略","Policy configured"],
+  publish_btn:["发布数据源","Publish Data Source"],
+  back:["上一步","Back"], next:["下一步","Next"],
+  test_q:["发布前先用示例问题测试","Test with a sample question before publishing"],
+
+  /* history */
+  hist_today:["今天","Today"], hist_earlier:["更早","Earlier"],
+  h1t:["ACME 账单为何上涨","Why ACME's bill went up"],
+  h2t:["Q2 花费最高的客户","Top customers by spend Q2"],
+  h3t:["退款异常排查","Refund anomaly check"],
+  h4t:["活动超预算检查","Campaign budget overrun"],
+};
+let lang = 0;
+function t(k){ return I[k] ? I[k][lang] : k; }
+function applyLang(){
+  document.querySelectorAll("[data-i]").forEach(el => { const k = el.getAttribute("data-i"); if(I[k]) el.innerHTML = I[k][lang]; });
+  document.documentElement.lang = lang===0 ? "zh-CN" : "en";
+  renderHistory(); renderEmpty(); renderSources(); renderAdmin();
+  mountComposers(); setCrumb();
+  if(current==="overview") renderOverview();
+}
+
+/* ---------------- composer ---------------- */
+let currentDS = "ads";
+function composerHTML(idSuffix){
+  return `<div class="composer" id="composer-${idSuffix}">
+    <textarea id="ta-${idSuffix}" rows="1" placeholder="${t('composer_ph')}" oninput="autoGrow(this)"></textarea>
+    <div class="composer-bar">
+      <button class="ds-pill" onclick="toggleDsMenu(event,'${idSuffix}')">🗂️ <span id="dslabel-${idSuffix}">${t('ds_'+currentDS)}</span> <span class="car">▾</span>
+        <div class="ds-menu hidden" id="dsmenu-${idSuffix}">
+          ${["ads","billing","sample"].map(k=>`<button onclick="pickDs(event,'${k}')">${t('ds_'+k)} ${k===currentDS?'<span style=\"color:var(--accent)\">✓</span>':''}</button>`).join("")}
+        </div>
+      </button>
+      <button class="send-btn" onclick="runAsk('${idSuffix}')">↑</button>
+    </div>
+  </div>`;
+}
+function mountComposers(){
+  document.getElementById("composerHero").innerHTML = composerHTML("hero");
+  document.getElementById("composerDockWrap").innerHTML = composerHTML("dock");
+}
+function autoGrow(el){ el.style.height="auto"; el.style.height=Math.min(el.scrollHeight,160)+"px"; }
+function toggleDsMenu(e,sfx){ e.stopPropagation(); const m=document.getElementById("dsmenu-"+sfx); m.classList.toggle("hidden"); }
+function pickDs(e,k){ e.stopPropagation(); currentDS=k; document.querySelectorAll(".ds-menu").forEach(m=>m.classList.add("hidden")); document.querySelectorAll("[id^=dslabel-]").forEach(l=>l.textContent=t("ds_"+k)); }
+document.addEventListener("click",()=>document.querySelectorAll(".ds-menu").forEach(m=>m.classList.add("hidden")));
+
+/* ---------------- nav ---------------- */
+let current = "ask";
+function go(view){
+  current = view;
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  const map={ask:"view-ask",sources:"view-sources",firstrun:"view-firstrun",admin:"view-admin",overview:"view-overview"};
+  document.getElementById(map[view]).classList.add("active");
+  if(view==="overview") renderOverview();
+  setCrumb();
+  document.getElementById("scrollArea").scrollTo(0,0);
+}
+function setCrumb(){ const m={ask:"crumb_ask",sources:"crumb_src",admin:"crumb_admin",firstrun:"crumb_first",overview:"crumb_over"}; document.getElementById("crumb").innerHTML=t(m[current]); }
+document.querySelectorAll(".side-link").forEach(n=>n.addEventListener("click",()=>go(n.dataset.view)));
+
+/* ---------------- toggles ---------------- */
+document.getElementById("langToggle").addEventListener("click",e=>{ if(!e.target.dataset.lang)return; lang=e.target.dataset.lang==="zh"?0:1; document.querySelectorAll("#langToggle button").forEach(b=>b.classList.toggle("on",b.dataset.lang===e.target.dataset.lang)); applyLang(); });
+document.getElementById("themeToggle").addEventListener("click",e=>{ if(!e.target.dataset.theme)return; document.documentElement.dataset.theme=e.target.dataset.theme; document.querySelectorAll("#themeToggle button").forEach(b=>b.classList.toggle("on",b.dataset.theme===e.target.dataset.theme)); });
+
+/* ---------------- history sidebar ---------------- */
+const HIST=[["h1t","today",1],["h2t","today",0],["h3t","earlier",0],["h4t","earlier",0]];
+let activeHist=-1;
+function renderHistory(){
+  const today=HIST.filter(h=>h[1]==="today"), earlier=HIST.filter(h=>h[1]==="earlier");
+  const item=(h)=>{const idx=HIST.indexOf(h);return `<button class="hist-item ${idx===activeHist?'active':''}" onclick="openHist(${idx})"><span class="hi-st">${h[2]?'●':'○'}</span>${t(h[0])}</button>`;};
+  document.getElementById("histWrap").innerHTML =
+    `<div class="hist-group">${t("hist_today")}</div>`+today.map(item).join("")+
+    `<div class="hist-group">${t("hist_earlier")}</div>`+earlier.map(item).join("");
+}
+function openHist(idx){ activeHist=idx; go("ask"); renderHistory(); showThread(t(HIST[idx][0])); }
+function newInvestigation(){ activeHist=-1; renderHistory(); go("ask"); showEmpty(); }
+
+/* ---------------- empty state ---------------- */
+function renderEmpty(){
+  document.getElementById("sampleCards").innerHTML =
+    [["📈","sc1"],["🏆","sc2"],["💸","sc3"],["↩️","sc4"],["🔗","sc5"]].map(([ic,k])=>
+      `<button class="sample-card" onclick="askFrom('${k}')"><div class="sc-ic">${ic}</div>${t(k)}</button>`).join("");
+  const rec=[["sc1","ads",1],["sc2","ads",0],["sc3","ads",0],["sc4","billing",0]];
+  document.getElementById("recentGrid").innerHTML = rec.map(([k,ds,act],i)=>
+    `<button class="recent-card" onclick="openHist(${i})"><div class="rq">${t(k)}</div><div class="rm"><span class="badge ${act?'good':'neutral'}" style="padding:1px 7px">${act?t('a_status_answered'):'v1'}</span>·<span>${t('ds_'+ds)}</span></div></button>`).join("");
+}
+function showEmpty(){ document.getElementById("askEmpty").style.display="flex"; document.getElementById("askThread").classList.remove("active"); }
+function askFrom(k){ const ta=document.getElementById("ta-hero"); showEmpty(); ta.value=t(k); runAsk("hero"); }
+
+/* ---------------- thread ---------------- */
+let turnSeq=0, ansVersion=0;
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function scrollThread(){ document.getElementById("threadScroll").scrollTo(0,999999); }
+
+/* open from history rail: show a settled thread at v1, no animation */
+function showThread(question){
+  document.getElementById("askEmpty").style.display="none";
+  document.getElementById("askThread").classList.add("active");
+  turnSeq=1; ansVersion=1;
+  document.getElementById("threadMsgs").innerHTML =
+    `<div class="msg msg-user"><div class="bubble">${esc(question)}</div></div>`+
+    `<div class="msg msg-ai"><div class="av">Q</div><div class="ai-body">${answerHTML(1)}</div></div>`;
+  document.getElementById("threadScroll").scrollTo(0,0);
+}
+/* submit from composer: fresh thread (hero / empty) or append a follow-up turn */
+function runAsk(sfx){
+  const ta=document.getElementById("ta-"+sfx);
+  let q=(ta.value||"").trim(); if(!q) q=t("sc1");
+  ta.value=""; autoGrow(ta);
+  const active=document.getElementById("askThread").classList.contains("active");
+  if(sfx==="hero" || !active){
+    document.getElementById("askEmpty").style.display="none";
+    document.getElementById("askThread").classList.add("active");
+    document.getElementById("threadMsgs").innerHTML=""; turnSeq=0; ansVersion=0;
+  }
+  appendTurn(q);
+}
+let lastQ="";
+/* questions that hit a non-answer (cross-Connection without verified mapping) */
+function isBlocked(q){ return /对不上|跨库|跨连接|对账|reconcil|cross[- ]?conn|db a|db b/i.test(q||""); }
+/* append a user question + a streamed AI answer (new version) */
+function appendTurn(q){
+  lastQ=q; turnSeq++; ansVersion++; const bodyId="aiBody-"+turnSeq;
+  document.getElementById("threadMsgs").insertAdjacentHTML("beforeend",
+    `<div class="msg msg-user"><div class="bubble">${esc(q)}</div></div>`+
+    `<div class="msg msg-ai"><div class="av">Q</div><div class="ai-body" id="${bodyId}">${progressHTML()}</div></div>`);
+  runProgress(bodyId,q); scrollThread();
+}
+/* rerun: append a new AI answer version with no user bubble */
+function rerun(){
+  turnSeq++; ansVersion++; const bodyId="aiBody-"+turnSeq;
+  document.getElementById("threadMsgs").insertAdjacentHTML("beforeend",
+    `<div class="msg msg-ai"><div class="av">Q</div><div class="ai-body" id="${bodyId}">${progressHTML()}</div></div>`);
+  runProgress(bodyId,lastQ); scrollThread();
+}
+function runProgress(bodyId,q){
+  const el=document.getElementById(bodyId); const steps=el.querySelectorAll(".pstep");
+  const ver=ansVersion; let i=0; steps[0].classList.add("active");
+  const iv=setInterval(()=>{
+    steps[i].classList.remove("active"); steps[i].classList.add("done"); i++;
+    if(i<steps.length) steps[i].classList.add("active");
+    else { clearInterval(iv); setTimeout(()=>{ el.innerHTML = isBlocked(q)?blockedHTML(ver):answerHTML(ver); scrollThread(); },350); }
+    scrollThread();
+  },600);
+}
+/* non-answer with an Unblock Path: what's missing + concrete next steps */
+function blockedHTML(ver){
+  return `
+    <div class="a-status">
+      <span class="badge warn"><span class="dot"></span>${t("b_status_label")}</span>
+      <span class="badge neutral">${t("b_conf")}</span>
+    </div>
+    <div class="direct" style="background:var(--warn-soft)">${t("b_direct")}</div>
+    <details class="collapse"><summary>${t("a_whatdid")}</summary><div class="cbody"><p style="margin:6px 0;color:var(--text-2)">${t("b_what_partial")}</p></div></details>
+    <div class="sec"><h3>⚠️ ${t("b_missing_t")}</h3>
+      <ul class="tidy"><li><b>${t("b_missing_1")}</b></li><li>${t("b_missing_2")}</li></ul>
+    </div>
+    <div class="sec"><h3>➡️ ${t("b_next_t")}</h3>
+      <div class="followups">
+        <button class="btn sm" onclick="unblockDef(this)">${t("act_pickdef")}</button>
+        <button class="btn sm primary" onclick="unblockNotify(this)">${t("act_notify")}</button>
+        <button class="btn sm" onclick="appendTurn(t('b_narrow_q'))">${t("act_narrow")}</button>
+      </div>
+    </div>`;
+}
+function unblockNotify(btn){ btn.outerHTML = `<span class="badge good">${t("b_notified")}</span>`; }
+function unblockDef(btn){
+  btn.parentNode.innerHTML =
+    `<span style="font-size:12.5px;color:var(--text-2);align-self:center;margin-right:4px">${t("b_pick_q")}</span>`+
+    `<button class="btn sm" onclick="appendTurn(t('b_def_usage'))">${t("b_def_usage")}</button>`+
+    `<button class="btn sm" onclick="appendTurn(t('b_def_invoice'))">${t("b_def_invoice")}</button>`;
+}
+function progressHTML(){
+  return `<div style="font-weight:600;margin-bottom:6px">${t("ask_running")}</div>`+
+    ["step1","step2","step3","step4"].map((k,n)=>`<div class="pstep" data-step="${n}"><span class="mk"></span><span>${t(k)}</span></div>`).join("");
+}
+
+/* ---------------- answer ---------------- */
+function answerHTML(ver){
+  ver = ver || ansVersion || 1;
+  const sql1=`<span class="kw">SELECT</span> date_trunc('month', s.day) AS period, <span class="kw">SUM</span>(s.amount) AS spend
+<span class="kw">FROM</span> campaign_spend s
+<span class="kw">JOIN</span> accounts a <span class="kw">ON</span> a.id = s.account_id
+<span class="kw">WHERE</span> a.name = 'ACME' <span class="kw">AND</span> s.status <> 'void' <span class="kw">AND</span> s.day >= '2026-05-01'
+<span class="kw">GROUP BY</span> 1 <span class="kw">ORDER BY</span> 1 <span class="kw">LIMIT</span> 1000;`;
+  const sql2=`<span class="kw">SELECT</span> c.name AS campaign, <span class="kw">SUM</span>(s.amount) AS spend
+<span class="kw">FROM</span> campaign_spend s <span class="kw">JOIN</span> campaigns c <span class="kw">ON</span> c.id = s.campaign_id
+<span class="kw">WHERE</span> s.account_id = 42 <span class="kw">AND</span> s.day >= '2026-06-01'
+<span class="kw">GROUP BY</span> 1 <span class="kw">ORDER BY</span> 2 DESC <span class="kw">LIMIT</span> 1000;`;
+  return `
+    <div class="a-status">
+      <span class="badge good"><span class="dot"></span>${t("a_status_answered")}</span>
+      <span class="badge warn">${t("a_conf")}</span>
+      <span style="font-size:12px;color:var(--text-3)">${t("a_conf_reason")}</span>
+    </div>
+    <div class="direct">${t("a_direct")}</div>
+    <details class="collapse"><summary>${t("a_whatdid")}</summary><div class="cbody"><p style="margin:6px 0;color:var(--text-2)">${t("a_whatdid_b")}</p></div></details>
+    <div class="sec"><h3>${t("a_findings")}</h3>
+      <div class="finding"><span class="fb">●</span><span>${t("f1")}</span> <span class="ev-ref" onclick="flashEv()">E1</span></div>
+      <div class="finding"><span class="fb">●</span><span>${t("f2")}</span> <span class="ev-ref" onclick="flashEv()">E2</span></div>
+      <div class="finding"><span class="fb">●</span><span>${t("f3")}</span> <span class="ev-ref" onclick="flashEv()">E1·E3</span></div>
+    </div>
+    <div class="sec"><h3>${t("a_evidence")} <span class="n">· 3</span></h3>
+      <div class="evidence-item" id="ev-1">
+        <div class="eh"><span class="id">E1 · ${t("ev1_purpose")}</span><span class="badge neutral">12 rows · 84ms</span></div>
+        <div class="kv"><span>${t("ev_ds")}</span><b>${t("ds_ads")}</b><span>${t("ev_conn")}</span><b>ads_warehouse_ro</b><span>${t("ev_tables")}</span><b>campaign_spend, accounts</b><span>${t("ev_summary")}</span><b>${t("ev1_summary")}</b><span>${t("ev_policy")}</span><b>${t("ev1_policy")}</b></div>
+        <details class="collapse"><summary>${t("show_sql")}</summary><div class="cbody"><pre class="sql">${sql1}</pre></div></details>
+      </div>
+      <div class="evidence-item">
+        <div class="eh"><span class="id">E2 · ${t("ev2_purpose")}</span><span class="badge neutral">6 rows · 61ms</span></div>
+        <div class="kv"><span>${t("ev_ds")}</span><b>${t("ds_ads")}</b><span>${t("ev_conn")}</span><b>ads_warehouse_ro</b><span>${t("ev_tables")}</span><b>campaign_spend, campaigns</b><span>${t("ev_summary")}</span><b>${t("ev2_summary")}</b><span>${t("ev_policy")}</span><b>${t("ev2_policy")}</b></div>
+        <table class="tbl"><tr><th>campaign</th><th>spend</th></tr><tr><td>Summer Sale</td><td>¥6,674</td></tr><tr><td>Brand Always-On</td><td>¥1,820</td></tr><tr><td>Retargeting</td><td>¥906</td></tr></table>
+        <details class="collapse"><summary>${t("show_sql")}</summary><div class="cbody"><pre class="sql">${sql2}</pre></div></details>
+      </div>
+    </div>
+    <details class="collapse"><summary>${t("a_assume")}</summary><div class="cbody"><ul class="tidy"><li>${t("as1")}</li><li>${t("as2")}</li><li><b>${t("as3")}</b></li></ul></div></details>
+    <details class="collapse" open><summary>⚠️ ${t("a_caveat")}</summary><div class="cbody"><ul class="tidy"><li>${t("cv1")}</li><li>${t("cv2")}</li></ul></div></details>
+    <div class="sec"><h3>${t("a_followups")}</h3><div class="followups">
+      <div class="chip" onclick="askFrom2(this)">${t("fu1")}</div><div class="chip" onclick="askFrom2(this)">${t("fu2")}</div><div class="chip" onclick="askFrom2(this)">${t("fu3")}</div>
+    </div></div>
+    <div class="sec" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sm" onclick="rerun()">↻ ${t("act_rerun")}</button>
+      <button class="btn sm">⤴ ${t("act_handoff")}</button>
+      <button class="btn sm">⧉ ${t("act_copy")}</button>
+      <button class="btn sm" style="opacity:.65">+ ${t("act_playbook")} <span style="font-size:10px">(roadmap)</span></button>
+    </div>
+    <div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--text-3)">${lang===0?`版本 v${ver} · 刚刚 · 最新`:`Version v${ver} · just now · latest`}</span>${ver>1?`<span class="ev-ref" style="background:none">${t("a_prev")} (v1–v${ver-1})</span>`:`<span class="ev-ref" style="background:none">${t("a_prev")}</span>`}</div>`;
+}
+function flashEv(){ const e=document.getElementById("ev-1"); if(e){ e.scrollIntoView({behavior:"smooth",block:"center"}); e.style.borderColor="var(--accent)"; setTimeout(()=>e.style.borderColor="",1200);} }
+function askFrom2(el){ const ta=document.getElementById("ta-dock"); if(ta){ ta.value=el.textContent; runAsk("dock"); } }
+
+/* ---------------- sources ---------------- */
+const SOURCES=[
+  {key:"ads",name:["广告平台","Advertising Platform"],desc:["客户广告花费、活动表现与发票对账。","Customer ad spend, campaign performance, invoice reconciliation."],st:"published",conns:2,members:6,qs:23},
+  {key:"billing",name:["计费系统","Billing System"],desc:["订阅、发票、退款与结算的只读排查。","Read-only investigation of subscriptions, invoices, refunds."],st:"published",conns:1,members:4,qs:11},
+  {key:"crm",name:["CRM(草稿)","CRM (Draft)"],desc:["客户、合同与机会;语义校准中。","Customers, contracts, opportunities; being calibrated."],st:"draft",conns:1,members:2,qs:0},
+  {key:"sample",name:["示例数据源","Sample Data Source"],desc:["内置演示数据,无需额外数据库即可跑通全流程。","Built-in demo data; runs the full flow with no extra database."],st:"published",conns:1,members:6,qs:5},
+];
+function renderSources(){
+  document.getElementById("ds-grid").innerHTML = SOURCES.map(s=>{
+    const lbl=s.st==="draft"?t("draft"):t("published"); const cls=s.st==="draft"?"warn":"good";
+    return `<div class="ds-card" onclick="go('${s.key==='ads'?'overview':'admin'}')">
+      <div class="top"><div class="ds-name">${s.name[lang]}</div><span class="badge ${cls}"><span class="dot"></span>${lbl}</span></div>
+      <div class="ds-desc">${s.desc[lang]}</div>
+      <div class="meta"><span><b>${s.conns}</b> ${t("m_conns")}</span><span><b>${s.members}</b> ${t("m_members")}</span><span><b>${s.qs}</b> ${t("m_qs")}</span></div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- overview ---------------- */
+function renderOverview(){
+  const ex=lang===0?["为什么 ACME 账单更高?","Q2 花费 top5?","哪些活动超预算?"]:["Why is ACME's bill higher?","Top 5 by spend in Q2?","Which campaigns over budget?"];
+  document.getElementById("overview-pad").innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div><h1>${t("ds_ads")}</h1><p class="sub" style="margin-bottom:12px">${t("ov_about_b")}</p>
+        <span class="badge good"><span class="dot"></span>${t("published")}</span> <span class="badge neutral">${t("role_querier")}</span></div>
+      <div class="row"><button class="btn primary" onclick="go('ask')">${t("ov_ask")}</button><button class="btn" onclick="go('admin')">${t("ov_cfg")}</button></div>
+    </div>
+    <div class="row" style="margin-top:18px;align-items:stretch">
+      <div class="card" style="flex:1;min-width:280px">
+        <h3 style="margin:0 0 8px;font-size:13.5px">✅ ${t("ov_can")}</h3><p style="color:var(--text-2);font-size:13px;margin:0">${t("ov_can_b")}</p>
+        <h3 style="margin:16px 0 8px;font-size:13.5px">⛔ ${t("ov_cannot")}</h3><p style="color:var(--text-2);font-size:13px;margin:0">${t("ov_cannot_b")}</p></div>
+      <div class="card" style="flex:1;min-width:280px">
+        <h3 style="margin:0 0 8px;font-size:13.5px">💡 ${t("ov_ex")}</h3><div class="followups">${ex.map(q=>`<div class="chip" onclick="go('ask')">${q}</div>`).join("")}</div>
+        <h3 style="margin:16px 0 8px;font-size:13.5px">🔌 ${t("ov_conns")}</h3><div class="kv"><span>billing_prod_readonly</span><b style="color:var(--good)">● ok</b><span>ads_warehouse_ro</span><b style="color:var(--good)">● ok</b></div></div>
+    </div>`;
+}
+
+/* ---------------- admin ---------------- */
+let astep=2;
+function renderAdmin(){
+  const p=document.getElementById("adm-panel"); if(!p)return;
+  if(astep===2){
+    p.innerHTML=`<h2 style="margin-top:0">${t("adm3_h")}</h2><p class="sub" style="margin-bottom:16px">${t("adm3_desc")}</p>
+      <h3 style="font-size:13.5px;margin:0 0 10px">${t("adm3_gloss")}</h3>${glossRow("g1",1)}${glossRow("g2",0)}${glossRow("g3",0)}
+      <h3 style="font-size:13.5px;margin:18px 0 10px">${t("adm3_map")}</h3>${mapRow("m1",1)}${mapRow("m2",1)}${mapRow("m3",0)}${admFoot()}`;
+  } else if(astep===3){
+    p.innerHTML=`<h2 style="margin-top:0">${t("adm4_h")}</h2><p class="sub" style="margin-bottom:16px">${t("adm4_desc")}</p>
+      ${pol("p1","p1s",1)}${pol("p2","p2s",1)}${pol("p3","p3s",1)}${pol("p4","p4s",1)}${pol("p5","p5s",1)}
+      <div class="field" style="max-width:240px;margin-top:16px"><label>${t("q_timeout")}</label><select><option>15s</option><option selected>30s</option><option>60s</option></select></div>${admFoot()}`;
+  } else if(astep===4){
+    p.innerHTML=`<h2 style="margin-top:0">${t("adm5_h")}</h2><p class="sub" style="margin-bottom:16px">${t("adm5_desc")}</p>
+      ${chk(1,"c_ok1")}${chk(1,"c_ok2")}${chk(1,"c_ok3")}${chk(1,"c_ok4")}${chk("warn","c_warn")}${chk(1,"c_ok6")}
+      <div class="ds-can" style="margin-top:16px">💡 <b>${t("test_q")}</b></div>
+      <div class="config-foot"><button class="btn" onclick="setAstep(3)">${t("back")}</button><button class="btn primary" onclick="go('sources')">${t("publish_btn")}</button></div>`;
+  } else {
+    p.innerHTML=`<p class="sub">${t("adm_t"+(astep+1))} — ${lang===0?'此步骤在原型中略去':'(omitted in prototype)'}.</p>${admFoot()}`;
+  }
+  document.querySelectorAll("#adm-steps .step").forEach(s=>{const n=+s.dataset.astep;s.classList.toggle("active",n===astep);s.classList.toggle("done",n<astep);});
+}
+function setAstep(n){astep=n;renderAdmin();document.getElementById("scrollArea").scrollTo(0,0);}
+document.querySelectorAll("#adm-steps .step").forEach(s=>s.addEventListener("click",()=>setAstep(+s.dataset.astep)));
+function glossRow(k,v){return `<div class="gloss-item"><span class="g-term">${t(k+"_term")}</span><span class="g-def">${t(k+"_def")}</span>${vbtn(v)}</div>`;}
+function mapRow(k,v){return `<div class="gloss-item"><span class="g-def" style="font-family:monospace;color:var(--text)">${t(k)}</span>${vbtn(v)}</div>`;}
+function vbtn(v){ return v?`<span class="badge good">✓ ${t("verified")}</span>`:`<span class="badge warn">${t("suggested")}</span><button class="btn sm primary" onclick="this.parentNode.querySelector('.badge').outerHTML='<span class=\\'badge good\\'>✓ '+t('verified')+'</span>';this.remove()">${t("verify")}</button>`; }
+function pol(k,ks,on){return `<div class="policy-row"><div class="p-label"><b>${t(k)}</b><small>${t(ks)}</small></div><div class="switch ${on?'':'off'}" onclick="this.classList.toggle('off')"></div></div>`;}
+function chk(ok,k){const b=ok==="warn"?`<span class="badge warn">!</span>`:`<span class="badge good">✓</span>`;return `<div class="gloss-item" style="background:var(--surface)">${b}<span class="g-def" style="color:var(--text)">${t(k)}</span></div>`;}
+function admFoot(){return `<div class="config-foot"><button class="btn" onclick="setAstep(${Math.max(0,astep-1)})">${t("back")}</button><button class="btn primary" onclick="setAstep(${astep+1})">${t("next")}</button></div>`;}
+
+/* init */
+applyLang(); go("ask"); showEmpty();
+</script>
+</body>
+</html>
