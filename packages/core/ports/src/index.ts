@@ -2,3 +2,4 @@
 // Agent/store ports are added in their respective phases.
 export * from './safety';
 export * from './connector';
+export * from './redaction';

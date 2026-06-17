@@ -45,6 +45,12 @@ importers:
 
   packages/core/ports: {}
 
+  packages/core/redaction:
+    dependencies:
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+
   packages/core/safety:
     dependencies:
       '@evidata/ports':
