@@ -26,7 +26,9 @@ describe('validateAnswer', () => {
   it('flags a Key Finding with no Evidence (guardrail: every finding cites evidence)', () => {
     const a = answeredFixture();
     // Simulate malformed agent output: empty evidenceIds (violates the type).
-    a.keyFindings = [{ text: 'unsupported claim', evidenceIds: [] as unknown as KeyFinding['evidenceIds'] }];
+    a.keyFindings = [
+      { text: 'unsupported claim', evidenceIds: [] as unknown as KeyFinding['evidenceIds'] },
+    ];
     expect(codes(a)).toContain('finding_without_evidence');
   });
 

@@ -102,11 +102,23 @@ export class AgentRunner {
       }
 
       if (decision.kind === 'unblock') {
-        return this.finalize(input, this.nonAnswer(input, resolveUnblock(decision.missing)), evidence, queryRuns, now);
+        return this.finalize(
+          input,
+          this.nonAnswer(input, resolveUnblock(decision.missing)),
+          evidence,
+          queryRuns,
+          now,
+        );
       }
 
       if (decision.kind === 'final') {
-        return this.finalize(input, this.answered(input, decision.draft, evidence, history), evidence, queryRuns, now);
+        return this.finalize(
+          input,
+          this.answered(input, decision.draft, evidence, history),
+          evidence,
+          queryRuns,
+          now,
+        );
       }
 
       // kind === 'query' — SAFETY_GATE first (the boundary).
@@ -122,7 +134,9 @@ export class AgentRunner {
       const execOptions: ExecOptions = {
         rowLimit: policy.rowLimit,
         timeoutMs: policy.timeoutMs,
-        ...(policy.statementTimeoutMs !== undefined ? { statementTimeoutMs: policy.statementTimeoutMs } : {}),
+        ...(policy.statementTimeoutMs !== undefined
+          ? { statementTimeoutMs: policy.statementTimeoutMs }
+          : {}),
       };
       const raw = await executor.run(sql, execOptions);
       const redacted = this.deps.redactor.redact(raw, {
@@ -153,12 +167,21 @@ export class AgentRunner {
         redactedColumns: redacted.redactedColumns,
       };
       history.toolResults.push(toolResult);
-      sink({ type: 'query', purpose, status: 'ok', rowCount: raw.rowCount, elapsedMs: raw.elapsedMs });
+      sink({
+        type: 'query',
+        purpose,
+        status: 'ok',
+        rowCount: raw.rowCount,
+        elapsedMs: raw.elapsedMs,
+      });
     }
 
     // Step budget exhausted before the provider concluded.
     const res = resolveUnblock([
-      { kind: 'insufficient_results', description: 'Reached the per-turn step budget before concluding.' },
+      {
+        kind: 'insufficient_results',
+        description: 'Reached the per-turn step budget before concluding.',
+      },
     ]);
     return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
   }
@@ -181,17 +204,30 @@ export class AgentRunner {
       connectorId: this.deps.connector.id,
       tables: gate.touchedTables,
       sql,
-      resultSummary: redacted.truncated ? `${raw.rowCount} rows (sampled)` : `${raw.rowCount} row(s)`,
+      resultSummary: redacted.truncated
+        ? `${raw.rowCount} rows (sampled)`
+        : `${raw.rowCount} row(s)`,
       sampleRows: redacted.sampleRows,
-      execution: { status: 'ok', elapsedMs: raw.elapsedMs, rowCount: raw.rowCount, truncated: raw.truncated },
+      execution: {
+        status: 'ok',
+        elapsedMs: raw.elapsedMs,
+        rowCount: raw.rowCount,
+        truncated: raw.truncated,
+      },
       safety: confirmed ? 'confirmed_by_user' : 'auto_executed',
       policyNotes: `Read-only · row limit ${policy.rowLimit} · ${confirmed ? 'sensitive/broad — confirmed' : 'auto-executed (low risk)'}`,
       redactedColumns: redacted.redactedColumns,
     };
   }
 
-  private answered(input: AgentInput, draft: AnswerDraft, evidence: Evidence[], history: AgentHistory): Answer {
-    const whatIDid = draft.whatIDid ?? (history.reasoning.length ? history.reasoning.join(' · ') : undefined);
+  private answered(
+    input: AgentInput,
+    draft: AnswerDraft,
+    evidence: Evidence[],
+    history: AgentHistory,
+  ): Answer {
+    const whatIDid =
+      draft.whatIDid ?? (history.reasoning.length ? history.reasoning.join(' · ') : undefined);
     return {
       investigationId: input.investigationId,
       status: draft.status,
@@ -249,11 +285,16 @@ export class AgentRunner {
       if (answer.status === 'Answered' || answer.status === 'Partial') {
         // Never show an invalid answered draft — downgrade to an honest non-answer.
         const res = resolveUnblock([
-          { kind: 'insufficient_results', description: 'The drafted answer failed contract validation.' },
+          {
+            kind: 'insufficient_results',
+            description: 'The drafted answer failed contract validation.',
+          },
         ]);
         return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
       }
-      throw new Error(`non-answer failed validation: ${JSON.stringify(violations)} ${JSON.stringify(schema.errors)}`);
+      throw new Error(
+        `non-answer failed validation: ${JSON.stringify(violations)} ${JSON.stringify(schema.errors)}`,
+      );
     }
     return { answer, queryRuns };
   }

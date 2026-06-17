@@ -62,11 +62,20 @@ function dailyPosted(
 }
 
 interface SeedData {
-  accounts: Array<[id: number, name: string, status: string, createdAt: string, email: string | null]>;
+  accounts: Array<
+    [id: number, name: string, status: string, createdAt: string, email: string | null]
+  >;
   campaigns: Array<[id: number, accountId: number, name: string, budget: number]>;
   spend: SpendRow[];
   invoices: Array<
-    [id: number, accountId: number, period: string, amount: number, settledAt: string | null, ref: string]
+    [
+      id: number,
+      accountId: number,
+      period: string,
+      amount: number,
+      settledAt: string | null,
+      ref: string,
+    ]
   >;
 }
 
@@ -130,16 +139,24 @@ const nullable = (s: string | null): string => (s === null ? 'NULL' : q(s));
 
 function insertStatements(data: SeedData): string {
   const accounts = data.accounts
-    .map(([id, name, status, createdAt, email]) => `(${id}, ${q(name)}, ${q(status)}, ${q(createdAt)}, ${nullable(email)})`)
+    .map(
+      ([id, name, status, createdAt, email]) =>
+        `(${id}, ${q(name)}, ${q(status)}, ${q(createdAt)}, ${nullable(email)})`,
+    )
     .join(',\n');
   const campaigns = data.campaigns
     .map(([id, accountId, name, budget]) => `(${id}, ${accountId}, ${q(name)}, ${budget})`)
     .join(',\n');
   const spend = data.spend
-    .map((r) => `(${r.id}, ${r.accountId}, ${r.campaignId}, ${q(r.day)}, ${r.amount}, ${q(r.status)})`)
+    .map(
+      (r) => `(${r.id}, ${r.accountId}, ${r.campaignId}, ${q(r.day)}, ${r.amount}, ${q(r.status)})`,
+    )
     .join(',\n');
   const invoices = data.invoices
-    .map(([id, accountId, period, amount, settledAt, ref]) => `(${id}, ${accountId}, ${q(period)}, ${amount}, ${nullable(settledAt)}, ${q(ref)})`)
+    .map(
+      ([id, accountId, period, amount, settledAt, ref]) =>
+        `(${id}, ${accountId}, ${q(period)}, ${amount}, ${nullable(settledAt)}, ${q(ref)})`,
+    )
     .join(',\n');
 
   return [

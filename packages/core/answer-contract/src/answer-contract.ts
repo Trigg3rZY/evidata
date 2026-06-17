@@ -67,11 +67,11 @@ export interface EvidenceExecutionMeta {
 }
 
 export interface Evidence {
-  id: string;                       // referenced by Key Findings, e.g. "E1"
+  id: string; // referenced by Key Findings, e.g. "E1"
   purpose: LocalizedText;
   dataSourceId: string;
   dataSourceName: LocalizedText;
-  connectorId: string;              // single connection per evidence item
+  connectorId: string; // single connection per evidence item
   tables: string[];
   /** Policy-bounded, as-executed SQL. NOT raw internal SQL. (PRD D4) */
   sql: string;
@@ -83,14 +83,14 @@ export interface Evidence {
   safety: SafetyClassification;
   /** e.g. "Read-only · row limit 1000 · auto-executed (low risk)" */
   policyNotes: LocalizedText;
-  redactedColumns: string[];        // columns masked/omitted for the viewer's role
+  redactedColumns: string[]; // columns masked/omitted for the viewer's role
 }
 
 export interface KeyFinding {
   text: LocalizedText;
   /** MUST be non-empty: every Key Finding cites at least one Evidence id. */
   evidenceIds: [string, ...string[]];
-  chartRef?: string;                // optional reference into `charts`
+  chartRef?: string; // optional reference into `charts`
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ export interface Chart {
   kind: ChartKind;
   /** Charts must reference Evidence (PRD Answer Contract). */
   evidenceIds: [string, ...string[]];
-  spec: unknown;                    // bounded, declarative; rendered, never editable in V1
+  spec: unknown; // bounded, declarative; rendered, never editable in V1
 }
 
 // ---------------------------------------------------------------------------
@@ -125,10 +125,10 @@ export type UnblockActionKind =
   | 'pick_candidate'
   | 'set_time_range'
   | 'pick_definition'
-  | 'request_access'        // roadmap-routed to Admin
-  | 'notify_admin_verify'   // creates a Suggested item (correction loop)
+  | 'request_access' // roadmap-routed to Admin
+  | 'notify_admin_verify' // creates a Suggested item (correction loop)
   | 'narrow_question'
-  | 'view_mutation_draft';  // shows draft + risk notes, never executes
+  | 'view_mutation_draft'; // shows draft + risk notes, never executes
 
 export interface UnblockAction {
   kind: UnblockActionKind;
@@ -169,8 +169,8 @@ export interface FollowupSuggestion {
 // ---------------------------------------------------------------------------
 
 export interface AnswerVersionMeta {
-  version: number;                  // 1-based, monotonic within an Investigation
-  createdAt: string;                // ISO-8601
+  version: number; // 1-based, monotonic within an Investigation
+  createdAt: string; // ISO-8601
   createdAfter?: {
     kind: 'clarification' | 'followup' | 'rerun' | 'definition_correction';
     fromVersion?: number;
@@ -184,14 +184,14 @@ export interface Answer {
   /** One-sentence direct answer (or explicit "cannot fully answer"). */
   directAnswer: LocalizedText;
   confidence: Confidence;
-  confidenceReason: LocalizedText;  // REQUIRED (PRD)
-  whatIDid?: LocalizedText;         // collapsible, durable
-  keyFindings: KeyFinding[];        // each cites Evidence; empty allowed only for non-answered
+  confidenceReason: LocalizedText; // REQUIRED (PRD)
+  whatIDid?: LocalizedText; // collapsible, durable
+  keyFindings: KeyFinding[]; // each cites Evidence; empty allowed only for non-answered
   evidence: Evidence[];
   assumptions: AssumptionItem[];
   caveats: LocalizedText[];
   charts?: Chart[];
-  recommendedFollowups: FollowupSuggestion[];   // 2-3
+  recommendedFollowups: FollowupSuggestion[]; // 2-3
   /** REQUIRED when status !== 'Answered' (PRD Unblock Path). */
   unblock?: UnblockPath;
   meta: AnswerVersionMeta;
@@ -203,8 +203,8 @@ export interface Answer {
 
 export interface Investigation {
   id: string;
-  dataSourceId: string;             // bound for the Thread's lifetime
-  title: LocalizedText;             // renamable; defaults from first question
+  dataSourceId: string; // bound for the Thread's lifetime
+  title: LocalizedText; // renamable; defaults from first question
   createdAt: string;
   updatedAt: string;
 }
@@ -221,7 +221,7 @@ export interface Turn {
 
 export interface InvestigationWithAnswers extends Investigation {
   turns: Turn[];
-  answers: Answer[];                // all versions, latest last
+  answers: Answer[]; // all versions, latest last
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +242,10 @@ export interface ContractViolation {
 export function validateAnswer(a: Answer): ContractViolation[] {
   const v: ContractViolation[] = [];
   if (!isLegalStatusConfidence(a.status, a.confidence)) {
-    v.push({ code: 'illegal_status_confidence', message: `${a.status} + ${a.confidence} is not allowed` });
+    v.push({
+      code: 'illegal_status_confidence',
+      message: `${a.status} + ${a.confidence} is not allowed`,
+    });
   }
   if (!a.confidenceReason?.trim()) {
     v.push({ code: 'missing_confidence_reason', message: 'confidenceReason is required' });
@@ -259,10 +262,16 @@ export function validateAnswer(a: Answer): ContractViolation[] {
     }
   }
   if (a.status !== 'Answered' && !a.unblock) {
-    v.push({ code: 'missing_unblock_on_non_answer', message: `${a.status} requires an Unblock Path` });
+    v.push({
+      code: 'missing_unblock_on_non_answer',
+      message: `${a.status} requires an Unblock Path`,
+    });
   }
   if (a.status === 'Answered' && a.keyFindings.length === 0) {
-    v.push({ code: 'answered_without_findings', message: 'Answered requires at least one Key Finding' });
+    v.push({
+      code: 'answered_without_findings',
+      message: 'Answered requires at least one Key Finding',
+    });
   }
   return v;
 }

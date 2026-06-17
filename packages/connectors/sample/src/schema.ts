@@ -111,7 +111,12 @@ export const SAMPLE_SCHEMA_SNAPSHOT: SchemaSnapshot = {
         { name: 'period_month', dataType: 'date', nullable: false },
         { name: 'amount', dataType: 'numeric', nullable: false },
         { name: 'settled_at', dataType: 'date', nullable: true },
-        { name: 'customer_ref', dataType: 'text', nullable: true, comment: 'loose ref; not a clean FK' },
+        {
+          name: 'customer_ref',
+          dataType: 'text',
+          nullable: true,
+          comment: 'loose ref; not a clean FK',
+        },
       ],
     },
   ],

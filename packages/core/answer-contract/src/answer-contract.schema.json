@@ -37,7 +37,11 @@
     "charts": { "type": "array", "items": { "$ref": "#/$defs/chart" } },
     "recommendedFollowups": {
       "type": "array",
-      "items": { "type": "object", "required": ["question"], "properties": { "question": { "type": "string" } } }
+      "items": {
+        "type": "object",
+        "required": ["question"],
+        "properties": { "question": { "type": "string" } }
+      }
     },
     "unblock": { "$ref": "#/$defs/unblockPath" },
     "meta": { "$ref": "#/$defs/versionMeta" }
@@ -46,11 +50,36 @@
     {
       "$comment": "Status x Confidence legality.",
       "oneOf": [
-        { "properties": { "status": { "const": "Answered" }, "confidence": { "enum": ["High", "Medium", "Low"] } } },
-        { "properties": { "status": { "const": "Partial" }, "confidence": { "enum": ["Medium", "Low", "CannotDetermine"] } } },
-        { "properties": { "status": { "const": "NeedsClarification" }, "confidence": { "const": "CannotDetermine" } } },
-        { "properties": { "status": { "const": "BlockedByPolicy" }, "confidence": { "const": "CannotDetermine" } } },
-        { "properties": { "status": { "const": "NoReliableAnswer" }, "confidence": { "enum": ["CannotDetermine", "Low"] } } }
+        {
+          "properties": {
+            "status": { "const": "Answered" },
+            "confidence": { "enum": ["High", "Medium", "Low"] }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "Partial" },
+            "confidence": { "enum": ["Medium", "Low", "CannotDetermine"] }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "NeedsClarification" },
+            "confidence": { "const": "CannotDetermine" }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "BlockedByPolicy" },
+            "confidence": { "const": "CannotDetermine" }
+          }
+        },
+        {
+          "properties": {
+            "status": { "const": "NoReliableAnswer" },
+            "confidence": { "enum": ["CannotDetermine", "Low"] }
+          }
+        }
       ]
     },
     {
@@ -76,7 +105,18 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["id", "purpose", "dataSourceId", "connectorId", "tables", "sql", "resultSummary", "execution", "safety", "policyNotes"],
+      "required": [
+        "id",
+        "purpose",
+        "dataSourceId",
+        "connectorId",
+        "tables",
+        "sql",
+        "resultSummary",
+        "execution",
+        "safety",
+        "policyNotes"
+      ],
       "properties": {
         "id": { "type": "string" },
         "purpose": { "type": "string" },
@@ -91,7 +131,10 @@
           "type": "object",
           "required": ["status", "elapsedMs", "rowCount", "truncated"],
           "properties": {
-            "status": { "type": "string", "enum": ["ok", "timeout", "connection_lost", "zero_rows", "error"] },
+            "status": {
+              "type": "string",
+              "enum": ["ok", "timeout", "connection_lost", "zero_rows", "error"]
+            },
             "elapsedMs": { "type": "number" },
             "rowCount": { "type": "integer" },
             "truncated": { "type": "boolean" }
@@ -126,7 +169,15 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["business_object", "time_range", "authorization", "mutation_required", "ambiguous_definition", "unverified_mapping", "insufficient_results"]
+          "enum": [
+            "business_object",
+            "time_range",
+            "authorization",
+            "mutation_required",
+            "ambiguous_definition",
+            "unverified_mapping",
+            "insufficient_results"
+          ]
         },
         "description": { "type": "string" }
       }
@@ -137,7 +188,16 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["specify_object", "pick_candidate", "set_time_range", "pick_definition", "request_access", "notify_admin_verify", "narrow_question", "view_mutation_draft"]
+          "enum": [
+            "specify_object",
+            "pick_candidate",
+            "set_time_range",
+            "pick_definition",
+            "request_access",
+            "notify_admin_verify",
+            "narrow_question",
+            "view_mutation_draft"
+          ]
         },
         "label": { "type": "string" },
         "choices": {
@@ -145,7 +205,11 @@
           "items": {
             "type": "object",
             "required": ["id", "label"],
-            "properties": { "id": { "type": "string" }, "label": { "type": "string" }, "followupQuestion": { "type": "string" } }
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "followupQuestion": { "type": "string" }
+            }
           }
         },
         "createsSuggestion": { "type": "boolean" }
@@ -155,8 +219,16 @@
       "type": "object",
       "required": ["whatsMissing", "nextSteps"],
       "properties": {
-        "whatsMissing": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/missingInfo" } },
-        "nextSteps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/unblockAction" } }
+        "whatsMissing": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/missingInfo" }
+        },
+        "nextSteps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/unblockAction" }
+        }
       }
     },
     "versionMeta": {
@@ -169,7 +241,10 @@
           "type": "object",
           "required": ["kind"],
           "properties": {
-            "kind": { "type": "string", "enum": ["clarification", "followup", "rerun", "definition_correction"] },
+            "kind": {
+              "type": "string",
+              "enum": ["clarification", "followup", "rerun", "definition_correction"]
+            },
             "fromVersion": { "type": "integer", "minimum": 1 }
           }
         },

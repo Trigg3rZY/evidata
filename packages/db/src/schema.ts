@@ -112,9 +112,7 @@ export const evidence = meta.table(
     redactedColumns: jsonb('redacted_columns').notNull(), // string[]
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
-  (t) => [
-    uniqueIndex('evidence_ref_uq').on(t.investigationId, t.answerVersion, t.evidenceRef),
-  ],
+  (t) => [uniqueIndex('evidence_ref_uq').on(t.investigationId, t.answerVersion, t.evidenceRef)],
 );
 
 export const suggestions = meta.table('suggestions', {

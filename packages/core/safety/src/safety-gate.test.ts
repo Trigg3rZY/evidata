@@ -47,7 +47,7 @@ describe('SafetyGate — reject rules', () => {
   });
 
   it.each([
-    ['INSERT', "INSERT INTO accounts(id) VALUES (1)"],
+    ['INSERT', 'INSERT INTO accounts(id) VALUES (1)'],
     ['UPDATE', "UPDATE accounts SET plan = 'pro' WHERE id = 1"],
     ['DELETE', 'DELETE FROM accounts WHERE id = 1'],
     ['TRUNCATE', 'TRUNCATE accounts'],
@@ -59,7 +59,10 @@ describe('SafetyGate — reject rules', () => {
 
   it.each([
     ['DELETE in CTE', 'WITH x AS (DELETE FROM accounts RETURNING id) SELECT * FROM x'],
-    ['INSERT in CTE', 'WITH x AS (INSERT INTO accounts(id) VALUES (1) RETURNING id) SELECT * FROM x'],
+    [
+      'INSERT in CTE',
+      'WITH x AS (INSERT INTO accounts(id) VALUES (1) RETURNING id) SELECT * FROM x',
+    ],
     ['UPDATE in CTE', "WITH x AS (UPDATE accounts SET plan = 'p' RETURNING id) SELECT * FROM x"],
   ])('rejects data-modifying CTE bodies: %s', (_label, sql) => {
     expect(rejectReason(check(sql))).toBe('not_read_only');
@@ -91,7 +94,9 @@ describe('SafetyGate — reject rules', () => {
     expect(check('SET ROLE admin').verdict).toBe('reject');
     expect(check('VACUUM accounts').verdict).toBe('reject');
     expect(check("COPY accounts TO '/tmp/x.csv'").verdict).toBe('reject');
-    expect(check("SELECT * FROM dblink('host=evil', 'SELECT 1') AS t(x int)").verdict).toBe('reject');
+    expect(check("SELECT * FROM dblink('host=evil', 'SELECT 1') AS t(x int)").verdict).toBe(
+      'reject',
+    );
   });
 });
 
@@ -107,7 +112,9 @@ describe('SafetyGate — allow + flags', () => {
   });
 
   it('allows a join across two authorized tables and reports both', () => {
-    const d = check('SELECT * FROM usage u JOIN invoices i ON u.account_id = i.customer_id WHERE i.month = 1');
+    const d = check(
+      'SELECT * FROM usage u JOIN invoices i ON u.account_id = i.customer_id WHERE i.month = 1',
+    );
     expect(d.verdict).toBe('allow');
     if (d.verdict === 'allow') {
       expect(new Set(d.touchedTables)).toEqual(new Set(['usage', 'invoices']));
@@ -121,7 +128,9 @@ describe('SafetyGate — allow + flags', () => {
   });
 
   it('allows a UNION over authorized tables', () => {
-    const d = check('SELECT id FROM accounts WHERE id = 1 UNION SELECT customer_id FROM invoices WHERE id = 1');
+    const d = check(
+      'SELECT id FROM accounts WHERE id = 1 UNION SELECT customer_id FROM invoices WHERE id = 1',
+    );
     expect(d.verdict).toBe('allow');
   });
 
@@ -157,7 +166,9 @@ describe('SafetyGate — allow + flags', () => {
   });
 
   it('honours a Policy that disables confirmation triggers', () => {
-    const c = ctx({ policy: policy({ confirmation: { onBroadScan: false, onSensitiveAccess: false } }) });
+    const c = ctx({
+      policy: policy({ confirmation: { onBroadScan: false, onSensitiveAccess: false } }),
+    });
     const d = check('SELECT * FROM invoices', c); // broad scan of large table
     if (d.verdict === 'allow') expect(d.needsConfirmation).toBe(false);
   });
@@ -167,7 +178,10 @@ describe('SafetyGate — EXPLAIN', () => {
   it.each([
     ['plain', 'EXPLAIN SELECT id FROM invoices WHERE id = 1'],
     ['verbose', 'EXPLAIN VERBOSE SELECT id FROM invoices WHERE id = 1'],
-    ['parenthesised options', 'EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM invoices WHERE id = 1'],
+    [
+      'parenthesised options',
+      'EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM invoices WHERE id = 1',
+    ],
     ['lowercase', 'explain select id from invoices where id = 1'],
   ])('allows EXPLAIN of an authorized read-only query: %s', (_label, sql) => {
     expect(check(sql).verdict).toBe('allow');

@@ -18,12 +18,7 @@
  *   check recurses into every CTE body to catch this bypass.
  */
 import { astVisitor, parse, type Statement } from 'pgsql-ast-parser';
-import type {
-  SafetyContext,
-  SafetyDecision,
-  SafetyGate,
-  SafetyRejectReason,
-} from '@evidata/ports';
+import type { SafetyContext, SafetyDecision, SafetyGate, SafetyRejectReason } from '@evidata/ports';
 
 /** Functions that read the filesystem, reach other systems, or mutate state. */
 const DENY_EXACT = new Set<string>([
@@ -206,7 +201,10 @@ export class SqlSafetyGate implements SafetyGate {
     const explain = stripExplain(sql);
     if (explain) {
       if (explain.analyze) {
-        return reject('not_read_only', 'EXPLAIN ANALYZE executes the statement and is not permitted.');
+        return reject(
+          'not_read_only',
+          'EXPLAIN ANALYZE executes the statement and is not permitted.',
+        );
       }
       if (!explain.inner.trim()) {
         return reject('unparseable', 'EXPLAIN with no statement to analyze.');
@@ -256,7 +254,10 @@ function evaluate(sql: string, ctx: SafetyContext): SafetyDecision {
     if (collected.cteNames.has(t.name)) continue;
     const qualified = t.schema ? `${t.schema}.${t.name}` : t.name;
     if (!ctx.allowedTables.has(t.name) && !ctx.allowedTables.has(qualified)) {
-      return reject('unauthorized_table', `The table "${qualified}" is not authorized for this question.`);
+      return reject(
+        'unauthorized_table',
+        `The table "${qualified}" is not authorized for this question.`,
+      );
     }
     touchedTables.push(t.name);
   }

@@ -1,11 +1,5 @@
 /** Shared fixtures for contract tests. Not part of the public export surface. */
-import type {
-  Answer,
-  AnswerStatus,
-  Confidence,
-  Evidence,
-  UnblockPath,
-} from './answer-contract';
+import type { Answer, AnswerStatus, Confidence, Evidence, UnblockPath } from './answer-contract';
 
 export function evidenceFixture(id: string): Evidence {
   return {
@@ -27,7 +21,10 @@ export function evidenceFixture(id: string): Evidence {
 export function unblockFixture(): UnblockPath {
   return {
     whatsMissing: [
-      { kind: 'unverified_mapping', description: 'invoices.customer_ref → accounts.id is Suggested' },
+      {
+        kind: 'unverified_mapping',
+        description: 'invoices.customer_ref → accounts.id is Suggested',
+      },
     ],
     nextSteps: [
       { kind: 'notify_admin_verify', label: 'Notify an Admin to verify', createsSuggestion: true },
