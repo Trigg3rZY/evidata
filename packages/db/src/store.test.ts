@@ -109,6 +109,33 @@ describe('DrizzleMetadataStore (spec 10)', () => {
     expect(thread?.answers.map((a) => a.meta.version)).toEqual([1, 2]);
   });
 
+  it('binds each Evidence row to a recorded QueryRun (provenance FK)', async () => {
+    const bound = await handle.client.query<{ n: number }>(
+      `select count(*)::int as n
+       from evidata_meta.evidence e
+       join evidata_meta.query_runs q on q.id = e.query_run_id
+       where e.investigation_id = 'inv1' and e.evidence_ref = 'E1'`,
+    );
+    // one binding per saved version (v1 + v2)
+    expect(bound.rows[0]?.n).toBe(2);
+  });
+
+  it('appends a rerun (no question) without adding a user turn', async () => {
+    const before = await store.getInvestigation('inv1');
+    const userTurnsBefore = before?.turns.filter((t) => t.role === 'user').length ?? 0;
+
+    const v3 = await store.saveAnswer({
+      investigationId: 'inv1',
+      answer: mkAnswer(3),
+      queryRuns: runs,
+    });
+    expect(v3.meta.version).toBe(3);
+
+    const after = await store.getInvestigation('inv1');
+    expect(after?.turns.filter((t) => t.role === 'user').length).toBe(userTurnsBefore);
+    expect(after?.turns.some((t) => t.role === 'agent' && t.answerVersion === 3)).toBe(true);
+  });
+
   it('lists investigations with the latest answer status', async () => {
     const item = (await store.listInvestigations()).find((i) => i.id === 'inv1');
     expect(item?.latestStatus).toBe('Answered');

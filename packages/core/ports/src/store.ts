@@ -13,7 +13,8 @@ export interface QueryRunRecord {
   id: string;
   connectorId: string;
   sql: string;
-  status: 'ok';
+  /** Execution outcome — every executed statement is recorded, incl. non-`ok` (spec 10 §9). */
+  status: 'ok' | 'timeout' | 'connection_lost' | 'zero_rows' | 'error';
   rowCount: number;
   truncated: boolean;
   elapsedMs: number;

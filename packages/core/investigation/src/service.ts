@@ -79,6 +79,9 @@ export class InvestigationService {
     return this.deps.dataSources.map((d) => ({ id: d.id, name: d.name }));
   }
 
+  // M0: `ask` always starts a new Investigation (single-turn). Follow-ups/reruns
+  // — loading prior answers, passing `priorAnswers`/`versionTrigger` to the
+  // runner so the store appends version N — land with the thread UI.
   async ask(params: AskParams, opts: AskOptions): Promise<AskResult> {
     const rt = this.dataSource(params.dataSourceId);
     const investigationId = this.newId('inv');
