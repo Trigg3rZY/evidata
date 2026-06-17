@@ -102,6 +102,23 @@ describe('M0 metadata schema (spec 10)', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects a second is_latest head per investigation (partial unique index)', async () => {
+    const { db } = handle;
+    // inv1 already has ans2 as its latest head; a second latest row must be rejected.
+    await expect(
+      db.insert(answers).values({
+        id: 'ans-second-head',
+        investigationId: 'inv1',
+        version: 99,
+        status: 'Answered',
+        confidence: 'High',
+        isLatest: true,
+        payload: {},
+        createdAt: at('2026-06-01T00:00:03Z'),
+      }),
+    ).rejects.toThrow();
+  });
+
   it('records a QueryRun and an Evidence row bound to it (G4 provenance)', async () => {
     const { db } = handle;
     await db.insert(queryRuns).values({

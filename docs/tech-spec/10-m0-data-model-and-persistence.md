@@ -90,6 +90,8 @@ export const answers = meta.table('answers', {
 }, (t) => ({
   versionUnique: uniqueIndex('answers_version_uq').on(t.investigationId, t.version),
   latestIdx: index('answers_latest_idx').on(t.investigationId, t.isLatest),
+  // At most one latest head per Investigation — a DB guarantee, not just app logic.
+  oneLatest: uniqueIndex('answers_one_latest_uq').on(t.investigationId).where(sql`${t.isLatest}`),
 }));
 
 export const queryRuns = meta.table('query_runs', {
@@ -161,7 +163,7 @@ The `MetadataStore` port (`01 §2.5`) maps to this schema as:
 PRD: follow-ups and reruns produce new versions; prior versions are never overwritten and remain retrievable.
 
 - Versions are 1-based and monotonic per Investigation (`answers_version_uq`).
-- Exactly one row per Investigation has `is_latest=true` (the head); appending a version demotes the previous head in the same transaction.
+- Exactly one row per Investigation has `is_latest=true` (the head); appending a version demotes the previous head in the same transaction. This is enforced at the DB level by a **partial unique index** (`answers_one_latest_uq` on `investigation_id WHERE is_latest`), not app logic alone.
 - `created_after_kind` / `created_after_from_version` record provenance (which prior version, and why: clarification/followup/rerun/definition_correction).
 - The version math and meta are computed by the already-shipped, tested pure helper `appendAnswerVersion` (`@evidata/answer-contract`, contract test C5), so the store does no ad-hoc version arithmetic.
 

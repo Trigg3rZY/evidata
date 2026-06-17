@@ -49,7 +49,7 @@ The `AgentRunner` (in `packages/core/agent`) drives one turn. The runner is the 
 - **THINKING** — consume `AgentStep`s from `AgentProvider.runInvestigation`. `reasoning` steps are forwarded to the client as SSE and (on success) collapse into `whatIDid`.
 - **SAFETY_GATE** — on `propose_sql`, run `SafetyGate.check` (sync, deterministic). `reject` → UNBLOCK or BlockedByPolicy. `allow` with `needsConfirmation` → emit a confirmation request (M0 auto-confirms low-risk per Sample Policy; the confirmation UI path is stubbed and exercised by one scenario).
 - **EXECUTE** — `QueryExecutor.run` (single connection, Policy `rowLimit`/`timeoutMs`) → `Redactor.redact` → `EvidenceRecorder.record` (the `QueryRun` metadata + the *redacted* Evidence, bound to the pending version; raw rows are never persisted — `10 §3`) → feed the **bounded** result back to the provider as a `toolResult`.
-- **UNBLOCK** — build an `UnblockPath` from the reject reason / clarification (mapping in §5); produce a non-`Answered` Answer.
+- **UNBLOCK** — build an `UnblockPath` from the reject reason / clarification (mapping in §5); produce a non-`Answered` Answer. Any Evidence already gathered this turn is carried on the Answer (a `NoReliableAnswer` still shows the work it did before blocking); the runner-authored text follows the question's language.
 - **FINALIZE** — assemble the `Answer`, run `validateAnswer`. If violations: re-prompt the provider once with the violation list; if still invalid, downgrade to `NoReliableAnswer` + Unblock Path (never show an invalid answer). Persist as a new version; emit SSE `answer`.
 
 ### Limits (M0 defaults; tunable, see Policy)

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "answers_one_latest_uq" ON "evidata_meta"."answers" USING btree ("investigation_id") WHERE "evidata_meta"."answers"."is_latest";

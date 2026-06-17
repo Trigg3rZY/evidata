@@ -10,6 +10,7 @@
  * Answer Contract document; `evidence`/`query_runs` are the normalized,
  * queryable provenance the EvidenceRecorder writes during execution.
  */
+import { sql } from 'drizzle-orm';
 import {
   pgSchema,
   text,
@@ -65,6 +66,10 @@ export const answers = meta.table(
   (t) => [
     uniqueIndex('answers_version_uq').on(t.investigationId, t.version),
     index('answers_latest_idx').on(t.investigationId, t.isLatest),
+    // At most one latest head per investigation — enforced by the DB, not just app logic.
+    uniqueIndex('answers_one_latest_uq')
+      .on(t.investigationId)
+      .where(sql`${t.isLatest}`),
   ],
 );
 
