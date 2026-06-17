@@ -15,7 +15,11 @@ export type {
   UnblockAction,
   UnblockPath,
 } from '@evidata/answer-contract';
-export { appendAnswerVersion, validateAnswer, validateAnswerSchema } from '@evidata/answer-contract';
+export {
+  appendAnswerVersion,
+  validateAnswer,
+  validateAnswerSchema,
+} from '@evidata/answer-contract';
 export type { VersionTrigger } from '@evidata/answer-contract';
 
 export type {

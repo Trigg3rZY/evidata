@@ -103,7 +103,10 @@ describe('PgliteQueryExecutor (spec 01 §2.1)', () => {
   });
 
   it('reports column metadata with mapped type names', async () => {
-    const res = await executor.run('select id, name, contact_email from accounts where id = 1', exec);
+    const res = await executor.run(
+      'select id, name, contact_email from accounts where id = 1',
+      exec,
+    );
     expect(res.columns.map((c) => c.name)).toEqual(['id', 'name', 'contact_email']);
     expect(res.columns[0]?.dataType).toBe('integer');
     expect(res.columns[1]?.dataType).toBe('text');
@@ -134,7 +137,8 @@ describe('SafetyGate ↔ executor on the real Sample (the trust boundary)', () =
   const gate = createSafetyGate();
 
   it('allows an authorized read-only query, which then executes', async () => {
-    const sql = "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'";
+    const sql =
+      "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'";
     const decision = gate.check(sql, sampleSafetyContext());
     expect(decision.verdict).toBe('allow');
     const res = await executor.run(sql, exec);
@@ -142,7 +146,10 @@ describe('SafetyGate ↔ executor on the real Sample (the trust boundary)', () =
   });
 
   it('rejects a mutation before any execution (read-only guarantee)', () => {
-    const decision = gate.check("update accounts set name = 'x' where id = 1", sampleSafetyContext());
+    const decision = gate.check(
+      "update accounts set name = 'x' where id = 1",
+      sampleSafetyContext(),
+    );
     expect(decision.verdict).toBe('reject');
     if (decision.verdict === 'reject') expect(decision.reason).toBe('not_read_only');
   });
@@ -154,7 +161,10 @@ describe('SafetyGate ↔ executor on the real Sample (the trust boundary)', () =
   });
 
   it('flags a sensitive column and requires confirmation', () => {
-    const decision = gate.check('select contact_email from accounts where id = 1', sampleSafetyContext());
+    const decision = gate.check(
+      'select contact_email from accounts where id = 1',
+      sampleSafetyContext(),
+    );
     expect(decision.verdict).toBe('allow');
     if (decision.verdict === 'allow') {
       expect(decision.touchedSensitive).toContain('accounts.contact_email');

@@ -107,9 +107,9 @@ describe('mutation-attempt — guardrail (spec 05 §4.5)', () => {
 
 describe('cross-area-reconcile — Unblock Path (spec 05 §4.3)', () => {
   it('gathers each area but blocks on the unverified mapping', async () => {
-    const { answer, queryRuns } = await new AgentRunner(deps(fixtureFor('cross-area-reconcile'))).run(
-      input("Why don't usage and billing reconcile for ACME?"),
-    );
+    const { answer, queryRuns } = await new AgentRunner(
+      deps(fixtureFor('cross-area-reconcile')),
+    ).run(input("Why don't usage and billing reconcile for ACME?"));
 
     expect(answer.status).toBe('NoReliableAnswer');
     expect(answer.confidence).toBe('CannotDetermine');
@@ -150,7 +150,9 @@ describe('step budget', () => {
 
 describe('FixtureProvider', () => {
   it('exits with an honest non-answer when the script is exhausted', async () => {
-    const { answer } = await new AgentRunner(deps(new FixtureProvider([]))).run(input('nothing scripted'));
+    const { answer } = await new AgentRunner(deps(new FixtureProvider([]))).run(
+      input('nothing scripted'),
+    );
     expect(answer.status).toBe('NoReliableAnswer');
   });
 });

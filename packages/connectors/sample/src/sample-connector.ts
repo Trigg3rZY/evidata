@@ -68,7 +68,11 @@ export const SAMPLE_CONTEXT: SampleDataSourceContext = {
   overview:
     'A small advertising-platform business: accounts run campaigns that accrue daily spend, and are billed monthly via invoices. Good for spend trends, per-campaign breakdowns, and customer rankings; not a system of record for billing disputes.',
   glossary: [
-    { term: 'spend', definition: "campaign_spend.amount excluding status = 'void'", status: 'verified' },
+    {
+      term: 'spend',
+      definition: "campaign_spend.amount excluding status = 'void'",
+      status: 'verified',
+    },
     { term: 'active account', definition: "accounts.status = 'active'", status: 'verified' },
     { term: 'settlement date', definition: 'invoices.settled_at', status: 'verified' },
   ],

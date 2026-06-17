@@ -53,7 +53,9 @@ export const ACME_BILL_UP: AgentDecision[] = [
         kf('The increase is concentrated in the Summer Sale campaign (+13,300).', 'E2'),
         kf('The June invoice (48,200) is not yet settled, so billing lags usage.', 'E3'),
       ],
-      caveats: ['Usage⇄billing reconciliation is approximate — invoice timing can shift the totals.'],
+      caveats: [
+        'Usage⇄billing reconciliation is approximate — invoice timing can shift the totals.',
+      ],
       recommendedFollowups: [
         { question: 'Break the June increase down by week.' },
         { question: 'Why is the June invoice not settled yet?' },
@@ -94,7 +96,12 @@ export const CROSS_AREA_RECONCILE: AgentDecision[] = [
   { kind: 'reasoning', label: 'Joining usage↔billing needs an unverified mapping' },
   {
     kind: 'unblock',
-    missing: [{ kind: 'unverified_mapping', description: 'invoices.customer_ref → accounts.id is Suggested' }],
+    missing: [
+      {
+        kind: 'unverified_mapping',
+        description: 'invoices.customer_ref → accounts.id is Suggested',
+      },
+    ],
   },
 ];
 
@@ -103,7 +110,9 @@ export const NEEDS_TIMERANGE: AgentDecision[] = [
   { kind: 'reasoning', label: 'No time window was given' },
   {
     kind: 'unblock',
-    missing: [{ kind: 'time_range', description: 'No time range was specified for the spend trend.' }],
+    missing: [
+      { kind: 'time_range', description: 'No time range was specified for the spend trend.' },
+    ],
   },
 ];
 
@@ -114,6 +123,6 @@ export const SAMPLE_SCENARIOS: Readonly<Record<string, AgentDecision[]>> = {
   'needs-timerange': NEEDS_TIMERANGE,
 };
 
-export function fixtureFor(scenarioId: keyof typeof SAMPLE_SCENARIOS | string): FixtureProvider {
+export function fixtureFor(scenarioId: string): FixtureProvider {
   return new FixtureProvider(SAMPLE_SCENARIOS[scenarioId] ?? []);
 }

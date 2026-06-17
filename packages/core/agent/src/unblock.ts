@@ -28,7 +28,11 @@ function actionsFor(kind: MissingKind): UnblockAction[] {
       return [{ kind: 'pick_definition', label: 'Pick a definition' }];
     case 'unverified_mapping':
       return [
-        { kind: 'notify_admin_verify', label: 'Notify an Admin to verify the mapping', createsSuggestion: true },
+        {
+          kind: 'notify_admin_verify',
+          label: 'Notify an Admin to verify the mapping',
+          createsSuggestion: true,
+        },
         { kind: 'narrow_question', label: 'Narrow the question to one area' },
       ];
     case 'insufficient_results':
@@ -38,8 +42,10 @@ function actionsFor(kind: MissingKind): UnblockAction[] {
 
 /** Status precedence: a policy block dominates, then unreliable, then clarification. */
 function statusFor(kinds: ReadonlyArray<MissingKind>): AnswerStatus {
-  if (kinds.some((k) => k === 'mutation_required' || k === 'authorization')) return 'BlockedByPolicy';
-  if (kinds.some((k) => k === 'unverified_mapping' || k === 'insufficient_results')) return 'NoReliableAnswer';
+  if (kinds.some((k) => k === 'mutation_required' || k === 'authorization'))
+    return 'BlockedByPolicy';
+  if (kinds.some((k) => k === 'unverified_mapping' || k === 'insufficient_results'))
+    return 'NoReliableAnswer';
   return 'NeedsClarification';
 }
 
@@ -80,6 +86,11 @@ export function gateRejectToMissing(
     case 'unauthorized_table':
       return [{ kind: 'authorization', description: detail }];
     default:
-      return [{ kind: 'insufficient_results', description: 'The proposed query could not be safely executed.' }];
+      return [
+        {
+          kind: 'insufficient_results',
+          description: 'The proposed query could not be safely executed.',
+        },
+      ];
   }
 }
