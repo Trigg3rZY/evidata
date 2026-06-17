@@ -95,7 +95,7 @@ Output: `SafetyDecision` (`allow` with touched tables/sensitive + `needsConfirma
 
 ## 5. Decision Boundaries → Unblock Path mapping
 
-The runner builds the `UnblockPath` deterministically from the trigger (implements PRD's table; types in `contracts/answer-contract.ts`):
+The runner builds the `UnblockPath` deterministically from the trigger (implements PRD's table; types in `packages/core/answer-contract/src/answer-contract.ts`):
 
 | Trigger (source) | `MissingKind` | `UnblockAction.kind` | status |
 |---|---|---|---|

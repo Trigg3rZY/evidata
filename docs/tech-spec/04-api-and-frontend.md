@@ -19,7 +19,7 @@ All routes are Next.js App Router route handlers under `apps/web/app/api`. JSON 
 | `GET /api/investigations/:id` | Full thread incl. all Answer versions. | `InvestigationWithAnswers` |
 | `POST /api/investigations/:id/suggestions` | Record a Suggested correction (correction loop / Unblock). | `{ id, status: 'recorded' }` |
 
-Types come from `contracts/answer-contract.ts`. `404`/permission responses follow PRD `Application States` (no existence leak beyond Policy).
+Types come from `@evidata/answer-contract` (`packages/core/answer-contract/src/answer-contract.ts`). `404`/permission responses follow PRD `Application States` (no existence leak beyond Policy).
 
 ### 1.1 SSE event stream
 
