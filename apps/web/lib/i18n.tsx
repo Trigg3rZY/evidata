@@ -14,6 +14,12 @@ const dict = {
     ask: 'Ask a question',
     composerPlaceholder: 'Ask a question about your data…',
     sample: 'Sample Data Source',
+    sampleBadge: 'Sample',
+    sampleOverview:
+      'A demo "Advertising Platform": accounts run campaigns that accrue daily ad spend and are billed monthly via invoices. Good for spend trends, per-campaign breakdowns, and customer rankings.',
+    tryAsking: 'Try asking',
+    demoNote:
+      'Demo answers are scripted (no live model yet) — see the status, evidence, and SQL behind each one.',
   },
   'zh-CN': {
     brand: 'evidata',
@@ -22,6 +28,11 @@ const dict = {
     ask: '提个问题',
     composerPlaceholder: '就你的数据提个问题…',
     sample: '示例数据源',
+    sampleBadge: '示例',
+    sampleOverview:
+      '一个演示用的"广告平台":账户投放营销活动、产生每日广告消费,并按月开具账单。适合看消费趋势、按活动拆解、以及客户排名。',
+    tryAsking: '试着问',
+    demoNote: '演示答案是脚本化的(尚未接入实时模型)——重点看每条回答背后的状态、证据与 SQL。',
   },
 } as const;
 
