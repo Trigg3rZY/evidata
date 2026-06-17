@@ -151,12 +151,12 @@ The `MetadataStore` port (`01 §2.5`) maps to this schema as:
 
 | Method | Behaviour |
 |---|---|
-| `createInvestigation(init)` | Insert one `investigations` row (M0 `dataSourceId='sample'`); title defaults from the first question. |
-| `appendAnswerVersion(investigationId, answer)` | Transaction: validate (`validateAnswer` + schema) → demote current head (`is_latest=false`) → insert the new `answers` row with `version = max+1`, `is_latest=true` → insert the agent `turns` row. Uses the pure `appendAnswerVersion` helper from `@evidata/answer-contract` to compute the version/meta (§6). |
+| `createInvestigation(init)` | Insert one `investigations` row (M0 `dataSourceId='sample'`); title derived from the first question. |
+| `saveAnswer({investigationId, question?, answer, queryRuns})` | One transaction: re-stamp the **DB-authoritative** version (`max+1`) onto the document → **validate (`validateAnswer` + schema); throw → rollback** (G3) → demote the current head (`is_latest=false`) → insert the optional user `turns` row → insert the `answers` row → insert `query_runs` + `evidence` (binding each Evidence to its run) → insert the agent `turns` row → bump `updatedAt`. The store generates globally-unique row ids; `"E1"` is kept as `evidence_ref`, not the PK. |
 | `getInvestigation(id)` | Load the investigation, its turns (ordered), and **all** answer versions (latest last) → `InvestigationWithAnswers`. |
 | `listInvestigations(opts)` | History rail: investigations with their latest answer's status/title/updatedAt, paged. |
 
-`EvidenceRecorder.record(run)` (`01 §2.5`) inserts one `query_runs` row and, when the run produced a redacted result, one `evidence` row referencing it, both bound to the *pending* Answer version; it returns the `EvidenceRef` (`evidenceRef`) the runner stitches into the draft. It is called once per executed query — the basis of the G4 count.
+The AgentRunner records QueryRuns + redacted Evidence in-process during execution (one per executed query — the basis of the G4 count) and returns them in its `RunResult`; `saveAnswer` persists them atomically with the Answer. (M0 ships no separate `EvidenceRecorder` adapter; the recording is the runner's, the persistence is the store's.)
 
 ## 6. Answer versioning (append-only)
 
@@ -165,7 +165,7 @@ PRD: follow-ups and reruns produce new versions; prior versions are never overwr
 - Versions are 1-based and monotonic per Investigation (`answers_version_uq`).
 - Exactly one row per Investigation has `is_latest=true` (the head); appending a version demotes the previous head in the same transaction. This is enforced at the DB level by a **partial unique index** (`answers_one_latest_uq` on `investigation_id WHERE is_latest`), not app logic alone.
 - `created_after_kind` / `created_after_from_version` record provenance (which prior version, and why: clarification/followup/rerun/definition_correction).
-- The version math and meta are computed by the already-shipped, tested pure helper `appendAnswerVersion` (`@evidata/answer-contract`, contract test C5), so the store does no ad-hoc version arithmetic.
+- Versioning is split: the runner uses the pure, tested `appendAnswerVersion` helper (`@evidata/answer-contract`, contract test C5) to compute the *draft's* in-memory meta, while the **store is authoritative for the persisted version** (`max+1` inside the transaction) and re-stamps it onto the document before validating and writing — robust against a caller that forgot to thread prior versions, and race-safe via `answers_version_uq`.
 
 A rerun re-executes and produces a fresh version with new `query_runs`/`evidence`; it never mutates the earlier version's rows.
 

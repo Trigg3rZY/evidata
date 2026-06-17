@@ -9,11 +9,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
-import type {
-  Answer,
-  Investigation,
-  InvestigationWithAnswers,
-  Turn,
+import {
+  type Answer,
+  type Investigation,
+  type InvestigationWithAnswers,
+  type Turn,
+  validateAnswer,
+  validateAnswerSchema,
 } from '@evidata/answer-contract';
 import type {
   InvestigationListItem,
@@ -78,11 +80,22 @@ export class DrizzleMetadataStore implements MetadataStore {
           .where(and(eq(answers.investigationId, investigationId), eq(answers.isLatest, true)));
       }
 
-      // Authoritative version meta lives on the stored document too.
+      // The store is authoritative for the persisted version number; re-stamp it
+      // onto the document (the runner's in-memory meta may predate the DB state).
       const stored: Answer = {
         ...answer,
         meta: { ...answer.meta, version: nextVersion, isLatest: true },
       };
+
+      // G3: never persist an invalid Answer (spec 10 §5/§9). Throwing rolls back
+      // the whole transaction.
+      const violations = validateAnswer(stored);
+      const schema = validateAnswerSchema(stored);
+      if (violations.length || !schema.valid) {
+        throw new Error(
+          `Refusing to persist an invalid Answer (G3): ${JSON.stringify(violations)} ${JSON.stringify(schema.errors)}`,
+        );
+      }
 
       if (question) {
         await tx.insert(turns).values({
@@ -166,6 +179,8 @@ export class DrizzleMetadataStore implements MetadataStore {
     });
   }
 
+  // Reads are non-transactional (3 sequential queries) — fine for M0; a
+  // concurrent saveAnswer could interleave. Wrap in a tx if that ever matters.
   async getInvestigation(id: string): Promise<InvestigationWithAnswers | null> {
     const [inv] = await this.db.select().from(investigations).where(eq(investigations.id, id));
     if (!inv) return null;
