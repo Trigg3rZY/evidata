@@ -1,6 +1,5 @@
-import { fixtureFor } from '@evidata/agent';
-import { askStream, parseAskBody, pickScenario } from '@/lib/ask-stream';
-import { getRuntime } from '@/lib/runtime';
+import { askStream, parseAskBody } from '@/lib/ask-stream';
+import { getRuntime, makeProvider } from '@/lib/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,12 +34,8 @@ export async function POST(req: Request): Promise<Response> {
           closed = true;
         }
       };
-      // M0 replays a canned scenario via the FixtureProvider; a real provider slots in later.
-      await askStream(
-        { service: rt.service, providerFor: (q) => fixtureFor(pickScenario(q)) },
-        parsed,
-        write,
-      );
+      // Real provider when configured (AGENT_PROVIDER=openai), else the FixtureProvider.
+      await askStream({ service: rt.service, providerFor: makeProvider }, parsed, write);
       if (!closed) controller.close();
     },
     cancel() {

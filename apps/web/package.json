@@ -16,6 +16,7 @@
     "@evidata/db": "workspace:*",
     "@evidata/investigation": "workspace:*",
     "@evidata/ports": "workspace:*",
+    "@evidata/provider-openai": "workspace:*",
     "@evidata/redaction": "workspace:*",
     "@evidata/safety": "workspace:*",
     "class-variance-authority": "^0.7.1",

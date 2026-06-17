@@ -11,6 +11,7 @@ const nextConfig = {
     '@evidata/connector-sample',
     '@evidata/db',
     '@evidata/investigation',
+    '@evidata/provider-openai',
   ],
   // pglite ships WASM + dynamic requires — keep it external to the server bundle.
   serverExternalPackages: ['@electric-sql/pglite'],

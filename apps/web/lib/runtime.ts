@@ -14,6 +14,21 @@ import {
 import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
 import { InvestigationService, type DataSourceRuntime } from '@evidata/investigation';
+import { fixtureFor, type AgentProvider } from '@evidata/agent';
+import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
+import { pickScenario } from './ask-stream';
+
+// A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
+// set (DeepSeek by default); otherwise we fall back to the deterministic
+// FixtureProvider so dev/CI stay hermetic. Resolved once at module load.
+const providerConfig = openAIConfigFromEnv(process.env);
+
+/** New provider per turn (the real provider is stateful per run). */
+export function makeProvider(question: string): AgentProvider {
+  return providerConfig
+    ? new OpenAIAgentProvider(providerConfig)
+    : fixtureFor(pickScenario(question));
+}
 
 export interface Runtime {
   service: InvestigationService;

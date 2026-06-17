@@ -62,6 +62,9 @@ importers:
       '@evidata/ports':
         specifier: workspace:*
         version: link:../../packages/core/ports
+      '@evidata/provider-openai':
+        specifier: workspace:*
+        version: link:../../packages/core/provider-openai
       '@evidata/redaction':
         specifier: workspace:*
         version: link:../../packages/core/redaction
@@ -177,6 +180,15 @@ importers:
 
   packages/core/ports:
     dependencies:
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../answer-contract
+
+  packages/core/provider-openai:
+    dependencies:
+      '@evidata/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@evidata/answer-contract':
         specifier: workspace:*
         version: link:../answer-contract
