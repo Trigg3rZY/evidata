@@ -91,7 +91,7 @@ Output: `SafetyDecision` (`allow` with touched tables/sensitive + `needsConfirma
 
 `packages/core/redaction`. A single, deterministic pass over the raw `QueryRunResult` that produces the `RedactedResult` (shape in `01 §2.3`). Its output is the **only** thing that flows onward — to both (a) Evidence recording and (b) the provider feedback. The raw result exists only in-process during this pass; it is never persisted (`10 §3`) and never sent to the model.
 
-**Two phases with the Gate.** The Gate flags sensitive columns *conservatively* (any column whose table is touched and that appears via `*` or by name) without resolving aliases — over-flagging is safe because it cannot cause a leak. The Redactor is where precise action happens: it resolves `alias → table → column`, then masks exactly the sensitive values. The Gate decides *whether*; the Redactor decides *what* and *how*.
+**Two phases with the Gate.** The Gate flags sensitive columns *conservatively* (any column whose table is touched and that appears via `*` or by name) without resolving aliases — over-flagging is safe because it cannot cause a leak. The Redactor then acts on the actual result columns. M0 masks by **output-column name**: any result column whose (unqualified) name matches the column part of a sensitive `table.column` is masked. This intentionally over-masks rather than under-masks (the safe direction); precise `alias → table → column` resolution is a documented future refinement. The Gate decides *whether*; the Redactor decides *what* and *how*.
 
 **Masking strategy.**
 - Mask sensitive column **values in place** (e.g. `j•••@acme.com` / `▒▒▒`) rather than dropping the column, so row shape and structural context are preserved for both the viewer and the provider.
@@ -99,8 +99,8 @@ Output: `SafetyDecision` (`allow` with touched tables/sensitive + `needsConfirma
 - Every column whose values were masked or omitted is listed in `redactedColumns`.
 
 **Bounding.**
-- Truncate to Policy `rowLimit`; set `truncated` and the true `rowCount`.
-- Prefer an `aggregateSummary` plus a **small** capped `sampleRows` set over returning full rows — the provider reasons over the summary, not the raw dataset.
+- The executor already caps the result to Policy `rowLimit`; the Redactor further caps the surfaced `sampleRows` to a small fixed cap (`SAMPLE_ROW_CAP`, M0 = 50) so the provider reasons over a sample, not the full dataset.
+- `rowCount` is the true (executor-bounded) count; `truncated` is set when the executor truncated or the sample is smaller than `rowCount`. An optional `aggregateSummary` may accompany the sample (unused in M0).
 
 **Surfacing.** `redactedColumns` is carried into the recorded Evidence (`10 §4`) and drives a redaction Caveat on the Answer (Sample scenario `sensitive-field`, `05 §4.6`), so masking is visible, not silent.
 
