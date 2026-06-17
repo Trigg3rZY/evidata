@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Answer } from '@evidata/answer-contract';
 import { parseSSE } from './sse';
 import type { Lang } from './ask-stream';
@@ -45,7 +45,9 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
           progress: [...state.progress, { kind: 'query', label: purpose, state: 'running' }],
         };
       }
-      // Mark the matching running step done rather than appending a duplicate.
+      // Mark the matching running step done. The runner executes queries
+      // sequentially (one running at a time), so the most-recent running step
+      // with this purpose is unambiguously the one that just finished.
       const progress = [...state.progress];
       for (let i = progress.length - 1; i >= 0; i--) {
         if (progress[i]?.kind === 'query' && progress[i]?.label === purpose) {
@@ -76,17 +78,28 @@ export interface UseInvestigationStream extends StreamState {
 /** Drives one Ask Data turn over the SSE endpoint, accumulating progress + the final Answer. */
 export function useInvestigationStream(): UseInvestigationStream {
   const [state, setState] = useState<StreamState>(INITIAL);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const reset = useCallback(() => setState(INITIAL), []);
+  // Abort any in-flight stream on unmount (no state updates after unmount).
+  useEffect(() => () => controllerRef.current?.abort(), []);
+
+  const reset = useCallback(() => {
+    controllerRef.current?.abort();
+    setState(INITIAL);
+  }, []);
 
   const ask = useCallback(
     async (question: string, dataSourceId = 'sample', language: Lang = 'en') => {
+      controllerRef.current?.abort(); // supersede any in-flight turn
+      const controller = new AbortController();
+      controllerRef.current = controller;
       setState({ ...INITIAL, status: 'streaming', question });
       try {
         const res = await fetch('/api/investigations', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ question, dataSourceId, language }),
+          signal: controller.signal,
         });
         if (!res.ok || !res.body) {
           setState((s) => ({ ...s, status: 'error', error: 'The request could not be started.' }));
@@ -108,6 +121,8 @@ export function useInvestigationStream(): UseInvestigationStream {
         // If the stream closed without an explicit done/error, settle as done.
         setState((s) => (s.status === 'streaming' ? { ...s, status: 'done' } : s));
       } catch {
+        // Superseded/unmounted aborts are intentional — don't surface them.
+        if (controller.signal.aborted) return;
         setState((s) => ({
           ...s,
           status: 'error',

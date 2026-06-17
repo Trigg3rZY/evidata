@@ -50,7 +50,7 @@ export function Composer({
           onClick={submit}
           disabled={disabled || !value.trim()}
           aria-label="Send"
-          className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
+          className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
         >
           <ArrowUp className="h-4 w-4" />
         </button>
