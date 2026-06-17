@@ -1,0 +1,98 @@
+/**
+ * Inlined M0 schema DDL — the concatenation of the committed `drizzle/*.sql`
+ * migrations, verbatim (the `--> statement-breakpoint` lines are valid `--` SQL
+ * comments). `createMetadataDb` execs this for the embedded pglite client.
+ *
+ * Why inline rather than the fs migrator: `new URL('../drizzle', import.meta.url)`
+ * is not resolvable once the package is bundled (e.g. by Next/Turbopack). The
+ * generated `drizzle/*.sql` remain the source of truth and the M1 real-Postgres
+ * path can use the file-based migrator (it runs unbundled). `schema-sql.test.ts`
+ * asserts this constant stays in sync with those files.
+ */
+export const SCHEMA_SQL = `CREATE SCHEMA "evidata_meta";
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."answers" (
+	"id" text PRIMARY KEY NOT NULL,
+	"investigation_id" text NOT NULL,
+	"version" integer NOT NULL,
+	"status" text NOT NULL,
+	"confidence" text NOT NULL,
+	"is_latest" boolean NOT NULL,
+	"created_after_kind" text,
+	"created_after_from_version" integer,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."evidence" (
+	"id" text PRIMARY KEY NOT NULL,
+	"investigation_id" text NOT NULL,
+	"answer_version" integer NOT NULL,
+	"evidence_ref" text NOT NULL,
+	"query_run_id" text NOT NULL,
+	"purpose" text NOT NULL,
+	"connector_id" text NOT NULL,
+	"tables" jsonb NOT NULL,
+	"sql" text NOT NULL,
+	"result_summary" text NOT NULL,
+	"sample_rows" jsonb,
+	"safety" text NOT NULL,
+	"policy_notes" text NOT NULL,
+	"redacted_columns" jsonb NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."investigations" (
+	"id" text PRIMARY KEY NOT NULL,
+	"data_source_id" text NOT NULL,
+	"title" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."query_runs" (
+	"id" text PRIMARY KEY NOT NULL,
+	"investigation_id" text NOT NULL,
+	"answer_version" integer NOT NULL,
+	"connector_id" text NOT NULL,
+	"sql" text NOT NULL,
+	"status" text NOT NULL,
+	"row_count" integer NOT NULL,
+	"truncated" boolean NOT NULL,
+	"elapsed_ms" integer NOT NULL,
+	"started_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."suggestions" (
+	"id" text PRIMARY KEY NOT NULL,
+	"investigation_id" text NOT NULL,
+	"answer_version" integer,
+	"kind" text NOT NULL,
+	"target_ref" text,
+	"description" text NOT NULL,
+	"status" text DEFAULT 'recorded' NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "evidata_meta"."turns" (
+	"id" text PRIMARY KEY NOT NULL,
+	"investigation_id" text NOT NULL,
+	"role" text NOT NULL,
+	"question" text,
+	"answer_version" integer,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "evidata_meta"."answers" ADD CONSTRAINT "answers_investigation_id_investigations_id_fk" FOREIGN KEY ("investigation_id") REFERENCES "evidata_meta"."investigations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidata_meta"."evidence" ADD CONSTRAINT "evidence_investigation_id_investigations_id_fk" FOREIGN KEY ("investigation_id") REFERENCES "evidata_meta"."investigations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidata_meta"."evidence" ADD CONSTRAINT "evidence_query_run_id_query_runs_id_fk" FOREIGN KEY ("query_run_id") REFERENCES "evidata_meta"."query_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidata_meta"."query_runs" ADD CONSTRAINT "query_runs_investigation_id_investigations_id_fk" FOREIGN KEY ("investigation_id") REFERENCES "evidata_meta"."investigations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidata_meta"."suggestions" ADD CONSTRAINT "suggestions_investigation_id_investigations_id_fk" FOREIGN KEY ("investigation_id") REFERENCES "evidata_meta"."investigations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidata_meta"."turns" ADD CONSTRAINT "turns_investigation_id_investigations_id_fk" FOREIGN KEY ("investigation_id") REFERENCES "evidata_meta"."investigations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "answers_version_uq" ON "evidata_meta"."answers" USING btree ("investigation_id","version");--> statement-breakpoint
+CREATE INDEX "answers_latest_idx" ON "evidata_meta"."answers" USING btree ("investigation_id","is_latest");--> statement-breakpoint
+CREATE UNIQUE INDEX "evidence_ref_uq" ON "evidata_meta"."evidence" USING btree ("investigation_id","answer_version","evidence_ref");--> statement-breakpoint
+CREATE INDEX "query_runs_version_idx" ON "evidata_meta"."query_runs" USING btree ("investigation_id","answer_version");--> statement-breakpoint
+CREATE INDEX "turns_investigation_idx" ON "evidata_meta"."turns" USING btree ("investigation_id","created_at");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "answers_one_latest_uq" ON "evidata_meta"."answers" USING btree ("investigation_id") WHERE "evidata_meta"."answers"."is_latest";`;

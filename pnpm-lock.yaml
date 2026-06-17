@@ -38,6 +38,30 @@ importers:
 
   apps/web:
     dependencies:
+      '@evidata/agent':
+        specifier: workspace:*
+        version: link:../../packages/core/agent
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../../packages/core/answer-contract
+      '@evidata/connector-sample':
+        specifier: workspace:*
+        version: link:../../packages/connectors/sample
+      '@evidata/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@evidata/investigation':
+        specifier: workspace:*
+        version: link:../../packages/core/investigation
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../../packages/core/ports
+      '@evidata/redaction':
+        specifier: workspace:*
+        version: link:../../packages/core/redaction
+      '@evidata/safety':
+        specifier: workspace:*
+        version: link:../../packages/core/safety
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

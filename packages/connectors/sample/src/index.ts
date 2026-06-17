@@ -2,6 +2,7 @@
 export {
   createSampleConnector,
   sampleSafetyContext,
+  sampleVerifiedContext,
   SAMPLE_DATA_SOURCE_ID,
   SAMPLE_ALLOWED_TABLES,
   SAMPLE_SENSITIVE_COLUMNS,
