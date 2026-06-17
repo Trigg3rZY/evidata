@@ -40,7 +40,7 @@ TypeScript full-stack (confirmed). Rationale: a single language across UI and se
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | Next.js (App Router) + React, TypeScript | Single deployable; route handlers serve the API + SSE. Client components for the thread. |
-| Styling / theme | CSS variables + design tokens | Mirrors the prototype's token approach; light/dark via `data-theme`. |
+| Styling / theme | Tailwind CSS v4 + shadcn/ui (Radix); lucide icons | CSS-var design tokens (shadcn semantic vars + layered status set); light/dark via `data-theme`. Full system in `11-m0-design-system.md`. |
 | i18n | typed message catalog (en, zh-CN) | No runtime string drift; keys checked at build. |
 | Server core | framework-agnostic TS modules (ports & adapters) | Domain logic does not import Next; callable from route handlers now, a Nest/worker later (M1+). |
 | Metadata store | Postgres via **pglite** (embedded) in M0 | Zero external dependency in M0; same SQL dialect as the real Postgres metadata store M1 will use. Drizzle ORM. |
@@ -58,8 +58,9 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 /
 ├─ apps/
 │  └─ web/                      # Next.js app (App Router)
-│     ├─ app/                   # routes + route handlers (API, SSE)
+│     ├─ app/                   # routes + route handlers (API, SSE); globals.css tokens
 │     └─ components/            # conversation UI, Answer renderer, ...
+│        └─ ui/                 # shadcn components (Tailwind v4, Radix)   (spec 11)
 ├─ packages/
 │  ├─ core/                     # framework-agnostic domain
 │  │  ├─ answer-contract/       # types + JSON schema + validators  (spec 02)
@@ -93,10 +94,11 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `08-m1-real-postgres-and-execution.md` | M1 architecture skeleton: real PostgreSQL, introspection, credentials, auth, metadata store. |
 | `09-m2-calibration-publishing-and-roles.md` | M2 architecture skeleton: calibration, Suggested→Verified, Policy, lifecycle, roles, correction loop. |
 | `10-m0-data-model-and-persistence.md` | M0 MetadataStore entities, contract-as-document + normalized provenance, Drizzle schema draft, Answer versioning, guardrail traceability. |
+| `11-m0-design-system.md` | Visual language: Tailwind + shadcn stack, color tokens (`globals.css` draft), the Status × Confidence system, typography, density modes, component mapping, a11y. |
 | `packages/core/answer-contract/src/answer-contract.ts` | Source-of-truth TypeScript types (moved out of `docs/` into the package once code landed). |
 | `packages/core/answer-contract/src/answer-contract.schema.json` | JSON Schema kept in lockstep with the types (C1 schema-sync test enforces no drift). |
 
-Depth: M0 (01–06, 10) is implementation-level; M1/M2 (08, 09) are architecture-skeleton; `07` is the umbrella blueprint.
+Depth: M0 (01–06, 10, 11) is implementation-level; M1/M2 (08, 09) are architecture-skeleton; `07` is the umbrella blueprint.
 
 ## PRD traceability (M0)
 
@@ -108,5 +110,5 @@ Depth: M0 (01–06, 10) is implementation-level; M1/M2 (08, 09) are architecture
 | AI Execution Boundary, Safety Gate, Redaction, Evidence Recorder | `03-agent-and-safety.md` |
 | Metadata persistence, Answer versioning, Evidence/QueryRun audit | `10-m0-data-model-and-persistence.md` |
 | Sample Data Source | `05-sample-data-source.md` |
-| Bilingual + theme + a11y baseline | `04-api-and-frontend.md` |
+| Bilingual + theme + a11y baseline | `04-api-and-frontend.md`, `11-m0-design-system.md` |
 | Guardrail Signals (read-only, no secrets to provider, every finding cites evidence) | `03` (enforcement), `06` (assertions) |

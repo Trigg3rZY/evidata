@@ -77,7 +77,7 @@ Mirrors the prototype. Client components unless noted.
         └─ <Composer variant="dock"/>  pinned; submit = follow-up turn
 ```
 
-`AnswerView` is a pure function of one `Answer` object — the same object the smoke tests validate. `UnblockPathView` renders `whatsMissing` + `nextSteps`; action buttons call the relevant API (`/turns` with `unblockActionId`/`choiceId`, or `/suggestions` for `createsSuggestion` actions) and, for `pick_definition`/`pick_candidate`, expand inline choices that submit a follow-up.
+Each surface maps to a shadcn/Radix component (`StatusRow` → `Badge`, Evidence SQL → `Collapsible`, the data-source picker → `Command`, the mutation-draft view → `Dialog`, …); the full mapping is in `11-m0-design-system.md §7`. `AnswerView` is a pure function of one `Answer` object — the same object the smoke tests validate. `UnblockPathView` renders `whatsMissing` + `nextSteps`; action buttons call the relevant API (`/turns` with `unblockActionId`/`choiceId`, or `/suggestions` for `createsSuggestion` actions) and, for `pick_definition`/`pick_candidate`, expand inline choices that submit a follow-up.
 
 ## 3. Client state
 
@@ -91,9 +91,10 @@ Mirrors the prototype. Client components unless noted.
 - Static UI chrome uses catalog keys. **AI answer content** is not translated client-side: per PRD it is authored in the question's language and arrives as resolved `LocalizedText` in the Answer.
 - Language toggle switches catalog + `<html lang>`; does not retranslate existing answers.
 
-## 5. Theming
+## 5. Styling & theming
 
-- CSS variables / design tokens as in the prototype; `data-theme="light|dark"` on `<html>`.
+- **Tailwind CSS v4 + shadcn/ui** (Radix primitives, owned in `apps/web/components/ui`); icons via lucide-react. The full visual language — tokens, the Status × Confidence system, typography, density modes, and the component mapping — is specified in `11-m0-design-system.md`.
+- Theme tokens are CSS custom properties (shadcn semantic vars + a layered status set); `data-theme="light|dark"` on `<html>`.
 - All four combinations (en/zh × light/dark) are a render-test matrix in spec 06.
 
 ## 6. Accessibility baseline (V1, enforced in M0)
