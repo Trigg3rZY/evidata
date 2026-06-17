@@ -45,9 +45,9 @@ Palette carried over from the prototype (trustworthy blue `#2f6df0`; semantic gr
   --code-bg: #f3f4f6;
 
   /* Status (the only "loud" color). bg = soft tint, fg = readable on tint. */
-  --status-answered: #1a8f5a;   --status-answered-bg: #e4f5ec;
-  --status-clarify: #2f6df0;    --status-clarify-bg: #e9f0fe;
-  --status-partial: #b07d0a;    --status-partial-bg: #fbf3df;
+  --status-answered: #0f6e41;   --status-answered-bg: #e4f5ec;   /* AA ≥4.5:1 on its bg at badge size */
+  --status-clarify: #1a5fd6;    --status-clarify-bg: #e9f0fe;
+  --status-partial: #8a6308;    --status-partial-bg: #fbf3df;
   --status-blocked: #c0392b;    --status-blocked-bg: #fbeae8;
   --status-unreliable: #5b626b; --status-unreliable-bg: #eef1f4;  /* neutral, not red */
 }

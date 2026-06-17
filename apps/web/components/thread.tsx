@@ -22,6 +22,11 @@ export function Thread() {
 
       {status === 'streaming' && !answer && <ReasoningStream progress={progress} />}
 
+      {/* Announce arrival to screen readers without dumping the whole answer. */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {answer ? 'Answer ready.' : ''}
+      </div>
+
       {answer && <AnswerView answer={answer} onFollowup={(q) => void ask(q, 'sample', lang)} />}
 
       {status === 'error' && error && (
