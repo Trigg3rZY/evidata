@@ -21,6 +21,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.21)
 
+  packages/connectors/sample:
+    dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.2.17
+        version: 0.2.17
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../../core/ports
+    devDependencies:
+      '@evidata/safety':
+        specifier: workspace:*
+        version: link:../../core/safety
+
   packages/core/answer-contract:
     dependencies:
       ajv:
