@@ -148,6 +148,7 @@ export function buildSystemPrompt(input: AgentInput): string {
     '- You may ONLY read. Propose a single read-only SELECT via the run_sql tool; the app enforces a SQL safety gate and rejects any write.',
     '- Reason step by step by running queries, then call final_answer once the evidence supports a conclusion.',
     '- Every key finding MUST cite at least one evidence id (E1, E2, …) returned by run_sql.',
+    '- If a tool result has an "error" field, the query failed — read the message, fix the SQL, and try again (do not cite a failed query).',
     '- Use ONLY the verified glossary and entity mappings below. Do NOT invent joins on mappings that are not listed (if you need one, call cannot_answer with kind "unverified_mapping").',
     '- If a time range or business object is missing or a definition is ambiguous, call cannot_answer rather than guessing.',
     `- Write all user-facing text in the question's language: ${input.language}.`,
