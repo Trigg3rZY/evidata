@@ -19,7 +19,7 @@ export type {
   AgentRunEvent,
   AnswerDraft,
   QueryProposal,
-  RecordedQueryRun,
+  QueryRunRecord,
   RunResult,
   ToolResult,
 } from './types';

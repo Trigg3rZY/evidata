@@ -1,0 +1,23 @@
+{
+  "name": "@evidata/investigation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "InvestigationService — orchestrates AgentRunner + MetadataStore for one Ask Data turn (spec 01/03/10).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@evidata/agent": "workspace:*",
+    "@evidata/answer-contract": "workspace:*",
+    "@evidata/ports": "workspace:*"
+  },
+  "devDependencies": {
+    "@evidata/connector-sample": "workspace:*",
+    "@evidata/db": "workspace:*",
+    "@evidata/redaction": "workspace:*",
+    "@evidata/safety": "workspace:*"
+  }
+}
