@@ -1,6 +1,6 @@
 # 07 — Full V1 Blueprint (M0 → M1 → M2)
 
-This is the umbrella view of the whole V1: how the system grows from the M0 trusted-answer loop into a self-hosted, multi-user, calibrated product, with every milestone adding capability behind interfaces that already exist in M0. M1 and M2 are specified at architecture-skeleton depth (08, 09); M0 (01–06) is the only milestone specified to implementation depth.
+This is the umbrella view of the whole V1: how the system grows from the M0 trusted-answer loop into a self-hosted, multi-user, calibrated product, with every milestone adding capability behind interfaces that already exist in M0. M0 (01–06, 10, 11) and M1 (08, 12) are specified to implementation depth; M2 (09) remains an architecture skeleton until M1 is built.
 
 PRD references: `V1 Product Scope`, `Implementation Milestones`, `Roles and Capability Matrix`, `Product-level Architecture Boundaries`.
 
@@ -85,5 +85,5 @@ Per PRD `Roadmap-only for V1` and the roadmap doc: Playbook editor/auto-suggesti
 
 ## 6. Detailed chapters
 
-- `08-m1-real-postgres-and-execution.md`
+- `08-m1-real-postgres-and-execution.md` (+ `12-m1-data-model.md`)
 - `09-m2-calibration-publishing-and-roles.md`
