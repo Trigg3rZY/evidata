@@ -107,6 +107,7 @@ function toDraft(args: Record<string, unknown>): AnswerDraft {
 
 /** What the model sees as a tool result: the redacted, bounded result only. */
 function resultForModel(tr: ToolResult): Record<string, unknown> {
+  if (tr.error) return { purpose: tr.purpose, error: tr.error };
   return {
     evidenceRef: tr.evidenceRef,
     purpose: tr.purpose,

@@ -12,7 +12,13 @@ import { createRedactor } from '@evidata/redaction';
 import { AgentRunner, type AgentRunnerDeps } from './runner';
 import { fixtureFor } from './scenarios';
 import { FixtureProvider } from './fixture-provider';
-import type { AgentContext, AgentInput, AgentProvider, AgentRunEvent } from './types';
+import type {
+  AgentContext,
+  AgentDecision,
+  AgentInput,
+  AgentProvider,
+  AgentRunEvent,
+} from './types';
 
 let handle: SampleConnectorHandle;
 
@@ -171,5 +177,42 @@ describe('FixtureProvider', () => {
       input('nothing scripted'),
     );
     expect(answer.status).toBe('NoReliableAnswer');
+  });
+});
+
+describe('executor error recovery', () => {
+  it('records a failed query, feeds the error back, and still finishes', async () => {
+    // The gate allows both (read-only, authorized table); the first SQL fails in
+    // the engine (bad column), the provider then runs a valid query and answers.
+    const script: AgentDecision[] = [
+      { kind: 'query', proposal: { purpose: 'oops', sql: 'select bogus_col from accounts' } },
+      {
+        kind: 'query',
+        proposal: {
+          purpose: 'real',
+          sql: "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'",
+        },
+      },
+      {
+        kind: 'final',
+        draft: {
+          status: 'Answered',
+          confidence: 'High',
+          directAnswer: 'ACME total posted spend',
+          confidenceReason: 'single query',
+          keyFindings: [{ text: 'total computed', evidenceIds: ['E1'] }],
+        },
+      },
+    ];
+    const events: AgentRunEvent[] = [];
+    const { answer, queryRuns } = await new AgentRunner(
+      deps(new FixtureProvider(script), (e) => events.push(e)),
+    ).run(input('total spend?'));
+
+    expect(answer.status).toBe('Answered');
+    expect(answer.evidence.map((e) => e.id)).toEqual(['E1']); // only the successful query is evidence
+    expect(queryRuns.map((q) => q.status)).toEqual(['error', 'ok']); // both recorded (G4); failure first
+    expect(events.some((e) => e.type === 'query' && e.status === 'error')).toBe(true);
+    expect(validateAnswer(answer)).toEqual([]);
   });
 });

@@ -38,13 +38,15 @@ export interface AgentInput {
 
 /** A bounded, redacted result handed back to the provider after a query runs. */
 export interface ToolResult {
-  evidenceRef: string; // 'E1'
+  evidenceRef: string; // 'E1' on success; a non-evidence marker on a failed query
   purpose: string;
   columns: ColumnMeta[];
   sampleRows: ReadonlyArray<Record<string, unknown>>;
   rowCount: number;
   truncated: boolean;
   redactedColumns: string[];
+  /** Set when the query failed to execute — fed back so the provider can correct its SQL. */
+  error?: string;
 }
 
 /** Everything the provider has seen so far this turn (drives the next decision). */
@@ -86,7 +88,8 @@ export interface AgentProvider {
 export type AgentRunEvent =
   | { type: 'reasoning'; label: string }
   | { type: 'query'; purpose: string; status: 'running' }
-  | { type: 'query'; purpose: string; status: 'ok'; rowCount: number; elapsedMs: number };
+  | { type: 'query'; purpose: string; status: 'ok'; rowCount: number; elapsedMs: number }
+  | { type: 'query'; purpose: string; status: 'error'; message: string };
 
 /** Audit record of one executed query (G4); canonical shape lives in ports. */
 export type { QueryRunRecord };

@@ -78,6 +78,7 @@ export class AgentRunner {
     const history: AgentHistory = { toolResults: [], reasoning: [] };
     const evidence: Evidence[] = [];
     const queryRuns: QueryRunRecord[] = [];
+    let erroredQueries = 0;
 
     for (let iter = 0; iter < maxIterations; iter++) {
       const decision = await this.deps.provider.next(input, history);
@@ -125,7 +126,40 @@ export class AgentRunner {
           ? { statementTimeoutMs: policy.statementTimeoutMs }
           : {}),
       };
-      const raw = await executor.run(sql, execOptions);
+
+      // A real model occasionally proposes SQL the gate allows but the engine
+      // rejects (bad column, unsupported function). Don't abort the turn — record
+      // the failed run (G4) and feed the error back so the provider can correct.
+      let raw: QueryRunResult;
+      try {
+        raw = await executor.run(sql, execOptions);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'The query could not be executed.';
+        const failRef = `qe${(erroredQueries += 1)}`;
+        queryRuns.push({
+          id: newId('qr'),
+          connectorId: this.deps.connector.id,
+          sql,
+          status: 'error',
+          rowCount: 0,
+          truncated: false,
+          elapsedMs: 0,
+          evidenceRef: failRef,
+        });
+        history.toolResults.push({
+          evidenceRef: failRef,
+          purpose,
+          columns: [],
+          sampleRows: [],
+          rowCount: 0,
+          truncated: false,
+          redactedColumns: [],
+          error: message,
+        });
+        sink({ type: 'query', purpose, status: 'error', message });
+        continue;
+      }
+
       const redacted = this.deps.redactor.redact(raw, {
         rowLimit: policy.rowLimit,
         sensitiveColumns: this.deps.safetyContext.sensitiveColumns,
