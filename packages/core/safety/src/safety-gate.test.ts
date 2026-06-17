@@ -162,3 +162,34 @@ describe('SafetyGate — allow + flags', () => {
     if (d.verdict === 'allow') expect(d.needsConfirmation).toBe(false);
   });
 });
+
+describe('SafetyGate — EXPLAIN', () => {
+  it.each([
+    ['plain', 'EXPLAIN SELECT id FROM invoices WHERE id = 1'],
+    ['verbose', 'EXPLAIN VERBOSE SELECT id FROM invoices WHERE id = 1'],
+    ['parenthesised options', 'EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM invoices WHERE id = 1'],
+    ['lowercase', 'explain select id from invoices where id = 1'],
+  ])('allows EXPLAIN of an authorized read-only query: %s', (_label, sql) => {
+    expect(check(sql).verdict).toBe('allow');
+  });
+
+  it.each([
+    ['bare ANALYZE', 'EXPLAIN ANALYZE SELECT * FROM accounts'],
+    ['parenthesised ANALYZE', 'EXPLAIN (ANALYZE) SELECT * FROM accounts'],
+    ['ANALYZE among options', 'EXPLAIN (VERBOSE, ANALYZE) SELECT * FROM accounts'],
+  ])('rejects EXPLAIN ANALYZE (it executes the statement): %s', (_label, sql) => {
+    expect(rejectReason(check(sql))).toBe('not_read_only');
+  });
+
+  it('applies the inner AST rules through EXPLAIN (unauthorized table)', () => {
+    expect(rejectReason(check('EXPLAIN SELECT * FROM secrets'))).toBe('unauthorized_table');
+  });
+
+  it('applies the inner AST rules through EXPLAIN (non-read-only)', () => {
+    expect(rejectReason(check('EXPLAIN DELETE FROM accounts WHERE id = 1'))).toBe('not_read_only');
+  });
+
+  it('rejects EXPLAIN with no inner statement', () => {
+    expect(check('EXPLAIN').verdict).toBe('reject');
+  });
+});

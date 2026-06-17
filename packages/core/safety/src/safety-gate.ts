@@ -6,11 +6,13 @@
  * closed: anything it cannot parse or recognise is rejected.
  *
  * Notes on this parser version (pgsql-ast-parser@12):
- * - `SET ROLE`, `VACUUM`, `ANALYZE`, `COPY`, `WITH RECURSIVE`, `SELECT INTO`,
- *   and `EXPLAIN` are not modelled and therefore parse-fail → rejected as
- *   `unparseable`. That is safe (fail-closed); the Sample scenarios use plain
- *   SELECTs. Denylisted *functions* inside otherwise-valid SQL are parseable and
- *   are rejected as `admin_or_maintenance`.
+ * - `SET ROLE`, `VACUUM`, `ANALYZE`, `COPY`, `WITH RECURSIVE`, and `SELECT INTO`
+ *   are not modelled and therefore parse-fail → rejected as `unparseable`. That
+ *   is safe (fail-closed). Denylisted *functions* inside otherwise-valid SQL are
+ *   parseable and are rejected as `admin_or_maintenance`.
+ * - `EXPLAIN` is also not modelled, so it is recognised lexically and stripped
+ *   (see `stripExplain`); the inner statement is then validated by the normal AST
+ *   pipeline. `EXPLAIN ANALYZE` executes the statement and is rejected.
  * - Data-modifying CTEs (`WITH x AS (DELETE … RETURNING …) SELECT …`) parse as a
  *   `with` whose bind statement is `delete`/`insert`/`update`; the read-only
  *   check recurses into every CTE body to catch this bypass.
@@ -44,6 +46,54 @@ function isDeniedFunction(name: string): boolean {
 
 function reject(reason: SafetyRejectReason, detail: string): SafetyDecision {
   return { verdict: 'reject', reason, detail };
+}
+
+/**
+ * Recognise and strip a leading `EXPLAIN` (which `pgsql-ast-parser` does not
+ * model) so the inner statement can be validated by the normal AST pipeline.
+ *
+ * This is the ONLY lexical step in the gate, and it makes no safety decision:
+ * the inner statement is fully re-validated on its AST (read-only recursion,
+ * table authorization, function denylist). A mis-strip can only yield a
+ * statement that fails to parse (→ rejected), never an unsafe execution.
+ * `EXPLAIN ANALYZE` actually executes the statement, so it is rejected.
+ */
+function stripExplain(sql: string): { inner: string; analyze: boolean } | null {
+  const m = /^\s*explain\b/i.exec(sql);
+  if (!m) return null;
+
+  let rest = sql.slice(m[0].length).replace(/^\s+/, '');
+  let analyze = false;
+
+  if (rest.startsWith('(')) {
+    // Parenthesised option list, e.g. EXPLAIN (ANALYZE, FORMAT JSON) SELECT …
+    let depth = 0;
+    let close = -1;
+    for (let i = 0; i < rest.length; i++) {
+      const ch = rest[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') {
+        depth--;
+        if (depth === 0) {
+          close = i;
+          break;
+        }
+      }
+    }
+    if (close === -1) return { inner: '', analyze: false }; // unbalanced → inner empty → unparseable
+    if (/\banalyze\b/i.test(rest.slice(1, close))) analyze = true;
+    rest = rest.slice(close + 1).replace(/^\s+/, '');
+  } else {
+    // Bare options, e.g. EXPLAIN ANALYZE VERBOSE SELECT …
+    const optRe = /^(analyze|verbose)\b\s*/i;
+    let mm: RegExpExecArray | null;
+    while ((mm = optRe.exec(rest))) {
+      if (mm[1] && /analyze/i.test(mm[1])) analyze = true;
+      rest = rest.slice(mm[0].length);
+    }
+  }
+
+  return { inner: rest, analyze };
 }
 
 /** A statement is read-only iff it (and every CTE body it contains) is. */
@@ -151,70 +201,87 @@ function detectSensitive(
 
 export class SqlSafetyGate implements SafetyGate {
   check(sql: string, ctx: SafetyContext): SafetyDecision {
-    // 1. Parse.
-    let ast: Statement[];
-    try {
-      ast = parse(sql);
-    } catch {
-      return reject('unparseable', 'The statement could not be parsed as SQL.');
-    }
-
-    // 2. Single statement.
-    if (ast.length === 0) {
-      return reject('unparseable', 'No SQL statement was found.');
-    }
-    if (ast.length > 1) {
-      return reject('multiple_statements', 'Only a single statement may be executed.');
-    }
-    const stmt = ast[0]!;
-
-    // 3. Read-only only (recurses into CTE bodies, union arms).
-    if (!isReadOnlyStatement(stmt)) {
-      return reject('not_read_only', 'Only read-only SELECT statements may be executed.');
-    }
-
-    const collected = collect(stmt);
-
-    // 4. No admin / maintenance functions.
-    for (const fn of collected.calls) {
-      if (isDeniedFunction(fn)) {
-        return reject('admin_or_maintenance', `The function "${fn}" is not permitted.`);
+    // 0. EXPLAIN (not modelled by the parser): strip and validate the inner
+    //    statement through the same AST rules. EXPLAIN ANALYZE executes → reject.
+    const explain = stripExplain(sql);
+    if (explain) {
+      if (explain.analyze) {
+        return reject('not_read_only', 'EXPLAIN ANALYZE executes the statement and is not permitted.');
       }
-    }
-
-    // 5. Authorized tables (CTE names are not real relations).
-    const touchedTables: string[] = [];
-    for (const t of collected.tables) {
-      if (collected.cteNames.has(t.name)) continue;
-      const qualified = t.schema ? `${t.schema}.${t.name}` : t.name;
-      if (!ctx.allowedTables.has(t.name) && !ctx.allowedTables.has(qualified)) {
-        return reject('unauthorized_table', `The table "${qualified}" is not authorized for this question.`);
+      if (!explain.inner.trim()) {
+        return reject('unparseable', 'EXPLAIN with no statement to analyze.');
       }
-      touchedTables.push(t.name);
+      return evaluate(explain.inner, ctx);
     }
-    const uniqueTables = [...new Set(touchedTables)];
-    const tableSet = new Set(uniqueTables);
-
-    // 6. Sensitive columns: flag (the Redactor masks).
-    const touchedSensitive = detectSensitive(ctx.sensitiveColumns, tableSet, collected);
-
-    // 8. Confirmation triggers (PRD default-strict Policy).
-    const isLarge = (table: string): boolean => {
-      const large = ctx.policy.largeTables;
-      return large && large.size > 0 ? large.has(table) : true;
-    };
-    const broadScan = !topLevelHasWhere(stmt) && uniqueTables.some(isLarge);
-    const needsConfirmation =
-      (ctx.policy.confirmation.onSensitiveAccess && touchedSensitive.length > 0) ||
-      (ctx.policy.confirmation.onBroadScan && broadScan);
-
-    return {
-      verdict: 'allow',
-      touchedTables: uniqueTables,
-      touchedSensitive,
-      needsConfirmation,
-    };
+    return evaluate(sql, ctx);
   }
+}
+
+/** Core AST validation of a single (non-EXPLAIN) statement. */
+function evaluate(sql: string, ctx: SafetyContext): SafetyDecision {
+  // 1. Parse.
+  let ast: Statement[];
+  try {
+    ast = parse(sql);
+  } catch {
+    return reject('unparseable', 'The statement could not be parsed as SQL.');
+  }
+
+  // 2. Single statement.
+  if (ast.length === 0) {
+    return reject('unparseable', 'No SQL statement was found.');
+  }
+  if (ast.length > 1) {
+    return reject('multiple_statements', 'Only a single statement may be executed.');
+  }
+  const stmt = ast[0]!;
+
+  // 3. Read-only only (recurses into CTE bodies, union arms).
+  if (!isReadOnlyStatement(stmt)) {
+    return reject('not_read_only', 'Only read-only SELECT statements may be executed.');
+  }
+
+  const collected = collect(stmt);
+
+  // 4. No admin / maintenance functions.
+  for (const fn of collected.calls) {
+    if (isDeniedFunction(fn)) {
+      return reject('admin_or_maintenance', `The function "${fn}" is not permitted.`);
+    }
+  }
+
+  // 5. Authorized tables (CTE names are not real relations).
+  const touchedTables: string[] = [];
+  for (const t of collected.tables) {
+    if (collected.cteNames.has(t.name)) continue;
+    const qualified = t.schema ? `${t.schema}.${t.name}` : t.name;
+    if (!ctx.allowedTables.has(t.name) && !ctx.allowedTables.has(qualified)) {
+      return reject('unauthorized_table', `The table "${qualified}" is not authorized for this question.`);
+    }
+    touchedTables.push(t.name);
+  }
+  const uniqueTables = [...new Set(touchedTables)];
+  const tableSet = new Set(uniqueTables);
+
+  // 6. Sensitive columns: flag (the Redactor masks).
+  const touchedSensitive = detectSensitive(ctx.sensitiveColumns, tableSet, collected);
+
+  // 8. Confirmation triggers (PRD default-strict Policy).
+  const isLarge = (table: string): boolean => {
+    const large = ctx.policy.largeTables;
+    return large && large.size > 0 ? large.has(table) : true;
+  };
+  const broadScan = !topLevelHasWhere(stmt) && uniqueTables.some(isLarge);
+  const needsConfirmation =
+    (ctx.policy.confirmation.onSensitiveAccess && touchedSensitive.length > 0) ||
+    (ctx.policy.confirmation.onBroadScan && broadScan);
+
+  return {
+    verdict: 'allow',
+    touchedTables: uniqueTables,
+    touchedSensitive,
+    needsConfirmation,
+  };
 }
 
 /** Construct the default M0 Safety Gate. */
