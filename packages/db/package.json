@@ -1,0 +1,22 @@
+{
+  "name": "@evidata/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "M0 MetadataStore schema + pglite-backed Drizzle client (spec 10).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "drizzle-orm": "^0.38.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1"
+  }
+}
