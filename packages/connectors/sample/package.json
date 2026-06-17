@@ -1,0 +1,19 @@
+{
+  "name": "@evidata/connector-sample",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Data Source — pglite-seeded Advertising Platform behind the Connector/QueryExecutor ports (spec 05).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@evidata/ports": "workspace:*"
+  },
+  "devDependencies": {
+    "@evidata/safety": "workspace:*"
+  }
+}
