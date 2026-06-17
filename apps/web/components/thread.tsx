@@ -11,7 +11,8 @@ import { ReasoningStream } from './reasoning-stream';
 
 interface Exchange {
   question: string;
-  answer: Answer;
+  answer?: Answer;
+  error?: string;
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -24,20 +25,31 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
+function ErrorBlock({ error }: { error: string }) {
+  return (
+    <div className="rounded-md border border-border bg-status-blocked-bg px-3 py-2 text-sm text-status-blocked">
+      {error}
+    </div>
+  );
+}
+
 export function Thread() {
   const { t, lang } = useI18n();
   const stream = useInvestigationStream();
   const { status, question, progress, answer, error, ask, reset } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
 
-  // When a turn settles with an answer, move it into the conversation and free
-  // the stream for the next question (the thread accumulates; it doesn't wipe).
+  // When a turn settles (answered OR errored), move it into the conversation and
+  // free the stream for the next question — the thread accumulates, never wipes.
   useEffect(() => {
-    if (status === 'done' && question && answer) {
-      setHistory((h) => [...h, { question, answer }]);
-      reset();
-    }
-  }, [status, question, answer, reset]);
+    if (status !== 'done' && status !== 'error') return;
+    if (!question) return;
+    const settled: Exchange = answer
+      ? { question, answer }
+      : { question, error: error ?? t('genericError') };
+    setHistory((h) => [...h, settled]);
+    reset();
+  }, [status, question, answer, error, reset, t]);
 
   const submit = (q: string): void => void ask(q, 'sample', lang);
   const isEmpty = history.length === 0 && status === 'idle';
@@ -50,34 +62,32 @@ export function Thread() {
         {history.map((ex, i) => (
           <div key={i} className="flex flex-col gap-4">
             <UserBubble text={ex.question} />
-            <AnswerView answer={ex.answer} onFollowup={submit} />
+            {ex.answer ? (
+              <AnswerView answer={ex.answer} onFollowup={submit} />
+            ) : (
+              <ErrorBlock error={ex.error ?? t('genericError')} />
+            )}
           </div>
         ))}
 
-        {status === 'streaming' && question && (
+        {/* The in-flight / just-settled turn (covers streaming and the transient
+            done|error commit before the effect moves it into history). */}
+        {status !== 'idle' && question && (
           <div className="flex flex-col gap-4">
             <UserBubble text={question} />
             {answer ? (
               <AnswerView answer={answer} onFollowup={submit} />
+            ) : status === 'error' ? (
+              <ErrorBlock error={error ?? t('genericError')} />
             ) : (
               <ReasoningStream progress={progress} />
             )}
           </div>
         )}
 
-        {/* Announce arrival to screen readers without dumping the whole answer. */}
         <div className="sr-only" role="status" aria-live="polite">
-          {answer ? 'Answer ready.' : ''}
+          {answer ? t('answerReady') : ''}
         </div>
-
-        {status === 'error' && (
-          <div className="flex flex-col gap-4">
-            {question && <UserBubble text={question} />}
-            <div className="rounded-md border border-border bg-status-blocked-bg px-3 py-2 text-sm text-status-blocked">
-              {error}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="sticky bottom-0 bg-background pb-4 pt-2">

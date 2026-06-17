@@ -31,7 +31,12 @@ const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/trend|trending/i, 'needs-timerange'],
 ];
 
-/** M0 maps a question to one of the canned Sample scenarios (FixtureProvider). */
+/**
+ * M0 maps a question to one of the canned Sample scenarios (FixtureProvider).
+ * Routing is English-only (the M0 fixtures are English); a non-English typed
+ * question falls through to the default scenario. Real, language-aware routing
+ * arrives with the real AgentProvider.
+ */
 export function pickScenario(question: string): string {
   for (const [pattern, id] of SCENARIO_PATTERNS) {
     if (pattern.test(question)) return id;
