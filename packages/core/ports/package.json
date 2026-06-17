@@ -1,0 +1,12 @@
+{
+  "name": "@evidata/ports",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared port interfaces (ports & adapters) for the evidata core. M0 ships one adapter per port; M1/M2 add more without touching callers.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts"
+}
