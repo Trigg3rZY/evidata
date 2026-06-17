@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type Lang = 'en' | 'zh-CN';
 
@@ -37,6 +37,10 @@ const I18nContext = createContext<I18nValue | null>(null);
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>('en');
+  // Keep <html lang> in sync so assistive tech announces in the right language (spec 04 §4).
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
   const value = useMemo<I18nValue>(() => ({ lang, setLang, t: (key) => dict[lang][key] }), [lang]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
