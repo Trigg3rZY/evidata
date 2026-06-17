@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build the web app first: compiles + type-checks it, and generates
+      # next-env.d.ts so the type-aware lint's project service resolves apps/web.
+      - name: Build web app
+        run: pnpm --filter @evidata/web build
+
       - name: Typecheck
         run: pnpm typecheck
 
