@@ -20,16 +20,31 @@ export async function POST(req: Request): Promise<Response> {
 
   const rt = await getRuntime();
   const encoder = new TextEncoder();
+  // Disconnect-safe: once the client goes away, `cancel()` flips `closed` and
+  // writes become no-ops, so a late enqueue can't throw out of `start`.
+  // (Cancelling the in-flight runner needs an AbortSignal through @evidata/agent
+  // — tracked as a follow-up; in M0 the work is cheap and bounded.)
+  let closed = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const write = (chunk: string): void => controller.enqueue(encoder.encode(chunk));
+      const write = (chunk: string): void => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {
+          closed = true;
+        }
+      };
       // M0 replays a canned scenario via the FixtureProvider; a real provider slots in later.
       await askStream(
         { service: rt.service, providerFor: (q) => fixtureFor(pickScenario(q)) },
         parsed,
         write,
       );
-      controller.close();
+      if (!closed) controller.close();
+    },
+    cancel() {
+      closed = true;
     },
   });
 

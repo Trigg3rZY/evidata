@@ -21,7 +21,12 @@ export function sseEvent(event: string, data: unknown): string {
 }
 
 const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\b(update|delete|insert|void|drop|alter|set)\b/i, 'mutation-attempt'],
+  // Explicit mutation phrasings only — benign words like "drop"/"insert" alone
+  // shouldn't route here (the real SafetyGate is the actual guard, regardless).
+  [
+    /\b(update|delete|void|truncate)\b|\b(insert into|drop table|alter table)\b/i,
+    'mutation-attempt',
+  ],
   [/reconcile|usage.*billing|billing.*usage/i, 'cross-area-reconcile'],
   [/trend|trending/i, 'needs-timerange'],
 ];

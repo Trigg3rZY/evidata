@@ -19,7 +19,11 @@ export interface Runtime {
   service: InvestigationService;
 }
 
-let runtimePromise: Promise<Runtime> | undefined;
+// Stash on globalThis so `next dev` hot-reloads reuse one in-memory DB instead
+// of leaking a fresh pglite per reload.
+const globalForRuntime = globalThis as typeof globalThis & {
+  __evidataRuntime?: Promise<Runtime>;
+};
 
 async function build(): Promise<Runtime> {
   const db = await createMetadataDb();
@@ -46,6 +50,13 @@ async function build(): Promise<Runtime> {
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
 export function getRuntime(): Promise<Runtime> {
-  if (!runtimePromise) runtimePromise = build();
-  return runtimePromise;
+  if (!globalForRuntime.__evidataRuntime) {
+    // Reset on failure so a transient build error (e.g. pglite init) can retry,
+    // rather than caching a rejected promise forever.
+    globalForRuntime.__evidataRuntime = build().catch((err: unknown) => {
+      delete globalForRuntime.__evidataRuntime;
+      throw err;
+    });
+  }
+  return globalForRuntime.__evidataRuntime;
 }
