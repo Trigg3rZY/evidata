@@ -34,6 +34,25 @@ importers:
         specifier: workspace:*
         version: link:../../core/safety
 
+  packages/core/agent:
+    dependencies:
+      '@evidata/answer-contract':
+        specifier: workspace:*
+        version: link:../answer-contract
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+    devDependencies:
+      '@evidata/connector-sample':
+        specifier: workspace:*
+        version: link:../../connectors/sample
+      '@evidata/redaction':
+        specifier: workspace:*
+        version: link:../redaction
+      '@evidata/safety':
+        specifier: workspace:*
+        version: link:../safety
+
   packages/core/answer-contract:
     dependencies:
       ajv:

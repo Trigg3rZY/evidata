@@ -6,7 +6,9 @@ PRD references: `AI Execution Boundary`, `SQL Safety Gate`, `Result Redaction an
 
 ## 1. AgentRunner state machine
 
-The `AgentRunner` (in `packages/core/agent`) drives one turn. The provider is a streaming oracle; the runner is the controller that enforces the boundary.
+The `AgentRunner` (in `packages/core/agent`) drives one turn. The runner is the controller that enforces the boundary; the provider only proposes.
+
+**Provider protocol (decision / tool-use loop).** The runner repeatedly calls `provider.next(input, history) → AgentDecision`, where a decision is `reasoning` (narration), `query` (a proposed SQL + purpose), `unblock` (the provider declares what's missing), or `final` (an answered draft). The runner acts on each: forwards `reasoning`, runs the SafetyGate + execution + redaction on `query` and appends the redacted `ToolResult` to `history`, or finalizes on `unblock`/`final`. This is the mainstream agent loop and keeps the runner the sole owner of the gate, execution, the reject→status mapping (§5), the step budget, and event emission — the provider only ever sees redacted `ToolResult`s. (This supersedes an earlier sketch of a bidirectional generator, which has awkward TS typing and buries control flow in the provider.)
 
 ```
         ┌──────────┐
@@ -136,8 +138,10 @@ Rules from PRD `Transient Investigation Updates`: steps show while active, colla
 
 ## 7. AgentProvider implementations
 
-- **Real provider** — env-configured (`AGENT_PROVIDER`, `AGENT_MODEL`, API key). Uses a structured tool/loop protocol to emit `AgentStep`s. Provider/model identifiers never cross to the client.
-- **FixtureProvider** — replays scripted `AgentStep` sequences keyed by Sample scenario id (spec 05). Deterministic, no network, no key. It is the default in tests and can be toggled for local dev (`AGENT_PROVIDER=fixture`). This makes the M0 smoke suite the reliable acceptance gate without depending on a live model.
+Both implement `AgentProvider.next(input, history) → AgentDecision` (§1). `input` carries only **Verified** Data Source context (the Suggested mapping is withheld — which is what makes the cross-area scenario block).
+
+- **Real provider** — env-configured (`AGENT_PROVIDER`, `AGENT_MODEL`, API key). Each `next` call maps to one model turn over the running tool-use transcript; the model emits the next decision. Provider/model identifiers never cross to the client.
+- **FixtureProvider** — replays a scripted `AgentDecision` sequence keyed by Sample scenario id (spec 05); it is **stateless**, picking the next step from how far the run has progressed (`reasoning + toolResults` seen), with an honest non-answer as the default exit. Deterministic, no network, no key — the default in tests and the basis of the M0 smoke gate.
 
 ## 8. Guardrail enforcement points (tie to PRD Success Measurement)
 

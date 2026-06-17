@@ -1,0 +1,21 @@
+{
+  "name": "@evidata/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AgentRunner state machine + FixtureProvider — drives one Investigation turn (spec 03).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@evidata/answer-contract": "workspace:*",
+    "@evidata/ports": "workspace:*"
+  },
+  "devDependencies": {
+    "@evidata/connector-sample": "workspace:*",
+    "@evidata/redaction": "workspace:*",
+    "@evidata/safety": "workspace:*"
+  }
+}
