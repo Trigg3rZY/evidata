@@ -140,7 +140,7 @@ Rules from PRD `Transient Investigation Updates`: steps show while active, colla
 
 Both implement `AgentProvider.next(input, history) → AgentDecision` (§1). `input` carries only **Verified** Data Source context (the Suggested mapping is withheld — which is what makes the cross-area scenario block).
 
-- **Real provider** — env-configured (`AGENT_PROVIDER`, `AGENT_MODEL`, API key). Each `next` call maps to one model turn over the running tool-use transcript; the model emits the next decision. Provider/model identifiers never cross to the client.
+- **Real provider** (`@evidata/provider-openai`) — an **OpenAI-compatible** adapter (DeepSeek by default; also OpenAI, Together, local Ollama/vLLM), env-configured (`AGENT_PROVIDER=openai`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`/`DEEPSEEK_API_KEY`, `AGENT_MODEL`). It is stateful per run and owns the chat transcript: the model drives the loop by calling exactly one tool per turn — `run_sql` → `query`, `final_answer` → `final`, `cannot_answer` → `unblock` — and each turn we feed back the previous query's **redacted** `ToolResult`. The runner still owns the SafetyGate, execution, redaction, recording, and `validateAnswer`; the model only proposes. Provider/model identifiers never cross to the client. Falls back to the FixtureProvider when no key is configured (so dev/CI stay hermetic).
 - **FixtureProvider** — replays a scripted `AgentDecision` sequence keyed by Sample scenario id (spec 05); it is **stateless**, picking the next step from how far the run has progressed (`reasoning + toolResults` seen), with an honest non-answer as the default exit. Deterministic, no network, no key — the default in tests and the basis of the M0 smoke gate.
 
 ## 8. Guardrail enforcement points (tie to PRD Success Measurement)
