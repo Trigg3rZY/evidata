@@ -81,6 +81,7 @@ export const AGENT_TOOLS: ToolDef[] = [
           confidenceReason: { type: 'string' },
           keyFindings: {
             type: 'array',
+            minItems: 1,
             items: {
               type: 'object',
               additionalProperties: false,

@@ -159,6 +159,9 @@ export class OpenAIAgentProvider implements AgentProvider {
     this.maxTokens = cfg.maxTokens ?? 1024;
   }
 
+  // NOTE: `signal` is accepted for forward-compatibility but the AgentRunner does
+  // not thread one yet, so an in-flight request isn't cancelled on disconnect —
+  // wiring AbortSignal end to end is the tracked M1 follow-up (08 §2.1).
   async next(
     input: AgentInput,
     history: AgentHistory,
@@ -170,7 +173,9 @@ export class OpenAIAgentProvider implements AgentProvider {
       this.started = true;
     }
 
-    // Feed back the previous run_sql's redacted result (queries run sequentially).
+    // Feed back the previous run_sql's redacted result. The runner pushes exactly
+    // one result per `query` decision before calling next() again, so the newest
+    // toolResult is the one this pendingCallId is waiting on.
     if (this.pendingCallId && history.toolResults.length > this.consumed) {
       const tr = history.toolResults[history.toolResults.length - 1]!;
       this.messages.push({
@@ -199,6 +204,9 @@ export class OpenAIAgentProvider implements AgentProvider {
       ...(assistant.tool_calls ? { tool_calls: assistant.tool_calls } : {}),
     });
 
+    // With tool_choice:'required' the model should always call a tool; if a
+    // provider ignores that (returns prose, or a malformed/empty body), we end
+    // this turn as an honest non-answer rather than guessing.
     const call = assistant.tool_calls?.[0];
     if (!call) return unblock('insufficient_results', 'The assistant did not take an action.');
     const args = asRecord(safeParse(call.function.arguments));
@@ -225,10 +233,13 @@ export function openAIConfigFromEnv(env: NodeJS.ProcessEnv): OpenAIProviderConfi
   if (env.AGENT_PROVIDER !== 'openai') return null;
   const apiKey = env.OPENAI_API_KEY ?? env.DEEPSEEK_API_KEY;
   if (!apiKey) return null;
-  return {
+  const config: OpenAIProviderConfig = {
     apiKey,
     baseURL: env.OPENAI_BASE_URL ?? 'https://api.deepseek.com',
     model: env.AGENT_MODEL ?? 'deepseek-chat',
-    ...(env.AGENT_MAX_TOKENS ? { maxTokens: Number(env.AGENT_MAX_TOKENS) } : {}),
   };
+  // Ignore a non-numeric AGENT_MAX_TOKENS rather than sending max_tokens: NaN/null.
+  const maxTokens = Number(env.AGENT_MAX_TOKENS);
+  if (Number.isFinite(maxTokens) && maxTokens > 0) config.maxTokens = maxTokens;
+  return config;
 }
