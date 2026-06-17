@@ -1,0 +1,17 @@
+{
+  "name": "@evidata/answer-contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Answer Contract — source-of-truth types, JSON Schema, validators, and versioning helpers.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/answer-contract.schema.json"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}

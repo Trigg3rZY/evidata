@@ -92,8 +92,8 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `07-v1-blueprint.md` | Full-V1 umbrella: system at end of V1, milestone→capability map, data-model evolution, trust boundary. |
 | `08-m1-real-postgres-and-execution.md` | M1 architecture skeleton: real PostgreSQL, introspection, credentials, auth, metadata store. |
 | `09-m2-calibration-publishing-and-roles.md` | M2 architecture skeleton: calibration, Suggested→Verified, Policy, lifecycle, roles, correction loop. |
-| `contracts/answer-contract.ts` | Source-of-truth TypeScript types. |
-| `contracts/answer-contract.schema.json` | JSON Schema kept in lockstep with the types. |
+| `packages/core/answer-contract/src/answer-contract.ts` | Source-of-truth TypeScript types (moved out of `docs/` into the package once code landed). |
+| `packages/core/answer-contract/src/answer-contract.schema.json` | JSON Schema kept in lockstep with the types (C1 schema-sync test enforces no drift). |
 
 Depth: M0 (01–06) is implementation-level; M1/M2 (08, 09) are architecture-skeleton; `07` is the umbrella blueprint.
 

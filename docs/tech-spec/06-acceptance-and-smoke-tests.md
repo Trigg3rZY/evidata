@@ -36,8 +36,12 @@ G4 every-run-recorded: EvidenceRecorder.record called once per executed query; c
 ## 3. Contract tests
 
 ```
-C1 schema-sync      : generate JSON schema from answer-contract.ts and assert it equals the
-                      committed answer-contract.schema.json (no drift).
+C1 schema-sync      : assert no drift between answer-contract.ts and the committed schema.
+                      The Status x Confidence legality oneOf is generated from the TS
+                      LEGAL_STATUS_CONFIDENCE table and asserted equal to the schema; status/
+                      confidence enums are checked for parity. (The schema deliberately encodes
+                      cross-field constraints a types->schema generator cannot, so it is hand-
+                      maintained and guarded by C1 rather than regenerated.)
 C2 legality         : property test over AnswerStatus × Confidence — isLegalStatusConfidence and
                       the JSON schema agree for all 20 combinations.
 C3 unblock-required : any Answer with status != Answered and no `unblock` fails validateAnswer

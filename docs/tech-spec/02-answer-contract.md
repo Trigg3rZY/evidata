@@ -1,6 +1,6 @@
 # 02 — Answer Contract (M0)
 
-The Answer Contract is the keystone of M0: the unit the whole loop produces, renders, validates, and smoke-tests. It is defined as code in `contracts/answer-contract.ts` (source of truth) and `contracts/answer-contract.schema.json` (JSON Schema, kept in lockstep). This document explains the design and the invariants.
+The Answer Contract is the keystone of M0: the unit the whole loop produces, renders, validates, and smoke-tests. It is defined as code in `packages/core/answer-contract/src/answer-contract.ts` (source of truth) and `packages/core/answer-contract/src/answer-contract.schema.json` (JSON Schema, kept in lockstep). This document explains the design and the invariants.
 
 PRD references: `Answer Contract`, `Status × Confidence`, `Interaction Model → Follow-up vs New Investigation`, `Unblock Path`, `Answer Versioning`.
 
@@ -11,7 +11,7 @@ The PRD requires "fixing the Answer Contract as a schema and smoke-test target."
 - `answer-contract.ts` — shared by the server (producer) and the React UI (renderer). No translation layer, no divergence.
 - `answer-contract.schema.json` — validates agent output at runtime and in tests, and documents the contract for non-TS tooling.
 
-A CI check (spec 06) asserts the two stay in sync (types → schema via `ts-json-schema-generator`, compared to the committed JSON).
+A CI check (spec 06, test C1) asserts the two stay in sync: the drift-prone Status × Confidence legality is generated from the `LEGAL_STATUS_CONFIDENCE` table in the `.ts` and asserted equal to the committed schema's `oneOf`, and the status/confidence enums are checked for parity. (The committed schema deliberately encodes cross-field constraints — legality, unblock-required, answered-findings — that a pure types→schema generator cannot express, so it is hand-maintained and guarded by C1 rather than regenerated.)
 
 ## 2. Durable fields (maps 1:1 to PRD)
 
