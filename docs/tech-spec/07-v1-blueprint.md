@@ -71,7 +71,7 @@ User ─< DataSourceMembership >─ DataSource ─< DataSourceConnection >─ Co
                                                           └─ Suggestion (review)
 ```
 
-A full Drizzle schema is produced incrementally: M0 ships the investigation/answer/evidence/suggestion tables; M1 and M2 add migrations. Migrations are forward-only and versioned.
+A full Drizzle schema is produced incrementally: M0 ships the investigation/answer/evidence/suggestion tables (specified to implementation depth in `10-m0-data-model-and-persistence.md`); M1 and M2 add migrations. Migrations are forward-only and versioned.
 
 ## 4. Trust boundary across V1
 
