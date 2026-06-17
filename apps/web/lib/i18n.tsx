@@ -12,6 +12,7 @@ const dict = {
     title: 'Ask Data',
     tagline: 'Trusted, evidence-backed answers over your data.',
     ask: 'Ask a question',
+    composerPlaceholder: 'Ask a question about your data…',
     sample: 'Sample Data Source',
   },
   'zh-CN': {
@@ -19,6 +20,7 @@ const dict = {
     title: '数据问答',
     tagline: '基于证据、可信赖的数据回答。',
     ask: '提个问题',
+    composerPlaceholder: '就你的数据提个问题…',
     sample: '示例数据源',
   },
 } as const;

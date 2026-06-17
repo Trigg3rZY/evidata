@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 // Flat config (ESLint 10). Type-checked rules via typescript-eslint's project
 // service; Prettier owns formatting (eslint-config-prettier disables conflicts).
@@ -34,6 +35,15 @@ export default tseslint.config(
     // Config files are not part of a typed project.
     files: ['**/*.config.{js,ts,mjs}', 'eslint.config.js'],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    // React component files: enforce the rules of hooks.
+    files: ['apps/web/**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
   },
   {
     // Tests exercise dynamic DB rows; relax the type-unsafe rules there.
