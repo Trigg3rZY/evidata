@@ -47,11 +47,71 @@ const asArray = (u: unknown): unknown[] => (Array.isArray(u) ? (u as unknown[]) 
 const asRecord = (u: unknown): Record<string, unknown> =>
   typeof u === 'object' && u !== null ? (u as Record<string, unknown>) : {};
 
+const STRUCTURAL: ReadonlySet<string> = new Set([':', ',', '}', ']']);
+
+/**
+ * Repair the two malformations DeepSeek emits in tool-call arguments — both invalid
+ * JSON the strict parser rejects, losing an otherwise-good answer:
+ *   1. Unescaped ASCII double-quotes inside string values (e.g. `新增了 "Summer Sale" 活动`).
+ *   2. Raw control characters (literal newlines/tabs) inside string values.
+ *
+ * We walk the text tracking string state. A `"` inside a string is treated as the
+ * closing quote only when the next non-space char is structural (`:,}]`) or the
+ * input ends; otherwise it's content and gets escaped. Control chars inside strings
+ * are escaped too. This is a best-effort repair tried only after strict parse fails.
+ */
+function lenientJson(s: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i] as string;
+    if (esc) {
+      out += ch;
+      esc = false;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch;
+      esc = true;
+      continue;
+    }
+    if (!inStr) {
+      if (ch === '"') inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < s.length && /\s/.test(s[j] as string)) j++;
+      const next = s[j];
+      if (next === undefined || STRUCTURAL.has(next)) {
+        inStr = false;
+        out += ch;
+      } else {
+        out += '\\"'; // content quote → escape
+      }
+      continue;
+    }
+    const code = ch.charCodeAt(0);
+    if (code < 0x20) {
+      out += code === 0x0a ? '\\n' : code === 0x09 ? '\\t' : code === 0x0d ? '\\r' : '';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function safeParse(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
   } catch {
-    return {};
+    try {
+      return JSON.parse(lenientJson(json)) as unknown;
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -125,23 +185,49 @@ interface ChatResponse {
   }>;
 }
 
-/** Default transport: a plain typed POST to an OpenAI-compatible `/chat/completions`. */
-export function fetchComplete(cfg: OpenAIProviderConfig): Complete {
+/** Transient HTTP statuses worth retrying (rate limit + upstream/gateway hiccups). */
+const RETRYABLE_STATUS: ReadonlySet<number> = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+
+/**
+ * Default transport: a plain typed POST to an OpenAI-compatible `/chat/completions`,
+ * with a bounded retry-with-backoff for transient failures (network errors and
+ * 429/5xx). A single hiccup otherwise aborts the whole turn — DeepSeek occasionally
+ * 503s mid-investigation. Aborts (client disconnect) are never retried; 4xx other
+ * than the rate-limit family fail fast.
+ */
+export function fetchComplete(cfg: OpenAIProviderConfig, maxRetries = 2): Complete {
   const base = cfg.baseURL.replace(/\/+$/, '');
+  const backoffMs = cfg.retryBackoffMs ?? 300;
   return async (req: CompletionRequest, opts) => {
-    const res = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-      body: JSON.stringify(req),
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    });
-    if (!res.ok) throw new Error(`AI provider returned HTTP ${res.status}`);
-    const data = (await res.json()) as ChatResponse;
-    const msg = data.choices?.[0]?.message;
-    return {
-      content: msg?.content ?? null,
-      ...(msg?.tool_calls ? { tool_calls: msg.tool_calls } : {}),
-    };
+    for (let attempt = 0; ; attempt++) {
+      if (opts.signal?.aborted) throw new Error('AI provider request aborted');
+      let res: Response;
+      try {
+        res = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
+          body: JSON.stringify(req),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+        });
+      } catch (err) {
+        // Network/transport error: retry unless aborted or out of attempts.
+        if (opts.signal?.aborted || attempt >= maxRetries) throw err;
+        await new Promise((r) => setTimeout(r, backoffMs * 2 ** attempt));
+        continue;
+      }
+      if (res.ok) {
+        const data = (await res.json()) as ChatResponse;
+        const msg = data.choices?.[0]?.message;
+        return {
+          content: msg?.content ?? null,
+          ...(msg?.tool_calls ? { tool_calls: msg.tool_calls } : {}),
+        };
+      }
+      if (!RETRYABLE_STATUS.has(res.status) || attempt >= maxRetries) {
+        throw new Error(`AI provider returned HTTP ${res.status}`);
+      }
+      await new Promise((r) => setTimeout(r, backoffMs * 2 ** attempt));
+    }
   };
 }
 
@@ -158,7 +244,12 @@ export class OpenAIAgentProvider implements AgentProvider {
   constructor(cfg: OpenAIProviderConfig, complete?: Complete) {
     this.complete = complete ?? fetchComplete(cfg);
     this.model = cfg.model;
-    this.maxTokens = cfg.maxTokens ?? 1024;
+    // A detailed, evidence-backed final_answer (esp. in CJK, where one char ≈ 1+
+    // token) can exceed 1k tokens. If the tool-call arguments are truncated, the
+    // JSON won't parse and the answer is lost — so default generously. Note:
+    // DeepSeek reports finish_reason='tool_calls' even on a length cutoff, so we
+    // can't detect truncation reliably; the only safe lever is a roomy budget.
+    this.maxTokens = cfg.maxTokens ?? 4096;
   }
 
   // NOTE: `signal` is accepted for forward-compatibility but the AgentRunner does
@@ -225,16 +316,21 @@ export class OpenAIAgentProvider implements AgentProvider {
       },
       { ...(signal ? { signal } : {}) },
     );
+    // We act on exactly one tool call per turn. DeepSeek occasionally returns
+    // several in one assistant message; recording the extras would leave them
+    // unanswered, and the NEXT request then violates the "every tool_call needs a
+    // tool response" rule and is rejected with HTTP 400. So keep only the call we
+    // process, so the transcript stays one tool_call ↔ one tool response.
+    const call = assistant.tool_calls?.[0];
     this.messages.push({
       role: 'assistant',
       content: assistant.content ?? null,
-      ...(assistant.tool_calls ? { tool_calls: assistant.tool_calls } : {}),
+      ...(call ? { tool_calls: [call] } : {}),
     });
 
     // With tool_choice:'required' the model should always call a tool; if a
     // provider ignores that (returns prose, or a malformed/empty body), we end
     // this turn as an honest non-answer rather than guessing.
-    const call = assistant.tool_calls?.[0];
     if (!call) return unblock('insufficient_results', 'The assistant did not take an action.');
     const args = asRecord(safeParse(call.function.arguments));
 

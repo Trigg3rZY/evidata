@@ -50,4 +50,6 @@ export interface OpenAIProviderConfig {
   baseURL: string;
   model: string;
   maxTokens?: number;
+  /** Base backoff for the transient-retry in fetchComplete (ms); defaults to 300. */
+  retryBackoffMs?: number;
 }

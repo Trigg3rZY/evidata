@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentHistory, AgentInput, ToolResult } from '@evidata/agent';
-import { OpenAIAgentProvider, openAIConfigFromEnv } from './index';
+import { fetchComplete, OpenAIAgentProvider, openAIConfigFromEnv } from './index';
 import type { AssistantMessage, Complete, CompletionRequest, ToolCall } from './types';
 
 const input: AgentInput = {
@@ -98,6 +98,57 @@ describe('OpenAIAgentProvider', () => {
     const toolMsg = second?.messages.find((m) => m.role === 'tool');
     expect(toolMsg?.tool_call_id).toBe('c1');
     expect(toolMsg?.content).toContain('"evidenceRef":"E1"');
+  });
+
+  it('records only the acted-on tool_call when the model returns several (avoids HTTP 400)', async () => {
+    // DeepSeek sometimes emits multiple tool_calls in one turn; the transcript must
+    // keep only the one we answer, or the next request has unanswered tool_calls.
+    const { complete, calls } = scripted([
+      {
+        content: null,
+        tool_calls: [
+          toolCall('a1', 'run_sql', { purpose: 'first', sql: 'select 1' }),
+          toolCall('a2', 'run_sql', { purpose: 'second', sql: 'select 2' }),
+        ],
+      },
+      {
+        content: null,
+        tool_calls: [
+          toolCall('a3', 'final_answer', {
+            status: 'Answered',
+            directAnswer: 'done',
+            confidence: 'Medium',
+            confidenceReason: 'r',
+            keyFindings: [{ text: 'f', evidenceIds: ['E1'] }],
+          }),
+        ],
+      },
+    ]);
+    const p = provider(complete);
+    const history = emptyHistory();
+
+    const d1 = await p.next(input, history);
+    expect(d1).toEqual({ kind: 'query', proposal: { purpose: 'first', sql: 'select 1' } });
+
+    history.toolResults.push({
+      evidenceRef: 'E1',
+      purpose: 'first',
+      columns: [],
+      sampleRows: [],
+      rowCount: 0,
+      truncated: false,
+      redactedColumns: [],
+    });
+    await p.next(input, history);
+
+    // the assistant turn in the 2nd request kept only the single acted-on call (a1),
+    // and exactly one tool response (for a1) follows it.
+    const assistantMsg = calls[1]?.messages.find((m) => m.role === 'assistant' && m.tool_calls);
+    expect(assistantMsg?.tool_calls).toHaveLength(1);
+    expect(assistantMsg?.tool_calls?.[0]?.id).toBe('a1');
+    const toolMsgs = calls[1]?.messages.filter((m) => m.role === 'tool');
+    expect(toolMsgs).toHaveLength(1);
+    expect(toolMsgs?.[0]?.tool_call_id).toBe('a1');
   });
 
   it('maps cannot_answer → unblock with the declared missing info', async () => {
@@ -202,6 +253,37 @@ describe('OpenAIAgentProvider', () => {
     expect(d.draft.keyFindings).toHaveLength(1);
     expect(d.draft.keyFindings[0]?.text).toBe('cited');
   });
+
+  // Hand-built raw arguments (not JSON.stringify) reproduce DeepSeek's tool-call
+  // defects — strict JSON.parse rejects these, but the provider repairs and recovers.
+  const rawFinal = (rawArgs: string): AssistantMessage => ({
+    content: null,
+    tool_calls: [
+      { id: 'c1', type: 'function', function: { name: 'final_answer', arguments: rawArgs } },
+    ],
+  });
+
+  it('recovers a final_answer with unescaped ASCII double-quotes inside string values', async () => {
+    const raw =
+      '{"status": "Answered", "directAnswer": "增长来自新增的 "Summer Sale" 活动", "confidence": "High", "confidenceReason": "数据来自 "campaign_spend" 表", "keyFindings": [{"text": "活动 "Summer Sale" 贡献了全部增长", "evidenceIds": ["E1"]}]}';
+    const d = await provider(scripted([rawFinal(raw)]).complete).next(input, emptyHistory());
+    if (d.kind !== 'final') throw new Error('expected final');
+    expect(d.draft.directAnswer).toContain('Summer Sale');
+    expect(d.draft.confidenceReason).toContain('campaign_spend');
+    expect(d.draft.keyFindings).toHaveLength(1);
+    expect(d.draft.keyFindings[0]?.evidenceIds).toEqual(['E1']);
+  });
+
+  it('recovers a final_answer with raw control characters inside string values', async () => {
+    // the \n / \t below are ACTUAL control chars in the source, i.e. invalid JSON
+    const raw =
+      '{"status":"Answered","directAnswer":"第一行\n第二行\t缩进","confidence":"High","confidenceReason":"r","keyFindings":[{"text":"f","evidenceIds":["E1"]}]}';
+    const d = await provider(scripted([rawFinal(raw)]).complete).next(input, emptyHistory());
+    if (d.kind !== 'final') throw new Error('expected final');
+    expect(d.draft.directAnswer).toContain('第一行');
+    expect(d.draft.directAnswer).toContain('第二行');
+    expect(d.draft.keyFindings).toHaveLength(1);
+  });
 });
 
 describe('openAIConfigFromEnv', () => {
@@ -242,5 +324,75 @@ describe('openAIConfigFromEnv', () => {
         AGENT_MAX_TOKENS: '2048',
       }),
     ).toMatchObject({ maxTokens: 2048 });
+  });
+});
+
+describe('fetchComplete transient retry', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const cfg = { apiKey: 'k', baseURL: 'http://x', model: 'm', retryBackoffMs: 0 };
+  const okResponse = () =>
+    ({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ choices: [{ message: { content: 'hi', tool_calls: undefined } }] }),
+    }) as unknown as Response;
+  const errResponse = (status: number) =>
+    ({ ok: false, status, json: () => Promise.resolve({}) }) as unknown as Response;
+  const req = {
+    model: 'm',
+    messages: [],
+    tools: [],
+    tool_choice: 'required',
+    temperature: 0,
+    max_tokens: 1,
+  } as CompletionRequest;
+
+  it('retries a 503 then succeeds', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(errResponse(503))
+      .mockResolvedValueOnce(okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await fetchComplete(cfg)(req, {});
+    expect(res.content).toBe('hi');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a network error then succeeds', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce(okResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await fetchComplete(cfg)(req, {});
+    expect(res.content).toBe('hi');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a 400 and fails fast', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(400));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchComplete(cfg)(req, {})).rejects.toThrow('HTTP 400');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after maxRetries on persistent 503', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(503));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchComplete(cfg, 2)(req, {})).rejects.toThrow('HTTP 503');
+    expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+
+  it('does not retry once the signal is aborted', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(503));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(fetchComplete(cfg)(req, { signal: controller.signal })).rejects.toThrow(
+      /aborted/i,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

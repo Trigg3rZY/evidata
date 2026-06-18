@@ -93,10 +93,40 @@ export class AgentRunner {
     let erroredQueries = 0;
     let finalRetried = false;
 
+    // Record a non-fatal query failure (gate reject of a benign mistake, or an
+    // engine error) and feed it back so the provider can correct, without aborting
+    // the turn. The failed run is still recorded (G4) but is not cited as evidence.
+    const recordFailure = (purpose: string, sql: string, message: string): void => {
+      const failRef = `qe${(erroredQueries += 1)}`;
+      queryRuns.push({
+        id: newId('qr'),
+        connectorId: this.deps.connector.id,
+        sql,
+        status: 'error',
+        rowCount: 0,
+        truncated: false,
+        elapsedMs: 0,
+        evidenceRef: failRef,
+      });
+      history.toolResults.push({
+        evidenceRef: failRef,
+        purpose,
+        columns: [],
+        sampleRows: [],
+        rowCount: 0,
+        truncated: false,
+        redactedColumns: [],
+        error: message,
+      });
+      sink({ type: 'query', purpose, status: 'error', message });
+    };
+
     for (let iter = 0; iter < maxIterations; iter++) {
-      // On the last step, ask the provider to answer with what it has rather than
-      // keep exploring and run out of budget with no answer.
-      history.mustFinalize = iter === maxIterations - 1;
+      // Over the last two steps, ask the provider to answer with what it has rather
+      // than keep exploring and run out of budget with no answer. Two steps (not one)
+      // leaves room for the single re-prompt retry below if the forced final is
+      // invalid — otherwise a forced answer gets no chance to meet the contract.
+      history.mustFinalize = iter >= maxIterations - 2;
       const decision = await this.deps.provider.next(input, history);
 
       if (decision.kind === 'reasoning') {
@@ -123,9 +153,9 @@ export class AgentRunner {
         const violations = validateAll(candidate);
         if (violations.length === 0) return { answer: candidate, queryRuns };
         // Re-prompt the provider once with the violations before downgrading (spec 03 §1).
-        // On the last step the loop exits before the re-prompt can run, so the retry
-        // is forfeited and we fall through to the budget-exhausted non-answer — the
-        // honest outcome when there's no budget left to correct.
+        // This retry is preserved even when finalizing is forced (see the two-step
+        // mustFinalize window above); if the corrected answer is still invalid we fall
+        // through to the honest non-answer.
         if (!finalRetried) {
           finalRetried = true;
           history.validationFeedback = violations;
@@ -145,8 +175,16 @@ export class AgentRunner {
       const { purpose, sql } = decision.proposal;
       const gate = this.deps.gate.check(sql, this.deps.safetyContext);
       if (gate.verdict === 'reject') {
-        const res = resolveUnblock(gateRejectToMissing(gate.reason, gate.detail));
-        return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
+        // Writes and admin/maintenance are hard policy boundaries — end the turn
+        // with an honest non-answer + Unblock Path (we never retry a mutation).
+        // Benign mistakes (unknown table, malformed or multiple statements) are fed
+        // back like an engine error so the model can correct, instead of aborting.
+        if (gate.reason === 'not_read_only' || gate.reason === 'admin_or_maintenance') {
+          const res = resolveUnblock(gateRejectToMissing(gate.reason, gate.detail));
+          return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
+        }
+        recordFailure(purpose, sql, `The safety gate rejected this query: ${gate.detail}`);
+        continue;
       }
 
       // EXECUTE → redact → record (G4). Gate-rejected proposals never reach here.
@@ -167,28 +205,7 @@ export class AgentRunner {
         raw = await executor.run(sql, execOptions);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'The query could not be executed.';
-        const failRef = `qe${(erroredQueries += 1)}`;
-        queryRuns.push({
-          id: newId('qr'),
-          connectorId: this.deps.connector.id,
-          sql,
-          status: 'error',
-          rowCount: 0,
-          truncated: false,
-          elapsedMs: 0,
-          evidenceRef: failRef,
-        });
-        history.toolResults.push({
-          evidenceRef: failRef,
-          purpose,
-          columns: [],
-          sampleRows: [],
-          rowCount: 0,
-          truncated: false,
-          redactedColumns: [],
-          error: message,
-        });
-        sink({ type: 'query', purpose, status: 'error', message });
+        recordFailure(purpose, sql, message);
         continue;
       }
 
