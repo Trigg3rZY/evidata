@@ -90,7 +90,7 @@ The Answer Contract carries an `AnswerStatus` and an independent `Confidence`. T
 
 Note the deliberate choice: red is reserved for `BlockedByPolicy` (a guardrail acting); a `NoReliableAnswer` is humble, not alarming, so it reads neutral.
 
-**Confidence — a quiet monochrome meter.** A three-segment meter (High = 3, Medium = 2, Low = 1) in `muted-foreground`, with the label beside it and `confidenceReason` on hover (shadcn `Tooltip`). It never uses status color, so "what is this conclusion" and "how sure am I" never compete.
+**Confidence — a quiet meter with a subtle per-level tint.** A three-segment meter (High = 3, Medium = 2, Low = 1) with the label beside it and `confidenceReason` on hover (shadcn `Tooltip`). The filled bars carry a *restrained* tint by level — High green, Medium amber, Low/CannotDetermine grey — never red (reserved for `BlockedByPolicy`). The tiny bars stay far quieter than the status badge, and the tint is **secondary**: the meter is `aria-hidden` and the textual level word carries the meaning (color is not the only cue, for a11y/colorblind). _(Revised from the original monochrome rule per user feedback, issue #41: a colorless meter read as too flat; the level ramp is legible at a glance without competing with Status.)_
 
 ## 5. Typography
 
