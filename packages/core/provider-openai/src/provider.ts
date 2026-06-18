@@ -58,7 +58,14 @@ const STRUCTURAL: ReadonlySet<string> = new Set([':', ',', '}', ']']);
  * We walk the text tracking string state. A `"` inside a string is treated as the
  * closing quote only when the next non-space char is structural (`:,}]`) or the
  * input ends; otherwise it's content and gets escaped. Control chars inside strings
- * are escaped too. This is a best-effort repair tried only after strict parse fails.
+ * are escaped (\n/\t/\r) or dropped (other C0). This is best-effort, tried only
+ * after strict parse fails.
+ *
+ * KNOWN GAP: a content quote sitting *immediately* before a structural char (e.g.
+ * `他说"对",然后`) is misread as the terminator, so that input is NOT repaired. It
+ * then fails to parse → empty draft → contract re-prompt / honest non-answer; it
+ * never yields a different, silently-wrong answer. The DeepSeek cases seen in
+ * practice are quote-then-text (`"Summer Sale" 活动`), which this handles.
  */
 function lenientJson(s: string): string {
   let out = '';
@@ -83,7 +90,11 @@ function lenientJson(s: string): string {
     }
     if (ch === '"') {
       let j = i + 1;
-      while (j < s.length && /\s/.test(s[j] as string)) j++;
+      for (;;) {
+        const cj = s[j];
+        if (cj === undefined || cj.trim() !== '') break;
+        j++;
+      }
       const next = s[j];
       if (next === undefined || STRUCTURAL.has(next)) {
         inStr = false;
