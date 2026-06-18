@@ -18,6 +18,7 @@ export type {
   AgentInput,
   AgentMessage,
   AgentProvider,
+  ConversationTurn,
   AgentRunEvent,
   AnswerDraft,
   QueryProposal,

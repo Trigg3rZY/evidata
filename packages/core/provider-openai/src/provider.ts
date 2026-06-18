@@ -302,6 +302,12 @@ export class OpenAIAgentProvider implements AgentProvider {
   ): Promise<AgentDecision> {
     if (!this.started) {
       this.messages.push({ role: 'system', content: buildSystemPrompt(input) });
+      // Seed prior turns so a follow-up can resolve references ("it", "that", "why?").
+      // Only the prior Direct Answers are replayed (compact context, not their evidence).
+      for (const turn of input.history ?? []) {
+        this.messages.push({ role: 'user', content: turn.question });
+        this.messages.push({ role: 'assistant', content: turn.answer });
+      }
       this.messages.push({ role: 'user', content: input.question });
       this.started = true;
     }

@@ -202,6 +202,25 @@ describe('OpenAIAgentProvider', () => {
     expect(p.usage).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0, calls: 1 });
   });
 
+  it('seeds prior turns into the transcript for a follow-up', async () => {
+    const { complete, calls } = scripted([
+      { content: null, tool_calls: [toolCall('c1', 'reply', { text: 'ok' })] },
+    ]);
+    const followup: AgentInput = {
+      ...input,
+      history: [{ question: 'first question', answer: 'first direct answer' }],
+    };
+    await provider(complete).next(followup, emptyHistory());
+    const msgs = calls[0]?.messages ?? [];
+    // The seeded prefix: system, the prior (user, assistant) pair, then the current
+    // question. (A trailing assistant turn is appended after the call returns — the
+    // request shares the live transcript array — so assert the prefix.)
+    expect(msgs.slice(0, 4).map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(msgs[1]?.content).toBe('first question');
+    expect(msgs[2]?.content).toBe('first direct answer');
+    expect(msgs[3]?.content).toBe(input.question);
+  });
+
   it('maps reply → a Message decision (no data claim, no evidence)', async () => {
     const { complete } = scripted([
       {

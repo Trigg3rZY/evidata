@@ -14,6 +14,8 @@ export interface AskBody {
   dataSourceId: string;
   question: string;
   language: Lang;
+  /** Set for a follow-up turn (continue this Investigation, append a version). */
+  investigationId?: string;
 }
 
 /** Encode one Server-Sent Event frame. */
@@ -82,7 +84,12 @@ export async function askStream(
   try {
     const provider = deps.providerFor(body.question);
     const result = await deps.service.ask(
-      { dataSourceId: body.dataSourceId, question: body.question, language: body.language },
+      {
+        dataSourceId: body.dataSourceId,
+        question: body.question,
+        language: body.language,
+        ...(body.investigationId ? { investigationId: body.investigationId } : {}),
+      },
       {
         provider,
         sink: (event: AgentRunEvent) => write(sseEvent(event.type, event)),
