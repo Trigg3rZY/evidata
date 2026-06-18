@@ -9,7 +9,13 @@ import {
 } from '@evidata/connector-sample';
 import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
-import { fixtureFor, type AgentInput, type AgentProvider } from '@evidata/agent';
+import {
+  fixtureFor,
+  FixtureProvider,
+  type AgentDecision,
+  type AgentInput,
+  type AgentProvider,
+} from '@evidata/agent';
 import { InvestigationService, type DataSourceRuntime } from './service';
 
 let db: MetadataDbHandle;
@@ -219,6 +225,95 @@ describe('InvestigationService', () => {
     expect(thread?.answers).toHaveLength(2);
     expect(thread?.answers.filter((a) => a.meta.isLatest)).toHaveLength(1); // single head
     expect(thread?.turns.filter((t) => t.role === 'user')).toHaveLength(1); // no new user turn
+  });
+
+  it('reruns the LATEST stored question, not a stale client-sent one', async () => {
+    const q = "Why is ACME's ad bill higher this month?";
+    const first = await service.ask(
+      { dataSourceId: 'sample', question: q, language: 'en' },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (first.kind !== 'answer') throw new Error('expected an answer');
+
+    let seen: AgentInput | undefined;
+    const capturing: AgentProvider = {
+      next: (input) => {
+        seen = input;
+        return Promise.resolve({ kind: 'message', text: 'ok' });
+      },
+    };
+    await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: 'a STALE different question',
+        language: 'en',
+        investigationId: first.investigationId,
+        rerun: true,
+      },
+      { provider: capturing },
+    );
+    expect(seen?.question).toBe(q); // ran the latest stored question, not the client's
+  });
+
+  it('a later follow-up sees the regenerated (rerun) answer, not the stale one', async () => {
+    const q = "Why is ACME's ad bill higher this month?";
+    const first = await service.ask(
+      { dataSourceId: 'sample', question: q, language: 'en' },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (first.kind !== 'answer') throw new Error('expected an answer');
+
+    // Rerun with a distinct answer so we can tell it apart from v1.
+    const regen: AgentDecision[] = [
+      {
+        kind: 'query',
+        proposal: {
+          purpose: 'p',
+          sql: "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'",
+        },
+      },
+      {
+        kind: 'final',
+        draft: {
+          status: 'Answered',
+          confidence: 'High',
+          directAnswer: 'REGENERATED',
+          confidenceReason: 'r',
+          keyFindings: [{ text: 'f', evidenceIds: ['E1'] }],
+        },
+      },
+    ];
+    const rerun = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: q,
+        language: 'en',
+        investigationId: first.investigationId,
+        rerun: true,
+      },
+      { provider: new FixtureProvider(regen) },
+    );
+    if (rerun.kind !== 'answer') throw new Error('expected an answer');
+    expect(rerun.answer.directAnswer).toBe('REGENERATED');
+
+    let seen: AgentInput | undefined;
+    const capturing: AgentProvider = {
+      next: (input) => {
+        seen = input;
+        return Promise.resolve({ kind: 'message', text: 'ok' });
+      },
+    };
+    await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: 'next?',
+        language: 'en',
+        investigationId: first.investigationId,
+      },
+      { provider: capturing },
+    );
+    // context for the latest turn reflects the rerun, not the original answer
+    expect(seen?.history?.at(-1)?.answer).toBe('REGENERATED');
   });
 
   it('rejects a follow-up to an unknown investigation', async () => {
