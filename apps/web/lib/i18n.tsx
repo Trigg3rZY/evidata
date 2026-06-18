@@ -51,6 +51,8 @@ const dict = {
     answerWhatIDid: 'What I did',
     answerEvidence: 'Evidence',
     answerAssumptions: 'Assumptions',
+    usageCalls: 'model calls',
+    usageQueries: 'queries',
     unblockWhatsMissing: "What's missing",
     unblockRecordedForAdmin: 'Recorded for an Admin',
     // Client-side stream failures (the server's own error frame is separate).
@@ -89,6 +91,8 @@ const dict = {
     answerWhatIDid: '我做了什么',
     answerEvidence: '证据',
     answerAssumptions: '假设',
+    usageCalls: '次模型调用',
+    usageQueries: '次查询',
     unblockWhatsMissing: '缺少什么',
     unblockRecordedForAdmin: '已记录,待管理员处理',
     errorRequestFailed: '无法发起请求。',

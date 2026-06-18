@@ -7,6 +7,8 @@ export type {
   Complete,
   CompletionRequest,
   OpenAIProviderConfig,
+  ProviderUsage,
+  TokenUsage,
   ToolCall,
   ToolDef,
 } from './types';

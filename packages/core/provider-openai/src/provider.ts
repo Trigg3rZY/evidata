@@ -24,6 +24,7 @@ import type {
   Complete,
   CompletionRequest,
   OpenAIProviderConfig,
+  ProviderUsage,
 } from './types';
 
 const MISSING_KINDS: ReadonlySet<string> = new Set<MissingKind>([
@@ -194,6 +195,7 @@ interface ChatResponse {
   choices?: Array<{
     message?: { content?: string | null; tool_calls?: AssistantMessage['tool_calls'] };
   }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 }
 
 /** Transient HTTP statuses worth retrying (rate limit + upstream/gateway hiccups). */
@@ -229,9 +231,19 @@ export function fetchComplete(cfg: OpenAIProviderConfig, maxRetries = 2): Comple
       if (res.ok) {
         const data = (await res.json()) as ChatResponse;
         const msg = data.choices?.[0]?.message;
+        const u = data.usage;
         return {
           content: msg?.content ?? null,
           ...(msg?.tool_calls ? { tool_calls: msg.tool_calls } : {}),
+          ...(u
+            ? {
+                usage: {
+                  promptTokens: u.prompt_tokens ?? 0,
+                  completionTokens: u.completion_tokens ?? 0,
+                  totalTokens: u.total_tokens ?? 0,
+                },
+              }
+            : {}),
         };
       }
       if (!RETRYABLE_STATUS.has(res.status) || attempt >= maxRetries) {
@@ -251,6 +263,17 @@ export class OpenAIAgentProvider implements AgentProvider {
   private pendingCallId: string | undefined;
   private pendingFinalCallId: string | undefined;
   private consumed = 0;
+  private readonly _usage: ProviderUsage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    calls: 0,
+  };
+
+  /** Cumulative token cost + model round-trips for this run (for cost reporting). */
+  get usage(): ProviderUsage {
+    return { ...this._usage };
+  }
 
   constructor(cfg: OpenAIProviderConfig, complete?: Complete) {
     this.complete = complete ?? fetchComplete(cfg);
@@ -327,6 +350,13 @@ export class OpenAIAgentProvider implements AgentProvider {
       },
       { ...(signal ? { signal } : {}) },
     );
+    // Tally cost: one model round-trip, plus tokens when the provider reports them.
+    this._usage.calls += 1;
+    if (assistant.usage) {
+      this._usage.promptTokens += assistant.usage.promptTokens;
+      this._usage.completionTokens += assistant.usage.completionTokens;
+      this._usage.totalTokens += assistant.usage.totalTokens;
+    }
     // We act on exactly one tool call per turn. DeepSeek occasionally returns
     // several in one assistant message; recording the extras would leave them
     // unanswered, and the NEXT request then violates the "every tool_call needs a

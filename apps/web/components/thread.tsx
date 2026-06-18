@@ -3,16 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Answer } from '@evidata/answer-contract';
 import { answerLabels, useI18n } from '@/lib/i18n';
-import { useInvestigationStream } from '@/lib/use-investigation-stream';
+import { useInvestigationStream, type UsageInfo } from '@/lib/use-investigation-stream';
 import { AnswerView } from './answer-view';
 import { Composer } from './composer';
 import { EmptyState } from './empty-state';
 import { ReasoningStream } from './reasoning-stream';
+import { UsageFooter } from './usage-footer';
 
 interface Exchange {
   question: string;
   answer?: Answer;
   error?: string;
+  usage?: UsageInfo;
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -40,7 +42,7 @@ export function Thread({ onClear }: { onClear: () => void }) {
     requestFailed: t('errorRequestFailed'),
     networkError: t('errorNetworkInterrupted'),
   });
-  const { status, question, progress, answer, error, ask, reset } = stream;
+  const { status, question, progress, answer, error, usage, ask, reset } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
 
   // When a turn settles (answered OR errored), move it into the conversation and
@@ -49,11 +51,11 @@ export function Thread({ onClear }: { onClear: () => void }) {
     if (status !== 'done' && status !== 'error') return;
     if (!question) return;
     const settled: Exchange = answer
-      ? { question, answer }
+      ? { question, answer, ...(usage ? { usage } : {}) }
       : { question, error: error ?? t('genericError') };
     setHistory((h) => [...h, settled]);
     reset();
-  }, [status, question, answer, error, reset, t]);
+  }, [status, question, answer, error, usage, reset, t]);
 
   // `/clear` is a conversation command, not a question — reset to the empty state
   // (matches the chat-app convention the composer placeholder advertises).
@@ -75,7 +77,10 @@ export function Thread({ onClear }: { onClear: () => void }) {
           <div key={i} className="flex flex-col gap-4">
             <UserBubble text={ex.question} />
             {ex.answer ? (
-              <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
+              <>
+                <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
+                {ex.usage && <UsageFooter usage={ex.usage} />}
+              </>
             ) : (
               <ErrorBlock error={ex.error ?? t('genericError')} />
             )}
@@ -88,7 +93,10 @@ export function Thread({ onClear }: { onClear: () => void }) {
           <div className="flex flex-col gap-4">
             <UserBubble text={question} />
             {answer ? (
-              <AnswerView answer={answer} onFollowup={submit} labels={labels} />
+              <>
+                <AnswerView answer={answer} onFollowup={submit} labels={labels} />
+                {usage && <UsageFooter usage={usage} />}
+              </>
             ) : status === 'error' ? (
               <ErrorBlock error={error ?? t('genericError')} />
             ) : (

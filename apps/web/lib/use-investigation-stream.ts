@@ -14,12 +14,22 @@ export interface ProgressStep {
   state?: string;
 }
 
+/** Cumulative cost of a turn (real model only): tokens, model round-trips, queries. */
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  calls: number;
+  queries: number;
+}
+
 export interface StreamState {
   status: StreamStatus;
   question: string | null;
   progress: ProgressStep[];
   answer: Answer | null;
   error: string | null;
+  usage: UsageInfo | null;
 }
 
 const INITIAL: StreamState = {
@@ -28,6 +38,7 @@ const INITIAL: StreamState = {
   progress: [],
   answer: null,
   error: null,
+  usage: null,
 };
 
 /** Apply one SSE message to the stream state. */
@@ -59,6 +70,8 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
     }
     case 'answer':
       return { ...state, answer: JSON.parse(data) as Answer };
+    case 'usage':
+      return { ...state, usage: JSON.parse(data) as UsageInfo };
     case 'done':
       return { ...state, status: 'done' };
     case 'error': {

@@ -33,9 +33,22 @@ export interface CompletionRequest {
   max_tokens: number;
 }
 
+/** Per-completion token counts (OpenAI `usage`, normalized to camelCase). */
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** Cumulative provider cost for one Investigation turn: tokens + model round-trips. */
+export interface ProviderUsage extends TokenUsage {
+  calls: number;
+}
+
 export interface AssistantMessage {
   content: string | null;
   tool_calls?: ToolCall[];
+  usage?: TokenUsage;
 }
 
 /** The single side-effecting call; the default wraps `fetch`, tests inject a fake. */

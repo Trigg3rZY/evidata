@@ -151,6 +151,57 @@ describe('OpenAIAgentProvider', () => {
     expect(toolMsgs?.[0]?.tool_call_id).toBe('a1');
   });
 
+  it('accumulates token usage and model call count across turns', async () => {
+    const { complete } = scripted([
+      {
+        content: null,
+        tool_calls: [toolCall('c1', 'run_sql', { purpose: 'p', sql: 'select 1' })],
+        usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+      },
+      {
+        content: null,
+        tool_calls: [
+          toolCall('c2', 'final_answer', {
+            status: 'Answered',
+            directAnswer: 'done',
+            confidence: 'High',
+            confidenceReason: 'r',
+            keyFindings: [{ text: 'f', evidenceIds: ['E1'] }],
+          }),
+        ],
+        usage: { promptTokens: 150, completionTokens: 30, totalTokens: 180 },
+      },
+    ]);
+    const p = provider(complete);
+    const history = emptyHistory();
+    await p.next(input, history);
+    history.toolResults.push({
+      evidenceRef: 'E1',
+      purpose: 'p',
+      columns: [],
+      sampleRows: [],
+      rowCount: 0,
+      truncated: false,
+      redactedColumns: [],
+    });
+    await p.next(input, history);
+    expect(p.usage).toEqual({
+      promptTokens: 250,
+      completionTokens: 50,
+      totalTokens: 300,
+      calls: 2,
+    });
+  });
+
+  it('counts calls even when the provider omits a usage field', async () => {
+    const { complete } = scripted([
+      { content: null, tool_calls: [toolCall('c1', 'cannot_answer', { missing: [] })] },
+    ]);
+    const p = provider(complete);
+    await p.next(input, emptyHistory());
+    expect(p.usage).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0, calls: 1 });
+  });
+
   it('maps cannot_answer → unblock with the declared missing info', async () => {
     const { complete } = scripted([
       {
@@ -406,6 +457,21 @@ describe('fetchComplete transient retry', () => {
       /aborted/i,
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('maps the response usage field to camelCase token counts', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: 'hi' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await fetchComplete(cfg)(req, {});
+    expect(res.usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
   });
 
   it('does not retry a 200 with a malformed body (not transient) — fails the turn', async () => {
