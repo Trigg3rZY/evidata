@@ -28,6 +28,7 @@ const dict = {
     today: 'Today',
     earlier: 'Earlier',
     noHistory: 'No conversations yet',
+    conversation: 'Conversation',
     sample: 'Sample Data Source',
     sampleBadge: 'Sample',
     sampleOverview:
@@ -80,6 +81,7 @@ const dict = {
     today: '今天',
     earlier: '更早',
     noHistory: '还没有对话',
+    conversation: '对话',
     sample: '示例数据源',
     sampleBadge: '示例',
     sampleOverview:
