@@ -151,7 +151,9 @@ export function Thread({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-6 pb-4">
+      {/* The conversation is a log of messages (role="log"): assistive tech announces
+          each settled exchange as it's appended and can navigate the thread. */}
+      <div role="log" aria-label={t('conversation')} className="flex flex-1 flex-col gap-6 pb-4">
         {loading ? (
           <p className="text-sm text-muted-foreground">…</p>
         ) : (
@@ -180,9 +182,11 @@ export function Thread({
         ))}
 
         {/* The in-flight / just-settled turn (covers streaming and the transient
-            done|error commit before the effect moves it into history). */}
+            done|error commit before the effect moves it into history). aria-hidden:
+            it's a transient preview — the settled exchange is announced once it lands
+            in the log above, so streaming churn isn't read aloud. */}
         {status !== 'idle' && question && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4" aria-hidden>
             <UserBubble text={question} />
             {answer ? (
               <>
