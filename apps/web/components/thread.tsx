@@ -33,7 +33,7 @@ function ErrorBlock({ error }: { error: string }) {
   );
 }
 
-export function Thread() {
+export function Thread({ onClear }: { onClear: () => void }) {
   const { t, lang } = useI18n();
   const labels = useMemo(() => answerLabels(t), [t]);
   const stream = useInvestigationStream({
@@ -55,7 +55,15 @@ export function Thread() {
     reset();
   }, [status, question, answer, error, reset, t]);
 
-  const submit = (q: string): void => void ask(q, 'sample', lang);
+  // `/clear` is a conversation command, not a question — reset to the empty state
+  // (matches the chat-app convention the composer placeholder advertises).
+  const submit = (q: string): void => {
+    if (q.trim().toLowerCase() === '/clear') {
+      onClear();
+      return;
+    }
+    void ask(q, 'sample', lang);
+  };
   const isEmpty = history.length === 0 && status === 'idle';
 
   return (
