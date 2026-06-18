@@ -24,7 +24,9 @@ test('acme-bill-up: an evidence-backed Answered result with collapsible SQL', as
   await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/38%/)).toBeVisible();
 
-  // Evidence is present; expanding E1 reveals the policy-bounded SQL.
+  // Evidence is collapsed by default (issue #48): open the section, then E1, to
+  // reveal the policy-bounded SQL.
+  await page.locator('summary', { hasText: /Evidence/i }).click();
   const e1 = page.locator('summary', { hasText: 'E1' });
   await expect(e1).toBeVisible();
   await e1.click();
