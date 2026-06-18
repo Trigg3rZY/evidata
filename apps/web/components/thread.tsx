@@ -103,7 +103,9 @@ export function Thread({
       .then((r) => (r.ok ? (r.json() as Promise<InvestigationWithAnswers>) : null))
       .then((thread) => {
         if (cancelled) return;
-        if (thread) setHistory(exchangesFrom(thread));
+        // Don't clobber a turn the user already started before the load returned
+        // (the composer is also disabled while loading) — only seed an empty thread.
+        if (thread) setHistory((h) => (h.length === 0 ? exchangesFrom(thread) : h));
         setLoading(false);
       })
       .catch(() => {
@@ -212,7 +214,7 @@ export function Thread({
           onSubmit={submit}
           onStop={stop}
           streaming={status === 'streaming'}
-          disabled={status === 'streaming'}
+          disabled={status === 'streaming' || loading}
           dataSourceName={t('sample')}
           placeholder={t('composerPlaceholder')}
           stopLabel={t('stop')}
