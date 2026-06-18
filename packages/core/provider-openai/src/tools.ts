@@ -153,6 +153,7 @@ export function buildSystemPrompt(input: AgentInput): string {
     '- Use ONLY the verified glossary and entity mappings below. Do NOT invent joins on mappings that are not listed (if you need one, call cannot_answer with kind "unverified_mapping").',
     '- If a time range or business object is missing or a definition is ambiguous, call cannot_answer rather than guessing.',
     `- Write all user-facing text in the question's language: ${input.language}.`,
+    '- In final_answer text fields, write plain prose: no Markdown, and do NOT put ASCII double-quotes (") inside the text — use 「」 or 《》 (or no quotes) for names so the tool arguments stay valid JSON.',
     '',
     `Data source overview: ${context.overview}`,
     '',
