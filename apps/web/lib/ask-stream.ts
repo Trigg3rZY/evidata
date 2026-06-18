@@ -32,9 +32,16 @@ const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [/reconcile|usage.*billing|billing.*usage/i, 'cross-area-reconcile'],
   [/trend|trending/i, 'needs-timerange'],
-  [/\b(email|contact)s?\b/i, 'sensitive-redaction'],
+  // Require the contact/email AND an account/customer subject, so "email me the
+  // report" doesn't route into the contact_email fixture.
   [
-    /top\s+(customer|account|spender)|highest|biggest.*(customer|account|spend)|by spend/i,
+    /\b(contact|email)s?\b.*\b(account|customer|client)s?\b|\b(account|customer|client)s?\b.*\b(contact|email)s?\b/i,
+    'sensitive-redaction',
+  ],
+  // "top customers", "customers by spend", "biggest spenders" — not a bare "highest"
+  // (which matches "why was ACME spend highest in June?").
+  [
+    /\btop\s+(customer|account|spender)s?\b|\b(customer|account)s?\s+by\s+spend\b|\b(biggest|highest|top)\s+spenders?\b/i,
     'top-customers',
   ],
 ];

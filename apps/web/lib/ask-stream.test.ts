@@ -28,6 +28,9 @@ describe('ask-stream helpers', () => {
     expect(pickScenario('List the active accounts and their contact emails')).toBe(
       'sensitive-redaction',
     );
+    // tighter routing: a bare email/highest mention must NOT hijack the fixture
+    expect(pickScenario('Can you email me the report?')).toBe('acme-bill-up');
+    expect(pickScenario('Why was ACME spend highest in June?')).toBe('acme-bill-up');
   });
 
   it('validates and normalizes the body', () => {
