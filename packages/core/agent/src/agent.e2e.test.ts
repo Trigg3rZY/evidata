@@ -8,7 +8,7 @@ import {
   type SampleConnectorHandle,
 } from '@evidata/connector-sample';
 import { createSafetyGate } from '@evidata/safety';
-import { createRedactor } from '@evidata/redaction';
+import { createRedactor, MASK } from '@evidata/redaction';
 import { AgentRunner, type AgentRunnerDeps } from './runner';
 import { fixtureFor } from './scenarios';
 import { FixtureProvider } from './fixture-provider';
@@ -307,6 +307,41 @@ describe('force-finalize on the last budget step', () => {
       await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(input('open-ended')),
     );
     expect(answer.status).toBe('NoReliableAnswer');
+    expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
+describe('top-customers — Answered/High (issue #43)', () => {
+  it('ranks accounts by total posted spend, ACME on top', async () => {
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('top-customers'))).run(
+        input('Who are the top customers by spend?'),
+      ),
+    );
+    expect(answer.status).toBe('Answered');
+    expect(answer.confidence).toBe('High');
+    expect(queryRuns).toHaveLength(1);
+    expect(answer.evidence.map((e) => e.id)).toEqual(['E1']);
+    expect(answer.directAnswer).toContain('ACME'); // ACME's 83,100 leads (real seed)
+    expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
+describe('sensitive-redaction — the Redactor masks a sensitive column (issue #43)', () => {
+  it('masks contact_email and carries a redaction caveat', async () => {
+    const { answer } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('sensitive-redaction'))).run(
+        input('List the active accounts and their contact emails'),
+      ),
+    );
+    expect(answer.status).toBe('Answered');
+    const e1 = answer.evidence[0]!;
+    expect(e1.redactedColumns).toContain('contact_email');
+    // the sensitive values are masked in the evidence, never leaked
+    const rows = e1.sampleRows ?? [];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.contact_email === MASK)).toBe(true);
+    expect(answer.caveats.some((c) => /redact|mask|sensitive|policy|•/i.test(c))).toBe(true);
     expect(validateAnswer(answer)).toEqual([]);
   });
 });

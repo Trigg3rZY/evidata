@@ -8,6 +8,8 @@ export {
   MUTATION_ATTEMPT,
   CROSS_AREA_RECONCILE,
   NEEDS_TIMERANGE,
+  TOP_CUSTOMERS,
+  SENSITIVE_REDACTION,
 } from './scenarios';
 export { resolveUnblock, gateRejectToMissing, type UnblockResolution } from './unblock';
 export { RunAbortedError } from './types';
