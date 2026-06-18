@@ -27,9 +27,9 @@ export function EmptyState({ onPick }: { onPick: (question: string) => void }) {
           {t('tryAsking')}
         </div>
         <div className="flex flex-col gap-2">
-          {examples.map((q) => (
+          {examples.map((q, i) => (
             <button
-              key={q}
+              key={i}
               type="button"
               onClick={() => onPick(q)}
               className="rounded-md border border-border bg-card px-4 py-3 text-left text-sm hover:border-input hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
