@@ -11,6 +11,18 @@ export {
 } from './scenarios';
 export { resolveUnblock, gateRejectToMissing, type UnblockResolution } from './unblock';
 export { RunAbortedError } from './types';
+// Evaluation harness (spec 13 §6) — labeled cases + scoring (the live pass wires the real model).
+export { EVAL_CASES, type EvalCase, type EvalRoute } from './eval/cases';
+export {
+  runResultToTrace,
+  scoreCase,
+  scoreReport,
+  formatReport,
+  type TurnTrace,
+  type CaseResult,
+  type EvalReport,
+  type UsageLike,
+} from './eval/harness';
 export type {
   AgentContext,
   AgentDecision,
