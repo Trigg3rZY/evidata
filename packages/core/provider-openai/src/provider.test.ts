@@ -145,6 +145,33 @@ describe('OpenAIAgentProvider', () => {
     expect(toolMsg?.content).toContain('E9');
   });
 
+  it('forces final_answer on the last budget step (mustFinalize)', async () => {
+    const { complete, calls } = scripted([
+      {
+        content: null,
+        tool_calls: [
+          toolCall('cf', 'final_answer', {
+            status: 'Answered',
+            directAnswer: 'best effort',
+            confidence: 'Low',
+            confidenceReason: 'step limit',
+            keyFindings: [{ text: 'f', evidenceIds: ['E1'] }],
+          }),
+        ],
+      },
+    ]);
+    const d = await provider(complete).next(input, {
+      toolResults: [],
+      reasoning: [],
+      mustFinalize: true,
+    });
+    expect(d.kind).toBe('final');
+    expect(calls[0]?.tool_choice).toEqual({ type: 'function', function: { name: 'final_answer' } });
+    expect(
+      calls[0]?.messages.some((m) => m.role === 'user' && /last step/i.test(m.content ?? '')),
+    ).toBe(true);
+  });
+
   it('falls back to an unblock when the model takes no action', async () => {
     const { complete } = scripted([{ content: 'thinking out loud' }]);
     const d = await provider(complete).next(input, emptyHistory());

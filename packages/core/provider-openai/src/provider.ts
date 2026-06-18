@@ -202,12 +202,24 @@ export class OpenAIAgentProvider implements AgentProvider {
       this.pendingFinalCallId = undefined;
     }
 
+    // Last step: force final_answer with the evidence gathered, rather than let
+    // the model keep exploring and exhaust the budget with no answer.
+    if (history.mustFinalize) {
+      this.messages.push({
+        role: 'user',
+        content:
+          'This is your last step — do not run more queries. Call final_answer now using the evidence already gathered (cite the E# ids). If the evidence is thin, still answer, but use a lower confidence (Low) and note the limitation in a caveat.',
+      });
+    }
+
     const assistant = await this.complete(
       {
         model: this.model,
         messages: this.messages,
         tools: AGENT_TOOLS,
-        tool_choice: 'required',
+        tool_choice: history.mustFinalize
+          ? { type: 'function', function: { name: 'final_answer' } }
+          : 'required',
         temperature: 0,
         max_tokens: this.maxTokens,
       },
