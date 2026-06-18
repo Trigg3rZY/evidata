@@ -75,6 +75,28 @@ export type AskResult =
   | { kind: 'answer'; investigationId: string; answer: Answer }
   | { kind: 'message'; message: AgentMessage };
 
+/**
+ * Read-only overview of a Data Source for the Data Sources view (spec 04 §1):
+ * structural + trust facts only. It never exposes internals — no credentials,
+ * connector handles, or executor (the Sample has none; M1's Connection creds
+ * stay on the Connection, never copied here).
+ */
+export interface DataSourceSafetyPosture {
+  /** The execution boundary is read-only by construction (spec 01 §4). */
+  readOnly: true;
+  rowLimit: number;
+  timeoutMs: number;
+  /** Sensitive columns the Redactor masks, as "table.column". */
+  redactedColumns: string[];
+}
+
+export interface DataSourceOverview {
+  id: string;
+  name: string;
+  schema: SchemaSnapshot;
+  safety: DataSourceSafetyPosture;
+}
+
 function deriveTitle(question: string): string {
   const trimmed = question.trim().replace(/\s+/g, ' ');
   return trimmed.length > 80 ? `${trimmed.slice(0, 79)}…` : trimmed;
@@ -124,6 +146,24 @@ export class InvestigationService {
   /** Available Data Sources for the picker (no internals leaked). */
   listDataSources(): Array<{ id: string; name: string }> {
     return this.deps.dataSources.map((d) => ({ id: d.id, name: d.name }));
+  }
+
+  /** Read-only overview for the Data Sources view (spec 04 §1): schema + trust
+   *  posture only, never credentials/connector internals. Null if unknown. */
+  getDataSourceOverview(id: string): DataSourceOverview | null {
+    const rt = this.deps.dataSources.find((d) => d.id === id);
+    if (!rt) return null;
+    return {
+      id: rt.id,
+      name: rt.name,
+      schema: rt.schema,
+      safety: {
+        readOnly: true,
+        rowLimit: rt.safetyContext.policy.rowLimit,
+        timeoutMs: rt.safetyContext.policy.timeoutMs,
+        redactedColumns: [...rt.safetyContext.sensitiveColumns],
+      },
+    };
   }
 
   /**
