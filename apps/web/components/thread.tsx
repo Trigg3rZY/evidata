@@ -59,6 +59,9 @@ export function Thread({ onClear }: { onClear: () => void }) {
   });
   const { status, question, progress, answer, message, error, usage, ask, reset, stop } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
+  // The active Investigation: set from the first/most-recent Answer; subsequent
+  // questions continue it as versioned follow-ups (a Message doesn't establish one).
+  const [investigationId, setInvestigationId] = useState<string | null>(null);
 
   // When a turn settles (answered, replied, errored, or stopped), move it into the
   // conversation and free the stream — the thread accumulates, never wipes.
@@ -73,6 +76,8 @@ export function Thread({ onClear }: { onClear: () => void }) {
           ? { question, stopped: true }
           : { question, error: error ?? t('genericError') };
     setHistory((h) => [...h, settled]);
+    // An Answer establishes/continues the Investigation; later turns continue it.
+    if (answer) setInvestigationId(answer.investigationId);
     reset();
   }, [status, question, answer, message, error, usage, reset, t]);
 
@@ -83,7 +88,7 @@ export function Thread({ onClear }: { onClear: () => void }) {
       onClear();
       return;
     }
-    void ask(q, 'sample', lang);
+    void ask(q, 'sample', lang, investigationId ?? undefined);
   };
   const isEmpty = history.length === 0 && status === 'idle';
 

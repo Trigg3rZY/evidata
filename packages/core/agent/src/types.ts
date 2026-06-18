@@ -28,12 +28,21 @@ export interface AgentContext {
   mappings: ReadonlyArray<{ from: string; to: string }>;
 }
 
+/** A prior turn in the same Investigation, for follow-up context (spec 03 §2). */
+export interface ConversationTurn {
+  question: LocalizedText;
+  /** The prior answer's Direct Answer (the conclusion) — compact context, not its evidence. */
+  answer: LocalizedText;
+}
+
 export interface AgentInput {
   investigationId: string;
   question: string;
   language: 'en' | 'zh-CN';
   schema: SchemaSnapshot;
   context: AgentContext;
+  /** Prior turns of this Investigation (a follow-up); empty/omitted for the first turn. */
+  history?: ConversationTurn[];
 }
 
 /** A bounded, redacted result handed back to the provider after a query runs. */

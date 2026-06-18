@@ -211,7 +211,13 @@ export class DrizzleMetadataStore implements MetadataStore {
           ...(t.answerVersion != null ? { answerVersion: t.answerVersion } : {}),
         }),
       ),
-      answers: answerRows.map((a) => a.payload as Answer),
+      // The columns are authoritative for version + the single is_latest head; the
+      // stored document's meta is stamped at write time and goes stale when a later
+      // version demotes it, so overlay the columns onto the returned meta.
+      answers: answerRows.map((a) => {
+        const doc = a.payload as Answer;
+        return { ...doc, meta: { ...doc.meta, version: a.version, isLatest: a.isLatest } };
+      }),
     };
   }
 

@@ -96,7 +96,12 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
 }
 
 export interface UseInvestigationStream extends StreamState {
-  ask: (question: string, dataSourceId?: string, language?: Lang) => Promise<void>;
+  ask: (
+    question: string,
+    dataSourceId?: string,
+    language?: Lang,
+    investigationId?: string,
+  ) => Promise<void>;
   reset: () => void;
   /** Interrupt the in-flight turn: aborts the request (the server stops too) and marks it stopped. */
   stop: () => void;
@@ -139,13 +144,23 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
   }, []);
 
   const ask = useCallback(
-    async (question: string, dataSourceId = 'sample', language: Lang = 'en') => {
+    async (
+      question: string,
+      dataSourceId = 'sample',
+      language: Lang = 'en',
+      investigationId?: string,
+    ) => {
       controllerRef.current?.abort(); // supersede any in-flight turn
       const controller = new AbortController();
       controllerRef.current = controller;
       setState({ ...INITIAL, status: 'streaming', question });
       try {
-        const res = await fetch('/api/investigations', {
+        // A follow-up POSTs to the existing investigation (append a version); a new
+        // question POSTs to the collection.
+        const url = investigationId
+          ? `/api/investigations/${encodeURIComponent(investigationId)}`
+          : '/api/investigations';
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ question, dataSourceId, language }),

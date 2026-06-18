@@ -12,6 +12,7 @@ import {
   type AgentMessage,
   type AgentProvider,
   type AgentRunEvent,
+  type ConversationTurn,
 } from '@evidata/agent';
 import type { Answer, InvestigationWithAnswers } from '@evidata/answer-contract';
 import type {
@@ -49,6 +50,9 @@ export interface AskParams {
   dataSourceId: string;
   question: string;
   language: 'en' | 'zh-CN';
+  /** Continue an existing Investigation (a follow-up): append a new Answer version
+   *  and seed the model with prior turns. Omit to start a new Investigation. */
+  investigationId?: string;
 }
 
 export interface AskOptions {
@@ -73,6 +77,29 @@ function deriveTitle(question: string): string {
   return trimmed.length > 80 ? `${trimmed.slice(0, 79)}…` : trimmed;
 }
 
+/**
+ * Reconstruct ordered (question → Direct Answer) pairs from a stored thread, to
+ * seed a follow-up's model context. Walks turns in order, pairing each user
+ * question with the next agent turn's answer version (by `meta.version`).
+ */
+function priorTurns(inv: InvestigationWithAnswers): ConversationTurn[] {
+  const byVersion = new Map(inv.answers.map((a) => [a.meta.version, a]));
+  const turns: ConversationTurn[] = [];
+  let pendingQuestion: string | undefined;
+  for (const t of inv.turns) {
+    if (t.role === 'user') {
+      pendingQuestion = t.question;
+    } else if (t.role === 'agent' && t.answerVersion !== undefined) {
+      const answer = byVersion.get(t.answerVersion);
+      if (pendingQuestion && answer?.directAnswer) {
+        turns.push({ question: pendingQuestion, answer: answer.directAnswer });
+      }
+      pendingQuestion = undefined;
+    }
+  }
+  return turns;
+}
+
 export class InvestigationService {
   private readonly now: () => Date;
   private readonly newId: (prefix: string) => string;
@@ -87,12 +114,27 @@ export class InvestigationService {
     return this.deps.dataSources.map((d) => ({ id: d.id, name: d.name }));
   }
 
-  // M0: `ask` always starts a new Investigation (single-turn). Follow-ups/reruns
-  // — loading prior answers, passing `priorAnswers`/`versionTrigger` to the
-  // runner so the store appends version N — land with the thread UI.
+  /**
+   * Run one turn. With `params.investigationId` it's a **follow-up**: the prior
+   * turns seed the model (resolve "it"/"why?") and `saveAnswer` appends the next
+   * Answer version to that Investigation (the store is authoritative for the
+   * version + the single is_latest head). Otherwise it starts a new Investigation.
+   * A conversational Message is ephemeral either way (no persistence).
+   */
   async ask(params: AskParams, opts: AskOptions): Promise<AskResult> {
     const rt = this.dataSource(params.dataSourceId);
-    const investigationId = this.newId('inv');
+
+    const isFollowup = !!params.investigationId;
+    let investigationId: string;
+    let history: ConversationTurn[] = [];
+    if (params.investigationId) {
+      const prior = await this.deps.store.getInvestigation(params.investigationId);
+      if (!prior) throw new Error(`Unknown investigation: ${params.investigationId}`);
+      investigationId = prior.id;
+      history = priorTurns(prior);
+    } else {
+      investigationId = this.newId('inv');
+    }
 
     const runner = new AgentRunner({
       provider: opts.provider,
@@ -107,8 +149,8 @@ export class InvestigationService {
     });
 
     // Run first, persist after: a cancelled turn (RunAbortedError) throws here and
-    // nothing is written — no orphan Investigation (spec 13 §4). The id is generated,
-    // not persisted, so it can still appear on streamed evidence during the run.
+    // nothing is written — no orphan Investigation (spec 13 §4). For a new turn the
+    // id is generated (not persisted), so it can still appear on streamed evidence.
     const result = await runner.run(
       {
         investigationId,
@@ -116,6 +158,7 @@ export class InvestigationService {
         language: params.language,
         schema: rt.schema,
         context: rt.context,
+        ...(history.length ? { history } : {}),
       },
       { ...(opts.signal ? { signal: opts.signal } : {}) },
     );
@@ -125,15 +168,17 @@ export class InvestigationService {
       return { kind: 'message', message: result.message };
     }
 
-    // Run first, persist after: a cancelled turn (RunAbortedError) throws above and
-    // nothing is written — no orphan Investigation (spec 13 §4). The id is generated,
-    // not persisted, so it can still appear on streamed evidence during the run.
-    await this.deps.store.createInvestigation({
-      id: investigationId,
-      dataSourceId: rt.id,
-      title: deriveTitle(params.question),
-    });
+    // New Investigation: create the row. A follow-up appends to the existing one.
+    if (!isFollowup) {
+      await this.deps.store.createInvestigation({
+        id: investigationId,
+        dataSourceId: rt.id,
+        title: deriveTitle(params.question),
+      });
+    }
 
+    // saveAnswer is authoritative for versioning: it appends version N+1 and demotes
+    // the prior head, and records the user/agent turns for this question.
     const answer = await this.deps.store.saveAnswer({
       investigationId,
       question: params.question,
