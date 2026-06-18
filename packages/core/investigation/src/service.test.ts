@@ -123,6 +123,8 @@ describe('InvestigationService', () => {
     expect(followup.investigationId).toBe(first.investigationId); // same thread
     expect(followup.answer.meta.version).toBe(2); // appended version
     expect(followup.answer.meta.isLatest).toBe(true);
+    // audit provenance preserved (not stamped like a first answer)
+    expect(followup.answer.meta.createdAfter).toEqual({ kind: 'followup', fromVersion: 1 });
 
     const thread = await service.getThread(first.investigationId);
     expect(thread?.answers).toHaveLength(2);
@@ -161,6 +163,32 @@ describe('InvestigationService', () => {
     expect(seen?.history).toHaveLength(1);
     expect(seen?.history?.[0]?.question).toBe("Why is ACME's ad bill higher this month?");
     expect(seen?.history?.[0]?.answer).toBe(first.answer.directAnswer);
+  });
+
+  it('binds a follow-up to the stored data source, ignoring the client dataSourceId', async () => {
+    const first = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: "Why is ACME's ad bill higher this month?",
+        language: 'en',
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (first.kind !== 'answer') throw new Error('expected an answer');
+
+    // A follow-up sends a bogus dataSourceId — it must NOT throw "Unknown data
+    // source"; the investigation's bound source ('sample') is used regardless.
+    const followup = await service.ask(
+      {
+        dataSourceId: 'does-not-exist',
+        question: 'and by campaign?',
+        language: 'en',
+        investigationId: first.investigationId,
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    expect(followup.kind).toBe('answer');
+    if (followup.kind === 'answer') expect(followup.investigationId).toBe(first.investigationId);
   });
 
   it('rejects a follow-up to an unknown investigation', async () => {
