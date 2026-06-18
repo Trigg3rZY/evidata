@@ -18,33 +18,76 @@
     "meta"
   ],
   "properties": {
-    "investigationId": { "type": "string" },
+    "investigationId": {
+      "type": "string"
+    },
     "status": {
       "type": "string",
       "enum": ["Answered", "Partial", "NeedsClarification", "BlockedByPolicy", "NoReliableAnswer"]
     },
-    "directAnswer": { "type": "string", "minLength": 1 },
-    "confidence": { "type": "string", "enum": ["High", "Medium", "Low", "CannotDetermine"] },
-    "confidenceReason": { "type": "string", "minLength": 1 },
-    "whatIDid": { "type": "string" },
+    "directAnswer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["High", "Medium", "Low", "CannotDetermine"]
+    },
+    "confidenceReason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "whatIDid": {
+      "type": "string"
+    },
     "keyFindings": {
       "type": "array",
-      "items": { "$ref": "#/$defs/keyFinding" }
+      "items": {
+        "$ref": "#/$defs/keyFinding"
+      }
     },
-    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
-    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
-    "caveats": { "type": "array", "items": { "type": "string" } },
-    "charts": { "type": "array", "items": { "$ref": "#/$defs/chart" } },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assumption"
+      }
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "charts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/chart"
+      }
+    },
     "recommendedFollowups": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["question"],
-        "properties": { "question": { "type": "string" } }
+        "properties": {
+          "question": {
+            "type": "string"
+          }
+        }
       }
     },
-    "unblock": { "$ref": "#/$defs/unblockPath" },
-    "meta": { "$ref": "#/$defs/versionMeta" }
+    "unblock": {
+      "$ref": "#/$defs/unblockPath"
+    },
+    "meta": {
+      "$ref": "#/$defs/versionMeta"
+    }
   },
   "allOf": [
     {
@@ -52,45 +95,87 @@
       "oneOf": [
         {
           "properties": {
-            "status": { "const": "Answered" },
-            "confidence": { "enum": ["High", "Medium", "Low"] }
+            "status": {
+              "const": "Answered"
+            },
+            "confidence": {
+              "enum": ["High", "Medium", "Low"]
+            }
           }
         },
         {
           "properties": {
-            "status": { "const": "Partial" },
-            "confidence": { "enum": ["Medium", "Low", "CannotDetermine"] }
+            "status": {
+              "const": "Partial"
+            },
+            "confidence": {
+              "enum": ["Medium", "Low", "CannotDetermine"]
+            }
           }
         },
         {
           "properties": {
-            "status": { "const": "NeedsClarification" },
-            "confidence": { "const": "CannotDetermine" }
+            "status": {
+              "const": "NeedsClarification"
+            },
+            "confidence": {
+              "const": "CannotDetermine"
+            }
           }
         },
         {
           "properties": {
-            "status": { "const": "BlockedByPolicy" },
-            "confidence": { "const": "CannotDetermine" }
+            "status": {
+              "const": "BlockedByPolicy"
+            },
+            "confidence": {
+              "const": "CannotDetermine"
+            }
           }
         },
         {
           "properties": {
-            "status": { "const": "NoReliableAnswer" },
-            "confidence": { "enum": ["CannotDetermine", "Low"] }
+            "status": {
+              "const": "NoReliableAnswer"
+            },
+            "confidence": {
+              "enum": ["CannotDetermine", "Low"]
+            }
           }
         }
       ]
     },
     {
       "$comment": "Any non-Answered status MUST carry an Unblock Path.",
-      "if": { "not": { "properties": { "status": { "const": "Answered" } } } },
-      "then": { "required": ["unblock"] }
+      "if": {
+        "not": {
+          "properties": {
+            "status": {
+              "const": "Answered"
+            }
+          }
+        }
+      },
+      "then": {
+        "required": ["unblock"]
+      }
     },
     {
       "$comment": "Answered MUST have at least one Key Finding.",
-      "if": { "properties": { "status": { "const": "Answered" } } },
-      "then": { "properties": { "keyFindings": { "minItems": 1 } } }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "Answered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "keyFindings": {
+            "minItems": 1
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -98,9 +183,19 @@
       "type": "object",
       "required": ["text", "evidenceIds"],
       "properties": {
-        "text": { "type": "string" },
-        "evidenceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-        "chartRef": { "type": "string" }
+        "text": {
+          "type": "string"
+        },
+        "evidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "chartRef": {
+          "type": "string"
+        }
       }
     },
     "evidence": {
@@ -118,15 +213,39 @@
         "policyNotes"
       ],
       "properties": {
-        "id": { "type": "string" },
-        "purpose": { "type": "string" },
-        "dataSourceId": { "type": "string" },
-        "dataSourceName": { "type": "string" },
-        "connectorId": { "type": "string" },
-        "tables": { "type": "array", "items": { "type": "string" } },
-        "sql": { "type": "string" },
-        "resultSummary": { "type": "string" },
-        "sampleRows": { "type": "array", "items": { "type": "object" } },
+        "id": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "dataSourceId": {
+          "type": "string"
+        },
+        "dataSourceName": {
+          "type": "string"
+        },
+        "connectorId": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sql": {
+          "type": "string"
+        },
+        "resultSummary": {
+          "type": "string"
+        },
+        "sampleRows": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
         "execution": {
           "type": "object",
           "required": ["status", "elapsedMs", "rowCount", "truncated"],
@@ -135,31 +254,65 @@
               "type": "string",
               "enum": ["ok", "timeout", "connection_lost", "zero_rows", "error"]
             },
-            "elapsedMs": { "type": "number" },
-            "rowCount": { "type": "integer" },
-            "truncated": { "type": "boolean" }
+            "elapsedMs": {
+              "type": "number"
+            },
+            "rowCount": {
+              "type": "integer"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
           }
         },
-        "safety": { "type": "string", "enum": ["auto_executed", "confirmed_by_user", "rejected"] },
-        "policyNotes": { "type": "string" },
-        "redactedColumns": { "type": "array", "items": { "type": "string" } }
+        "safety": {
+          "type": "string",
+          "enum": ["auto_executed", "confirmed_by_user", "rejected"]
+        },
+        "policyNotes": {
+          "type": "string"
+        },
+        "redactedColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "assumption": {
       "type": "object",
       "required": ["text"],
       "properties": {
-        "text": { "type": "string" },
-        "verifiedRefs": { "type": "array", "items": { "type": "string" } }
+        "text": {
+          "type": "string"
+        },
+        "verifiedRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "chart": {
       "type": "object",
       "required": ["ref", "kind", "evidenceIds", "spec"],
       "properties": {
-        "ref": { "type": "string" },
-        "kind": { "type": "string", "enum": ["table", "bar", "line", "comparison"] },
-        "evidenceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "ref": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["table", "bar", "line", "comparison"]
+        },
+        "evidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
         "spec": {}
       }
     },
@@ -179,7 +332,9 @@
             "insufficient_results"
           ]
         },
-        "description": { "type": "string" }
+        "description": {
+          "type": "string"
+        }
       }
     },
     "unblockAction": {
@@ -199,20 +354,33 @@
             "view_mutation_draft"
           ]
         },
-        "label": { "type": "string" },
+        "label": {
+          "type": "string"
+        },
         "choices": {
           "type": "array",
           "items": {
             "type": "object",
             "required": ["id", "label"],
             "properties": {
-              "id": { "type": "string" },
-              "label": { "type": "string" },
-              "followupQuestion": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "followupQuestion": {
+                "type": "string"
+              }
             }
           }
         },
-        "createsSuggestion": { "type": "boolean" }
+        "createsSuggestion": {
+          "type": "boolean"
+        },
+        "draftSql": {
+          "type": "string"
+        }
       }
     },
     "unblockPath": {
@@ -222,12 +390,16 @@
         "whatsMissing": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/missingInfo" }
+          "items": {
+            "$ref": "#/$defs/missingInfo"
+          }
         },
         "nextSteps": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/unblockAction" }
+          "items": {
+            "$ref": "#/$defs/unblockAction"
+          }
         }
       }
     },
@@ -235,8 +407,14 @@
       "type": "object",
       "required": ["version", "createdAt", "isLatest"],
       "properties": {
-        "version": { "type": "integer", "minimum": 1 },
-        "createdAt": { "type": "string", "format": "date-time" },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "createdAfter": {
           "type": "object",
           "required": ["kind"],
@@ -245,10 +423,15 @@
               "type": "string",
               "enum": ["clarification", "followup", "rerun", "definition_correction"]
             },
-            "fromVersion": { "type": "integer", "minimum": 1 }
+            "fromVersion": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
-        "isLatest": { "type": "boolean" }
+        "isLatest": {
+          "type": "boolean"
+        }
       }
     }
   }

@@ -137,6 +137,8 @@ export interface UnblockAction {
   choices?: Array<{ id: string; label: LocalizedText; followupQuestion?: LocalizedText }>;
   /** True for actions that create a Suggested edit for Admins (correction loop). */
   createsSuggestion?: boolean;
+  /** For `view_mutation_draft`: the proposed write, shown read-only — NEVER executed. */
+  draftSql?: string;
 }
 
 export interface MissingInfo {

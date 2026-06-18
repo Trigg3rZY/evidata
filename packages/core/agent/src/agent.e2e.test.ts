@@ -122,7 +122,10 @@ describe('mutation-attempt — guardrail (spec 05 §4.5)', () => {
     expect(answer.status).toBe('BlockedByPolicy');
     expect(queryRuns).toHaveLength(0); // nothing executed — the boundary held
     expect(validateAnswer(answer)).toEqual([]);
-    expect(answer.unblock?.nextSteps.some((a) => a.kind === 'view_mutation_draft')).toBe(true);
+    const draft = answer.unblock?.nextSteps.find((a) => a.kind === 'view_mutation_draft');
+    expect(draft).toBeDefined();
+    // the proposed (un-executed) write is carried for the UI to show
+    expect(draft?.draftSql).toContain('update campaign_spend');
   });
 });
 

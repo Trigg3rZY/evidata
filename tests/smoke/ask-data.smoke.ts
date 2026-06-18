@@ -42,6 +42,10 @@ test('mutation-attempt: the read-only guardrail blocks a write', async ({ page }
     timeout: 20_000,
   });
   await expect(page.getByText(/What's missing/i)).toBeVisible();
+
+  // The "view the proposed change" action reveals the blocked SQL, read-only (#37).
+  await page.getByRole('button', { name: /proposed change/i }).click();
+  await expect(page.getByText(/update campaign_spend/i)).toBeVisible();
 });
 
 test('render matrix: en/zh × light/dark have no WCAG AA violations', async ({ page }) => {
