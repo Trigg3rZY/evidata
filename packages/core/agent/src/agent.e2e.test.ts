@@ -180,6 +180,55 @@ describe('FixtureProvider', () => {
   });
 });
 
+describe('re-prompt on invalid final (spec 03 §1)', () => {
+  const goodSql =
+    "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'";
+  const draft = (evidenceIds: [string, ...string[]]): AgentDecision => ({
+    kind: 'final',
+    draft: {
+      status: 'Answered',
+      confidence: 'High',
+      directAnswer: 'total',
+      confidenceReason: 'one query',
+      keyFindings: [{ text: 'computed', evidenceIds }],
+    },
+  });
+
+  it('re-prompts once with the violations, then accepts a corrected answer', async () => {
+    let step = 0;
+    let sawFeedback: string[] | undefined;
+    const provider: AgentProvider = {
+      next: (_input, history) => {
+        step += 1;
+        if (step === 1)
+          return Promise.resolve({ kind: 'query', proposal: { purpose: 'p', sql: goodSql } });
+        if (step === 2) return Promise.resolve(draft(['E9'])); // dangling evidence → invalid
+        sawFeedback = history.validationFeedback;
+        return Promise.resolve(draft(['E1'])); // corrected
+      },
+    };
+    const { answer } = await new AgentRunner(deps(provider)).run(input('total?'));
+    expect(answer.status).toBe('Answered');
+    expect(answer.keyFindings[0]?.evidenceIds).toEqual(['E1']);
+    expect(sawFeedback?.length).toBeGreaterThan(0); // the provider received the violations
+  });
+
+  it('downgrades to NoReliableAnswer if the answer is still invalid after the retry', async () => {
+    let step = 0;
+    const provider: AgentProvider = {
+      next: () => {
+        step += 1;
+        if (step === 1)
+          return Promise.resolve({ kind: 'query', proposal: { purpose: 'p', sql: goodSql } });
+        return Promise.resolve(draft(['E9'])); // always cites missing evidence
+      },
+    };
+    const { answer } = await new AgentRunner(deps(provider)).run(input('total?'));
+    expect(answer.status).toBe('NoReliableAnswer');
+    expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
 describe('executor error recovery', () => {
   it('records a failed query, feeds the error back, and still finishes', async () => {
     // The gate allows both (read-only, authorized table); the first SQL fails in

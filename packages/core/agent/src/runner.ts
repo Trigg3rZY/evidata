@@ -63,6 +63,18 @@ export interface AgentRunnerDeps {
 
 type AllowDecision = Extract<SafetyDecision, { verdict: 'allow' }>;
 
+/** Combined contract-violation messages (structural + JSON schema), for re-prompting. */
+function validateAll(answer: Answer): string[] {
+  const messages = validateAnswer(answer).map((v) => v.message);
+  const schema = validateAnswerSchema(answer);
+  if (!schema.valid) {
+    messages.push(
+      ...schema.errors.map((e) => `${e.instancePath || '/'} ${e.message ?? 'invalid'}`.trim()),
+    );
+  }
+  return messages;
+}
+
 export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
@@ -79,6 +91,7 @@ export class AgentRunner {
     const evidence: Evidence[] = [];
     const queryRuns: QueryRunRecord[] = [];
     let erroredQueries = 0;
+    let finalRetried = false;
 
     for (let iter = 0; iter < maxIterations; iter++) {
       const decision = await this.deps.provider.next(input, history);
@@ -100,13 +113,26 @@ export class AgentRunner {
       }
 
       if (decision.kind === 'final') {
-        return this.finalize(
-          input,
-          this.answered(input, decision.draft, evidence, history),
-          evidence,
-          queryRuns,
+        const candidate = this.applyVersion(
+          { ...this.answered(input, decision.draft, evidence, history), evidence },
           now,
         );
+        const violations = validateAll(candidate);
+        if (violations.length === 0) return { answer: candidate, queryRuns };
+        // Re-prompt the provider once with the violations before downgrading (spec 03 §1).
+        if (!finalRetried) {
+          finalRetried = true;
+          history.validationFeedback = violations;
+          sink({ type: 'reasoning', label: 'Revising the answer to meet the contract' });
+          continue;
+        }
+        const res = resolveUnblock([
+          {
+            kind: 'insufficient_results',
+            description: 'The drafted answer failed contract validation.',
+          },
+        ]);
+        return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
       }
 
       // kind === 'query' — SAFETY_GATE first (the boundary).
