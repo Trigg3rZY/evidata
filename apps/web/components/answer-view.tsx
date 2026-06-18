@@ -2,7 +2,7 @@ import { TriangleAlert } from 'lucide-react';
 import type { Answer } from '@evidata/answer-contract';
 import type { AnswerLabels } from '@/lib/i18n';
 import { ConfidenceMeter } from './confidence-meter';
-import { EvidenceItem } from './evidence-item';
+import { EvidenceSection } from './evidence-section';
 import { StatusBadge } from './status-badge';
 import { UnblockPathView } from './unblock-path';
 
@@ -70,12 +70,7 @@ export function AnswerView({
       )}
 
       {answer.evidence.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <div className="text-xs font-medium text-muted-foreground">{labels.evidence}</div>
-          {answer.evidence.map((e) => (
-            <EvidenceItem key={e.id} evidence={e} />
-          ))}
-        </section>
+        <EvidenceSection evidence={answer.evidence} label={labels.evidence} />
       )}
 
       {answer.assumptions.length > 0 && (
