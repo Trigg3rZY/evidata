@@ -87,7 +87,13 @@ export type AgentDecision =
   | { kind: 'reasoning'; label: string }
   | { kind: 'query'; proposal: QueryProposal }
   | { kind: 'unblock'; missing: [MissingInfo, ...MissingInfo[]] }
-  | { kind: 'final'; draft: AnswerDraft };
+  | { kind: 'final'; draft: AnswerDraft }
+  // A conversational reply that makes NO claim about the data, so it carries no
+  // evidence and skips the gate/validate path (spec 13 §1–3): greeting, capability
+  // chat, out-of-scope decline (`reply`), or an authored-but-unexecuted SQL
+  // statement (`draft_sql`, which sets `sql`). NEVER a data figure — that must go
+  // through `final` (an evidence-gated Answer).
+  | { kind: 'message'; text: LocalizedText; sql?: string };
 
 export interface AgentProvider {
   next(input: AgentInput, history: AgentHistory, signal?: AbortSignal): Promise<AgentDecision>;
@@ -116,8 +122,19 @@ export type AgentRunEvent =
 /** Audit record of one executed query (G4); canonical shape lives in ports. */
 export type { QueryRunRecord };
 
-export interface RunResult {
-  answer: Answer;
-  /** Every executed query, in order (basis of the G4 count). */
-  queryRuns: QueryRunRecord[];
+/** A conversational reply (spec 13 §1): no data claim, no evidence, not versioned. */
+export interface AgentMessage {
+  text: LocalizedText;
+  /** Present for `draft_sql`: SQL authored as text, never executed. */
+  sql?: string;
 }
+
+/** Outcome of one turn — an evidence-backed Answer, or a conversational Message. */
+export type RunResult =
+  | {
+      kind: 'answer';
+      answer: Answer;
+      /** Every executed query, in order (basis of the G4 count). */
+      queryRuns: QueryRunRecord[];
+    }
+  | { kind: 'message'; message: AgentMessage };

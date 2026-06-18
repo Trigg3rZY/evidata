@@ -81,7 +81,7 @@ export async function askStream(
 ): Promise<void> {
   try {
     const provider = deps.providerFor(body.question);
-    const { answer } = await deps.service.ask(
+    const result = await deps.service.ask(
       { dataSourceId: body.dataSourceId, question: body.question, language: body.language },
       {
         provider,
@@ -89,11 +89,20 @@ export async function askStream(
         ...(signal ? { signal } : {}),
       },
     );
-    write(sseEvent('answer', answer));
+    // A conversational Message (greeting / drafted SQL / decline) is not an Answer —
+    // no status/evidence chrome; the queries count is 0 (spec 13).
+    if (result.kind === 'message') {
+      write(sseEvent('message', result.message));
+    } else {
+      write(sseEvent('answer', result.answer));
+    }
     // Cost transparency: when the real model ran, report tokens + round-trips +
     // queries so the UI can show what the turn cost (fixtures report nothing).
     const usage = readUsage(provider);
-    if (usage) write(sseEvent('usage', { ...usage, queries: answer.evidence.length }));
+    if (usage) {
+      const queries = result.kind === 'answer' ? result.answer.evidence.length : 0;
+      write(sseEvent('usage', { ...usage, queries }));
+    }
     write(sseEvent('done', {}));
   } catch (e) {
     // A cancelled turn (client Stop / disconnect) is not an error — emit `aborted`

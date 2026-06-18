@@ -16,6 +16,7 @@ export type {
   AgentDecision,
   AgentHistory,
   AgentInput,
+  AgentMessage,
   AgentProvider,
   AgentRunEvent,
   AnswerDraft,

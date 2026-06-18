@@ -45,6 +45,23 @@ export function nonAnswerSentence(status: AnswerStatus, lang: Lang): string {
   return NON_ANSWER_SENTENCE[lang][status];
 }
 
+// Deterministic greeting guard (spec 13 §3): an unmistakable greeting is answered
+// with a canned Message and ZERO model calls/queries — the tool-mediated route
+// can't *guarantee* that (the model might still query), so this is the backstop.
+// Full-match + short to avoid swallowing real questions like "hi, why is spend up?".
+const GREETING_RE = /^(hi+|hey+|hello|yo|嗨+|你好(呀|啊)?|您好|哈[喽啰])[\s!,.。！？~～]*$/iu;
+
+export function isGreeting(question: string): boolean {
+  const t = question.trim();
+  return t.length > 0 && t.length <= 12 && GREETING_RE.test(t);
+}
+
+export function greetingReply(lang: Lang): string {
+  return lang === 'zh-CN'
+    ? '你好!我可以基于当前数据源回答你的数据问题——比如消费趋势、按活动拆解、客户排名。想了解什么?'
+    : 'Hi! I answer questions about the connected data source — spend trends, per-campaign breakdowns, customer rankings, and the like. What would you like to know?';
+}
+
 export function nonAnswerReason(status: AnswerStatus, lang: Lang): string {
   return NON_ANSWER_REASON[lang][status];
 }

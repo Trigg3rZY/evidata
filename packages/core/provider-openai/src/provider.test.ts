@@ -202,6 +202,35 @@ describe('OpenAIAgentProvider', () => {
     expect(p.usage).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0, calls: 1 });
   });
 
+  it('maps reply → a Message decision (no data claim, no evidence)', async () => {
+    const { complete } = scripted([
+      {
+        content: null,
+        tool_calls: [toolCall('c1', 'reply', { text: 'Hi! Ask me about the data.' })],
+      },
+    ]);
+    const d = await provider(complete).next(input, emptyHistory());
+    expect(d).toEqual({ kind: 'message', text: 'Hi! Ask me about the data.' });
+  });
+
+  it('maps draft_sql → a Message decision carrying the unexecuted SQL', async () => {
+    const { complete } = scripted([
+      {
+        content: null,
+        tool_calls: [
+          toolCall('c1', 'draft_sql', {
+            sql: 'DELETE FROM campaign_spend WHERE amount > 30',
+            explanation: 'Deletes rows over 30 (not executed).',
+          }),
+        ],
+      },
+    ]);
+    const d = await provider(complete).next(input, emptyHistory());
+    if (d.kind !== 'message') throw new Error('expected a message');
+    expect(d.sql).toBe('DELETE FROM campaign_spend WHERE amount > 30');
+    expect(d.text).toContain('Deletes rows over 30');
+  });
+
   it('maps cannot_answer → unblock with the declared missing info', async () => {
     const { complete } = scripted([
       {

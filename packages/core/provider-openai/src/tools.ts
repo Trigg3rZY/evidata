@@ -117,6 +117,34 @@ export const AGENT_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'reply',
+      description:
+        'Reply conversationally WITHOUT querying — for a greeting, a "what can you do?" question, or to decline a question that is outside this data source. Plain text only. Do NOT include any number, statistic, or claim about the data (those require run_sql + final_answer).',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'draft_sql',
+      description:
+        'Write/draft/explain a SQL statement as TEXT for the user, WITHOUT executing it — it is never run, even if it is a write (DELETE/UPDATE/…). Use this when the user asks you to write or show a query rather than answer a question about the data.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { sql: { type: 'string' }, explanation: { type: 'string' } },
+        required: ['sql', 'explanation'],
+      },
+    },
+  },
 ];
 
 function schemaText(input: AgentInput): string {
@@ -144,8 +172,13 @@ export function buildSystemPrompt(input: AgentInput): string {
   const glossary = context.glossary.map((g) => `  - ${g.term}: ${g.definition}`).join('\n');
   const mappings = context.mappings.map((m) => `  - ${m.from} → ${m.to}`).join('\n');
   return [
-    'You are a careful data analyst for a trusted, evidence-backed answer system.',
-    'Your entire scope is the single data source described below. Only engage with questions answerable from THIS data source — including questions about what data it contains. If a question is unrelated to it (small talk, general knowledge, other systems, or a request to write content), do NOT attempt it: call cannot_answer with kind "insufficient_results" and briefly say it is outside this data source\'s scope.',
+    'You are a careful data analyst for a trusted, evidence-backed answer system, scoped to the single data source described below.',
+    'First decide what the user wants, then pick the matching tool:',
+    '- Greeting / small talk / "what can you do?": call reply (a short, friendly message). NEVER run a query for these.',
+    '- A request to write, draft, or explain a SQL statement (even a write like DELETE/UPDATE): call draft_sql — produce the SQL as text; it is NOT executed.',
+    "- A question unrelated to this data source (general knowledge, other systems): call reply with a brief decline saying it's outside this data source's scope.",
+    '- A question ABOUT the data (including what data it contains): gather evidence with run_sql, then final_answer.',
+    'Do NOT put any figure, statistic, or claim about the data into reply or draft_sql — those require run_sql + final_answer.',
     'Rules:',
     '- You may ONLY read. Propose a single read-only SELECT via the run_sql tool; the app enforces a SQL safety gate and rejects any write.',
     '- Be decisive and efficient: most questions need only 1–4 queries. As soon as the evidence supports a conclusion, call final_answer. Do NOT keep exploring — there is a small per-turn query budget, and exhausting it ends the turn with NO answer. Prefer one well-aggregated query over many small ones.',

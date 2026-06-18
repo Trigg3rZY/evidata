@@ -38,6 +38,7 @@ const dict = {
     genericError: 'Something went wrong.',
     stop: 'Stop',
     stopped: 'Stopped.',
+    notExecuted: 'Draft only — not executed',
     // Answer chrome (StatusBadge / ConfidenceMeter / AnswerView / UnblockPathView).
     // AI answer *content* stays in the question's language; only these labels switch.
     statusAnswered: 'Answered',
@@ -82,6 +83,7 @@ const dict = {
     genericError: '出了点问题。',
     stop: '停止',
     stopped: '已停止。',
+    notExecuted: '仅为草稿——未执行',
     statusAnswered: '已回答',
     statusNeedsClarification: '需要澄清',
     statusPartial: '部分回答',

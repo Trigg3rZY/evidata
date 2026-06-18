@@ -393,6 +393,14 @@ export class OpenAIAgentProvider implements AgentProvider {
       case 'final_answer':
         this.pendingFinalCallId = call.id; // so a re-prompt can respond to this call
         return { kind: 'final', draft: toDraft(args) };
+      case 'reply':
+        // Conversational message — no data claim, no evidence (spec 13). The turn ends.
+        return { kind: 'message', text: asString(args.text) };
+      case 'draft_sql': {
+        // SQL authored as text, never executed. Explanation is the message body.
+        const sql = asString(args.sql);
+        return { kind: 'message', text: asString(args.explanation), ...(sql ? { sql } : {}) };
+      }
       default:
         return unblock('insufficient_results', `Unknown action: ${call.function.name}`);
     }

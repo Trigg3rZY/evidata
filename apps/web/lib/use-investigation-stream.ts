@@ -23,11 +23,18 @@ export interface UsageInfo {
   queries: number;
 }
 
+/** A conversational reply (greeting / drafted SQL / decline) — not an Answer (spec 13). */
+export interface MessageInfo {
+  text: string;
+  sql?: string;
+}
+
 export interface StreamState {
   status: StreamStatus;
   question: string | null;
   progress: ProgressStep[];
   answer: Answer | null;
+  message: MessageInfo | null;
   error: string | null;
   usage: UsageInfo | null;
 }
@@ -37,6 +44,7 @@ const INITIAL: StreamState = {
   question: null,
   progress: [],
   answer: null,
+  message: null,
   error: null,
   usage: null,
 };
@@ -70,6 +78,8 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
     }
     case 'answer':
       return { ...state, answer: JSON.parse(data) as Answer };
+    case 'message':
+      return { ...state, message: JSON.parse(data) as MessageInfo };
     case 'usage':
       return { ...state, usage: JSON.parse(data) as UsageInfo };
     case 'done':

@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import {
   AgentRunner,
   type AgentContext,
+  type AgentMessage,
   type AgentProvider,
   type AgentRunEvent,
 } from '@evidata/agent';
@@ -57,10 +58,15 @@ export interface AskOptions {
   signal?: AbortSignal;
 }
 
-export interface AskResult {
-  investigationId: string;
-  answer: Answer;
-}
+/**
+ * One turn's outcome: an evidence-backed Answer (persisted, versioned), or a
+ * conversational Message (greeting / drafted SQL / decline — spec 13). M0 keeps
+ * Messages ephemeral: they make no data claim, so they are streamed and shown but
+ * not persisted (no Investigation row, no version chain).
+ */
+export type AskResult =
+  | { kind: 'answer'; investigationId: string; answer: Answer }
+  | { kind: 'message'; message: AgentMessage };
 
 function deriveTitle(question: string): string {
   const trimmed = question.trim().replace(/\s+/g, ' ');
@@ -114,6 +120,14 @@ export class InvestigationService {
       { ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
+    // A conversational Message makes no data claim — ephemeral, nothing persisted.
+    if (result.kind === 'message') {
+      return { kind: 'message', message: result.message };
+    }
+
+    // Run first, persist after: a cancelled turn (RunAbortedError) throws above and
+    // nothing is written — no orphan Investigation (spec 13 §4). The id is generated,
+    // not persisted, so it can still appear on streamed evidence during the run.
     await this.deps.store.createInvestigation({
       id: investigationId,
       dataSourceId: rt.id,
@@ -127,7 +141,7 @@ export class InvestigationService {
       queryRuns: result.queryRuns,
     });
 
-    return { investigationId, answer };
+    return { kind: 'answer', investigationId, answer };
   }
 
   getThread(id: string): Promise<InvestigationWithAnswers | null> {
