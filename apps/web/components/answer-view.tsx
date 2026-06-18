@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react';
-import type { Answer } from '@evidata/answer-contract';
+import type { Answer, Evidence } from '@evidata/answer-contract';
 import type { AnswerLabels } from '@/lib/i18n';
 import { ConfidenceMeter } from './confidence-meter';
 import { EvidenceSection } from './evidence-section';
@@ -16,12 +16,16 @@ import { UnblockPathView } from './unblock-path';
 export function AnswerView({
   answer,
   onFollowup,
+  onInspect,
   labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
+  /** Open an evidence item in the inspector (right pane); chips are static without it. */
+  onInspect?: ((evidence: Evidence) => void) | undefined;
   labels: AnswerLabels;
 }) {
+  const byId = new Map(answer.evidence.map((e) => [e.id, e]));
   return (
     <article className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -56,14 +60,26 @@ export function AnswerView({
               />
               <span>
                 {finding.text}{' '}
-                {finding.evidenceIds.map((id) => (
-                  <span
-                    key={id}
-                    className="ml-1 rounded bg-status-clarify-bg px-1.5 py-0.5 text-[11px] font-medium text-status-clarify"
-                  >
-                    {id}
-                  </span>
-                ))}
+                {finding.evidenceIds.map((id) => {
+                  const cls =
+                    'ml-1 rounded bg-status-clarify-bg px-1.5 py-0.5 text-[11px] font-medium text-status-clarify';
+                  const ev = byId.get(id);
+                  return onInspect && ev ? (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => onInspect(ev)}
+                      aria-label={`${labels.evidence} ${id}`}
+                      className={`${cls} hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                    >
+                      {id}
+                    </button>
+                  ) : (
+                    <span key={id} className={cls}>
+                      {id}
+                    </span>
+                  );
+                })}
               </span>
             </li>
           ))}
