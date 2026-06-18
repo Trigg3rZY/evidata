@@ -213,7 +213,13 @@ export function fetchComplete(cfg: OpenAIProviderConfig, maxRetries = 2): Comple
   const backoffMs = cfg.retryBackoffMs ?? 300;
   return async (req: CompletionRequest, opts) => {
     for (let attempt = 0; ; attempt++) {
-      if (opts.signal?.aborted) throw new Error('AI provider request aborted');
+      if (opts.signal?.aborted) {
+        // name 'AbortError' so callers (askStream) classify this as a cancellation,
+        // not a generic failure — matching fetch's own abort DOMException.
+        const err = new Error('AI provider request aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
       let res: Response;
       try {
         res = await fetch(`${base}/chat/completions`, {
@@ -286,9 +292,9 @@ export class OpenAIAgentProvider implements AgentProvider {
     this.maxTokens = cfg.maxTokens ?? 4096;
   }
 
-  // NOTE: `signal` is accepted for forward-compatibility but the AgentRunner does
-  // not thread one yet, so an in-flight request isn't cancelled on disconnect —
-  // wiring AbortSignal end to end is the tracked M1 follow-up (08 §2.1).
+  // The AgentRunner threads `signal` here (spec 13 §4); it's forwarded to the
+  // model `fetch`, so an in-flight request is cancelled on Stop/disconnect.
+  // Executor-level (real-Postgres) cancellation remains the M1 follow-up (08 §2.1).
   async next(
     input: AgentInput,
     history: AgentHistory,

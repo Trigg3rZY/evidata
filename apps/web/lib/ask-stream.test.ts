@@ -81,7 +81,9 @@ describe('askStream (integration over the real Sample)', () => {
   };
 
   it('streams reasoning → query → answer → done for acme-bill-up', async () => {
+    const before = (await service.list()).length;
     const text = await collect("Why is ACME's ad bill higher this month than last?");
+    expect((await service.list()).length).toBe(before + 1); // persisted after the run (reorder)
     expect(text).toContain('event: reasoning');
     expect(text).toContain('event: query');
     expect(text).toContain('event: answer');

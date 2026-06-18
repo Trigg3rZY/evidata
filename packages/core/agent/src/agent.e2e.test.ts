@@ -299,9 +299,10 @@ describe('cancellation (spec 13 §4)', () => {
     };
     const controller = new AbortController();
     controller.abort();
+    // name 'AbortError' is the contract askStream keys on to emit `aborted`, not `error`.
     await expect(
       new AgentRunner(deps(provider)).run(input('endless'), { signal: controller.signal }),
-    ).rejects.toThrow(/abort/i);
+    ).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls).toBe(0);
   });
 
@@ -317,7 +318,7 @@ describe('cancellation (spec 13 §4)', () => {
     };
     await expect(
       new AgentRunner(deps(provider)).run(input('endless'), { signal: controller.signal }),
-    ).rejects.toThrow(/abort/i);
+    ).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls).toBe(1); // first step ran; the loop-top check stops the second
   });
 });
