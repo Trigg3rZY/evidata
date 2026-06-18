@@ -53,6 +53,9 @@ export interface ToolResult {
 export interface AgentHistory {
   toolResults: ToolResult[];
   reasoning: string[];
+  /** Set by the runner when a `final` draft failed contract validation, so the
+   *  provider can correct it once before the runner downgrades (spec 03 §1). */
+  validationFeedback?: string[];
 }
 
 export interface QueryProposal {

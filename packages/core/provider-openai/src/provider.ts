@@ -152,6 +152,7 @@ export class OpenAIAgentProvider implements AgentProvider {
   private readonly messages: ChatMessage[] = [];
   private started = false;
   private pendingCallId: string | undefined;
+  private pendingFinalCallId: string | undefined;
   private consumed = 0;
 
   constructor(cfg: OpenAIProviderConfig, complete?: Complete) {
@@ -188,6 +189,19 @@ export class OpenAIAgentProvider implements AgentProvider {
       this.pendingCallId = undefined;
     }
 
+    // Re-prompt after a rejected final_answer: every tool_call needs a tool
+    // response, so answer the pending final_answer call with the violations and
+    // let the model correct it (spec 03 §1 re-prompt-once).
+    if (this.pendingFinalCallId) {
+      const feedback = history.validationFeedback?.join('; ') ?? 'The previous answer was invalid.';
+      this.messages.push({
+        role: 'tool',
+        tool_call_id: this.pendingFinalCallId,
+        content: `Your final_answer was rejected: ${feedback}. Fix it and call final_answer again, citing only evidence ids returned by run_sql.`,
+      });
+      this.pendingFinalCallId = undefined;
+    }
+
     const assistant = await this.complete(
       {
         model: this.model,
@@ -222,6 +236,7 @@ export class OpenAIAgentProvider implements AgentProvider {
       case 'cannot_answer':
         return { kind: 'unblock', missing: toMissing(args.missing) };
       case 'final_answer':
+        this.pendingFinalCallId = call.id; // so a re-prompt can respond to this call
         return { kind: 'final', draft: toDraft(args) };
       default:
         return unblock('insufficient_results', `Unknown action: ${call.function.name}`);

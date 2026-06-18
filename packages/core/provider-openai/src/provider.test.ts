@@ -116,6 +116,35 @@ describe('OpenAIAgentProvider', () => {
     if (d.kind === 'unblock') expect(d.missing[0].kind).toBe('unverified_mapping');
   });
 
+  it('responds to a rejected final_answer with the violations on re-prompt', async () => {
+    const final = (id: string, ev: string) =>
+      toolCall(id, 'final_answer', {
+        status: 'Answered',
+        directAnswer: 'x',
+        confidence: 'High',
+        confidenceReason: 'r',
+        keyFindings: [{ text: 'f', evidenceIds: [ev] }],
+      });
+    const { complete, calls } = scripted([
+      { content: null, tool_calls: [final('cf1', 'E9')] },
+      { content: null, tool_calls: [final('cf2', 'E1')] },
+    ]);
+    const p = provider(complete);
+    const history = emptyHistory();
+
+    const d1 = await p.next(input, history);
+    expect(d1.kind).toBe('final');
+
+    // the runner would reject d1 and re-prompt with the violations
+    history.validationFeedback = ['finding cites unknown evidence E9'];
+    const d2 = await p.next(input, history);
+    expect(d2.kind).toBe('final');
+
+    // the 2nd request answered the pending final_answer tool_call with the feedback
+    const toolMsg = calls[1]?.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'cf1');
+    expect(toolMsg?.content).toContain('E9');
+  });
+
   it('falls back to an unblock when the model takes no action', async () => {
     const { complete } = scripted([{ content: 'thinking out loud' }]);
     const d = await provider(complete).next(input, emptyHistory());
