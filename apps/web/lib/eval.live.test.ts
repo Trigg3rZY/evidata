@@ -24,6 +24,7 @@ import {
   formatReport,
   scoreCase,
   scoreReport,
+  type AgentRunEvent,
   type CaseResult,
   type TurnTrace,
 } from '@evidata/agent';
@@ -36,23 +37,13 @@ import {
 
 const cfg = openAIConfigFromEnv(process.env);
 
-function traceFromAsk(result: AskResult, usage: ProviderUsage): TurnTrace {
-  if (result.kind === 'message') {
-    return {
-      route: result.message.sql ? 'draft_sql' : 'reply',
-      status: 'message',
-      queries: 0,
-      modelCalls: usage.calls,
-      tokens: usage.totalTokens,
-    };
-  }
-  return {
-    route: 'answer',
-    status: result.answer.status,
-    queries: result.answer.evidence.length,
-    modelCalls: usage.calls,
-    tokens: usage.totalTokens,
-  };
+// `queries` comes from the run's ok-query events (a Message carries no queryRuns on
+// AskResult), so a message that ran queries before replying is counted, not hidden.
+function traceFromAsk(result: AskResult, usage: ProviderUsage, queries: number): TurnTrace {
+  const base = { queries, modelCalls: usage.calls, tokens: usage.totalTokens };
+  return result.kind === 'message'
+    ? { route: result.message.sql ? 'draft_sql' : 'reply', status: 'message', ...base }
+    : { route: 'answer', status: result.answer.status, ...base };
 }
 
 describe.runIf(cfg)('agent eval — live model', () => {
@@ -89,11 +80,17 @@ describe.runIf(cfg)('agent eval — live model', () => {
     const results: CaseResult[] = [];
     for (const c of EVAL_CASES) {
       const provider = new OpenAIAgentProvider(cfg!); // one stateful provider per turn
+      let queries = 0;
       const result = await service.ask(
         { dataSourceId: 'sample', question: c.question, language: c.lang },
-        { provider },
+        {
+          provider,
+          sink: (e: AgentRunEvent) => {
+            if (e.type === 'query' && e.status === 'ok') queries += 1;
+          },
+        },
       );
-      results.push(scoreCase(c, traceFromAsk(result, provider.usage)));
+      results.push(scoreCase(c, traceFromAsk(result, provider.usage, queries)));
     }
     const report = scoreReport(results);
     // The report IS the deliverable — print it for inspection.

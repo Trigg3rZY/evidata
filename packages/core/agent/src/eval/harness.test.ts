@@ -10,7 +10,7 @@ import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
 import { AgentRunner, type AgentRunnerDeps } from '../runner';
 import { fixtureFor } from '../scenarios';
-import type { AgentContext, AgentInput, AgentProvider } from '../types';
+import type { AgentContext, AgentInput, AgentProvider, QueryRunRecord } from '../types';
 import { EVAL_CASES } from './cases';
 import {
   formatReport,
@@ -65,6 +65,27 @@ describe('eval scoring (pure)', () => {
     expect(report.avgQueries).toBeCloseTo((0 + 4 + 2) / 3);
     expect(report.avgTokens).toBeCloseTo((0 + 300 + 200) / 3);
     expect(formatReport(report)).toContain('routing 100%');
+  });
+
+  it('counts queries on a Message that ran queries first (no hidden execution)', () => {
+    const qr: QueryRunRecord = {
+      id: 'qr1',
+      connectorId: 'c',
+      sql: 'select 1',
+      status: 'ok',
+      rowCount: 1,
+      truncated: false,
+      elapsedMs: 1,
+      evidenceRef: 'E1',
+    };
+    const t = runResultToTrace(
+      { kind: 'message', message: { text: 'hi' }, queryRuns: [qr] },
+      { calls: 2, totalTokens: 50 },
+    );
+    expect(t).toMatchObject({ route: 'reply', status: 'message', queries: 1 });
+    // a zero-query case must then FAIL — the guardrail catches the execution.
+    const offtopic = EVAL_CASES.find((c) => c.id === 'offtopic-zh')!;
+    expect(scoreCase(offtopic, t).pass).toBe(false);
   });
 });
 

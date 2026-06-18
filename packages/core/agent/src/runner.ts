@@ -97,7 +97,7 @@ export class AgentRunner {
     // Greeting guard (spec 13 §3): an unmistakable greeting gets a canned reply with
     // ZERO model calls or queries — the deterministic backstop for "你好" over-exploring.
     if (isGreeting(input.question)) {
-      return { kind: 'message', message: { text: greetingReply(input.language) } };
+      return { kind: 'message', message: { text: greetingReply(input.language) }, queryRuns: [] };
     }
 
     const history: AgentHistory = { toolResults: [], reasoning: [] };
@@ -155,9 +155,12 @@ export class AgentRunner {
 
       if (decision.kind === 'message') {
         // A conversational reply / drafted SQL — no data claim, no gate, no validate.
+        // Carry any queryRuns that ran before it: a Message should be zero-query, but
+        // if the model queried first, the count must still be reported (not hidden).
         return {
           kind: 'message',
           message: { text: decision.text, ...(decision.sql ? { sql: decision.sql } : {}) },
+          queryRuns,
         };
       }
 

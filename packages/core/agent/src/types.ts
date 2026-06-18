@@ -138,12 +138,10 @@ export interface AgentMessage {
   sql?: string;
 }
 
-/** Outcome of one turn — an evidence-backed Answer, or a conversational Message. */
+/** Outcome of one turn — an evidence-backed Answer, or a conversational Message.
+ *  Both carry `queryRuns`: a Message should normally be zero-query, but if the model
+ *  ran queries before replying, the count must still be reported (so the eval/G4 see
+ *  it) — a Message is not an excuse to hide execution. */
 export type RunResult =
-  | {
-      kind: 'answer';
-      answer: Answer;
-      /** Every executed query, in order (basis of the G4 count). */
-      queryRuns: QueryRunRecord[];
-    }
-  | { kind: 'message'; message: AgentMessage };
+  | { kind: 'answer'; answer: Answer; queryRuns: QueryRunRecord[] }
+  | { kind: 'message'; message: AgentMessage; queryRuns: QueryRunRecord[] };
