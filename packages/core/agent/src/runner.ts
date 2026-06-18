@@ -85,6 +85,7 @@ export class AgentRunner {
 
   async run(input: AgentInput, opts: RunOptions = {}): Promise<RunResult> {
     const { signal } = opts;
+    if (signal?.aborted) throw new RunAbortedError(); // Stop means stop, even before the greeting guard.
     const now = this.deps.now ?? (() => new Date());
     let seq = 0;
     const newId = this.deps.newId ?? ((p: string) => `${p}_${(seq += 1)}`);
