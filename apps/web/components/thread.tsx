@@ -163,12 +163,7 @@ export function Thread({
             <UserBubble text={ex.question} />
             {ex.answer ? (
               <>
-                <AnswerView
-                  answer={ex.answer}
-                  onFollowup={submit}
-                  onRerun={() => submit(ex.question)}
-                  labels={labels}
-                />
+                <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
                 {ex.usage && <UsageFooter usage={ex.usage} />}
               </>
             ) : ex.message ? (
