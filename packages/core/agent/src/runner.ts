@@ -403,7 +403,8 @@ export class AgentRunner {
       return { ...answer, meta: { version: 1, createdAt, isLatest: true } };
     }
     const trigger: VersionTrigger = this.deps.versionTrigger ?? 'followup';
-    const versions = appendAnswerVersion(prior, answer, { createdAt, trigger });
+    const fromVersion = prior.reduce((max, a) => Math.max(max, a.meta.version), 0);
+    const versions = appendAnswerVersion(prior, answer, { createdAt, trigger, fromVersion });
     return versions[versions.length - 1]!;
   }
 }

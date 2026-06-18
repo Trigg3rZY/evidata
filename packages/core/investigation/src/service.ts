@@ -122,17 +122,23 @@ export class InvestigationService {
    * A conversational Message is ephemeral either way (no persistence).
    */
   async ask(params: AskParams, opts: AskOptions): Promise<AskResult> {
-    const rt = this.dataSource(params.dataSourceId);
-
     const isFollowup = !!params.investigationId;
+    let rt: DataSourceRuntime;
     let investigationId: string;
     let history: ConversationTurn[] = [];
+    let priorAnswers: ReadonlyArray<Answer> = [];
     if (params.investigationId) {
       const prior = await this.deps.store.getInvestigation(params.investigationId);
       if (!prior) throw new Error(`Unknown investigation: ${params.investigationId}`);
+      // The data source is bound for the Investigation's lifetime — run against the
+      // STORED one, not the client-supplied params.dataSourceId (which a follow-up
+      // request may omit or get wrong).
+      rt = this.dataSource(prior.dataSourceId);
       investigationId = prior.id;
       history = priorTurns(prior);
+      priorAnswers = prior.answers;
     } else {
+      rt = this.dataSource(params.dataSourceId);
       investigationId = this.newId('inv');
     }
 
@@ -146,6 +152,10 @@ export class InvestigationService {
       now: this.now,
       newId: this.newId,
       ...(opts.sink ? { sink: opts.sink } : {}),
+      // Drive the runner's version stamping so a follow-up records its audit
+      // provenance (createdAfter: { kind: 'followup', fromVersion }); the store
+      // still re-stamps the authoritative version/isLatest.
+      ...(priorAnswers.length ? { priorAnswers, versionTrigger: 'followup' as const } : {}),
     });
 
     // Run first, persist after: a cancelled turn (RunAbortedError) throws here and
