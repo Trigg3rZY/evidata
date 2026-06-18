@@ -4,6 +4,8 @@ export type {
   AskOptions,
   AskParams,
   AskResult,
+  DataSourceOverview,
   DataSourceRuntime,
+  DataSourceSafetyPosture,
   InvestigationServiceDeps,
 } from './service';

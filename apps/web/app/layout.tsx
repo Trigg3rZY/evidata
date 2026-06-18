@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
+import { DataSourceProvider } from '@/lib/data-source-context';
 import { LangProvider } from '@/lib/i18n';
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           enableSystem
           disableTransitionOnChange
         >
-          <LangProvider>{children}</LangProvider>
+          <LangProvider>
+            <DataSourceProvider>{children}</DataSourceProvider>
+          </LangProvider>
         </ThemeProvider>
       </body>
     </html>
