@@ -45,7 +45,6 @@ const dict = {
     notExecuted: 'Draft only — not executed',
     actionCopy: 'Copy',
     actionCopied: 'Copied',
-    actionRerun: 'Rerun',
     // Answer chrome (StatusBadge / ConfidenceMeter / AnswerView / UnblockPathView).
     // AI answer *content* stays in the question's language; only these labels switch.
     statusAnswered: 'Answered',
@@ -97,7 +96,6 @@ const dict = {
     notExecuted: '仅为草稿——未执行',
     actionCopy: '复制',
     actionCopied: '已复制',
-    actionRerun: '重跑',
     statusAnswered: '已回答',
     statusNeedsClarification: '需要澄清',
     statusPartial: '部分回答',
@@ -175,7 +173,7 @@ export interface AnswerLabels {
   evidence: string;
   assumptions: string;
   unblock: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
-  actions: { copy: string; copied: string; rerun: string };
+  actions: { copy: string; copied: string };
 }
 
 /** Resolve the active catalog into a typed `AnswerLabels` bundle. */
@@ -205,6 +203,6 @@ export function answerLabels(t: (key: MessageKey) => string): AnswerLabels {
       recordedForAdmin: t('unblockRecordedForAdmin'),
       notExecuted: t('notExecuted'),
     },
-    actions: { copy: t('actionCopy'), copied: t('actionCopied'), rerun: t('actionRerun') },
+    actions: { copy: t('actionCopy'), copied: t('actionCopied') },
   };
 }

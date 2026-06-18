@@ -16,13 +16,10 @@ import { UnblockPathView } from './unblock-path';
 export function AnswerView({
   answer,
   onFollowup,
-  onRerun,
   labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
-  /** Re-ask the question that produced this answer (appends a new version). */
-  onRerun?: () => void;
   labels: AnswerLabels;
 }) {
   return (
@@ -121,11 +118,9 @@ export function AnswerView({
         </section>
       )}
 
-      {onRerun && (
-        <div className="border-t border-border pt-2">
-          <QuickActions answer={answer} onRerun={onRerun} labels={labels.actions} />
-        </div>
-      )}
+      <div className="border-t border-border pt-2">
+        <QuickActions answer={answer} labels={labels.actions} />
+      </div>
     </article>
   );
 }
