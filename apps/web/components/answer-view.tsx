@@ -17,12 +17,15 @@ export function AnswerView({
   answer,
   onFollowup,
   onInspect,
+  onRerun,
   labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
   /** Open an evidence item in the inspector (right pane); chips are static without it. */
   onInspect?: ((evidence: Evidence) => void) | undefined;
+  /** Regenerate this answer in place (latest answer only). */
+  onRerun?: (() => void) | undefined;
   labels: AnswerLabels;
 }) {
   const byId = new Map(answer.evidence.map((e) => [e.id, e]));
@@ -135,7 +138,7 @@ export function AnswerView({
       )}
 
       <div className="border-t border-border pt-2">
-        <QuickActions answer={answer} labels={labels.actions} />
+        <QuickActions answer={answer} onRerun={onRerun} labels={labels.actions} />
       </div>
     </article>
   );

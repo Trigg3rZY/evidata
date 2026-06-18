@@ -191,6 +191,36 @@ describe('InvestigationService', () => {
     if (followup.kind === 'answer') expect(followup.investigationId).toBe(first.investigationId);
   });
 
+  it('a rerun appends a version with NO new user turn and versionTrigger rerun', async () => {
+    const q = "Why is ACME's ad bill higher this month?";
+    const first = await service.ask(
+      { dataSourceId: 'sample', question: q, language: 'en' },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (first.kind !== 'answer') throw new Error('expected an answer');
+
+    const rerun = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: q,
+        language: 'en',
+        investigationId: first.investigationId,
+        rerun: true,
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (rerun.kind !== 'answer') throw new Error('expected an answer');
+    expect(rerun.investigationId).toBe(first.investigationId);
+    expect(rerun.answer.meta.version).toBe(2);
+    expect(rerun.answer.meta.isLatest).toBe(true);
+    expect(rerun.answer.meta.createdAfter).toEqual({ kind: 'rerun', fromVersion: 1 });
+
+    const thread = await service.getThread(first.investigationId);
+    expect(thread?.answers).toHaveLength(2);
+    expect(thread?.answers.filter((a) => a.meta.isLatest)).toHaveLength(1); // single head
+    expect(thread?.turns.filter((t) => t.role === 'user')).toHaveLength(1); // no new user turn
+  });
+
   it('rejects a follow-up to an unknown investigation', async () => {
     await expect(
       service.ask(

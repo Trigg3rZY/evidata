@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Answer, Evidence, InvestigationWithAnswers } from '@evidata/answer-contract';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
+import { exchangesFrom } from '@/lib/thread-reconstruct';
 import { answerLabels, useI18n } from '@/lib/i18n';
 import {
   useInvestigationStream,
@@ -51,24 +52,6 @@ function StoppedBlock({ label }: { label: string }) {
   );
 }
 
-/** Rebuild the conversation from a stored thread: pair each user question with the
- *  agent turn's answer version (issue #40 — loading a past Investigation). */
-function exchangesFrom(thread: InvestigationWithAnswers): Exchange[] {
-  const byVersion = new Map(thread.answers.map((a) => [a.meta.version, a]));
-  const out: Exchange[] = [];
-  let pendingQuestion: string | undefined;
-  for (const turn of thread.turns) {
-    if (turn.role === 'user') {
-      pendingQuestion = turn.question;
-    } else if (turn.role === 'agent' && turn.answerVersion !== undefined) {
-      const answer = byVersion.get(turn.answerVersion);
-      if (pendingQuestion && answer) out.push({ question: pendingQuestion, answer });
-      pendingQuestion = undefined;
-    }
-  }
-  return out;
-}
-
 export function Thread({
   onClear,
   initialInvestigationId,
@@ -97,6 +80,9 @@ export function Thread({
     initialInvestigationId ?? null,
   );
   const [loading, setLoading] = useState(Boolean(initialInvestigationId));
+  // Set while a Rerun is in flight, so the settle effect replaces the latest
+  // exchange's answer in place instead of appending a new turn (issue #56).
+  const rerunRef = useRef(false);
   // Available data sources + the active one (M0: just "sample"). The composer shows a
   // real selector only when there's >1; the server binds a thread to its source for
   // its lifetime, so changing this only affects new questions.
@@ -144,6 +130,8 @@ export function Thread({
   useEffect(() => {
     if (status !== 'done' && status !== 'error' && status !== 'aborted') return;
     if (!question) return;
+    const wasRerun = rerunRef.current;
+    rerunRef.current = false;
     const settled: Exchange = answer
       ? { question, answer, ...(usage ? { usage } : {}) }
       : message
@@ -151,7 +139,16 @@ export function Thread({
         : status === 'aborted'
           ? { question, stopped: true }
           : { question, error: error ?? t('genericError') };
-    setHistory((h) => [...h, settled]);
+    if (answer && wasRerun) {
+      // Regenerate-in-place: replace the latest exchange's answer (keep its question).
+      setHistory((h) =>
+        h.length > 0
+          ? [...h.slice(0, -1), { ...h[h.length - 1]!, answer, ...(usage ? { usage } : {}) }]
+          : [settled],
+      );
+    } else {
+      setHistory((h) => [...h, settled]);
+    }
     // An Answer establishes/continues the Investigation; later turns continue it,
     // and the history rail refreshes (a new thread appears / order updates).
     if (answer) {
@@ -169,6 +166,11 @@ export function Thread({
       return;
     }
     void ask(q, dataSourceId, lang, investigationId ?? undefined);
+  };
+  // Regenerate the latest answer in place (issue #56): same question, rerun=true.
+  const rerun = (q: string): void => {
+    rerunRef.current = true;
+    void ask(q, dataSourceId, lang, investigationId ?? undefined, true);
   };
   const isEmpty = history.length === 0 && status === 'idle';
   // Badge label: the sample keeps its localized name; any real source shows its own
@@ -197,6 +199,7 @@ export function Thread({
                   answer={ex.answer}
                   onFollowup={submit}
                   onInspect={onInspect}
+                  onRerun={i === history.length - 1 ? () => rerun(ex.question) : undefined}
                   labels={labels}
                 />
                 {ex.usage && <UsageFooter usage={ex.usage} />}
