@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Answer, InvestigationWithAnswers } from '@evidata/answer-contract';
+import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import { answerLabels, useI18n } from '@/lib/i18n';
 import {
   useInvestigationStream,
@@ -97,7 +98,7 @@ export function Thread({
   // real selector only when there's >1; the server binds a thread to its source for
   // its lifetime, so changing this only affects new questions.
   const [dataSources, setDataSources] = useState<ReadonlyArray<{ id: string; name: string }>>([]);
-  const [dataSourceId, setDataSourceId] = useState('sample');
+  const [dataSourceId, setDataSourceId] = useState<string>(SAMPLE_DATA_SOURCE_ID);
   useEffect(() => {
     let cancelled = false;
     fetch('/api/data-sources')
@@ -167,6 +168,11 @@ export function Thread({
     void ask(q, dataSourceId, lang, investigationId ?? undefined);
   };
   const isEmpty = history.length === 0 && status === 'idle';
+  // Badge label: the sample keeps its localized name; any real source shows its own
+  // name (so a single non-sample deployment never mislabels as "Sample").
+  const activeSource = dataSources.find((d) => d.id === dataSourceId);
+  const dataSourceName =
+    activeSource && activeSource.id !== SAMPLE_DATA_SOURCE_ID ? activeSource.name : t('sample');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -239,11 +245,12 @@ export function Thread({
           onStop={stop}
           streaming={status === 'streaming'}
           disabled={status === 'streaming' || loading}
-          dataSourceName={t('sample')}
+          dataSourceName={dataSourceName}
           dataSources={dataSources}
           dataSourceId={dataSourceId}
           onDataSourceChange={setDataSourceId}
           dataSourceLabel={t('dataSource')}
+          sourceLocked={Boolean(investigationId)}
           placeholder={t('composerPlaceholder')}
           stopLabel={t('stop')}
         />

@@ -13,6 +13,7 @@ export function Composer({
   dataSourceId,
   onDataSourceChange,
   dataSourceLabel,
+  sourceLocked,
   placeholder,
   stopLabel,
 }: {
@@ -26,6 +27,8 @@ export function Composer({
   dataSourceId?: string;
   onDataSourceChange?: (id: string) => void;
   dataSourceLabel?: string;
+  /** Lock the selector once a thread is active — a source is bound for its lifetime. */
+  sourceLocked?: boolean;
   placeholder: string;
   stopLabel: string;
 }) {
@@ -65,8 +68,9 @@ export function Composer({
             <select
               value={dataSourceId}
               onChange={(e) => onDataSourceChange?.(e.target.value)}
+              disabled={sourceLocked}
               aria-label={dataSourceLabel ?? 'Data source'}
-              className="bg-transparent text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="bg-transparent text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-100"
             >
               {dataSources.map((d) => (
                 <option key={d.id} value={d.id}>
