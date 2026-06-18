@@ -56,6 +56,9 @@ export interface AgentHistory {
   /** Set by the runner when a `final` draft failed contract validation, so the
    *  provider can correct it once before the runner downgrades (spec 03 §1). */
   validationFeedback?: string[];
+  /** Set by the runner on the last budget step: the provider should answer NOW
+   *  (final_answer) with the evidence gathered rather than keep exploring. */
+  mustFinalize?: boolean;
 }
 
 export interface QueryProposal {

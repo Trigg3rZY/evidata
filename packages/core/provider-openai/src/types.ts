@@ -22,11 +22,13 @@ export interface ToolDef {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }
 
+export type ToolChoice = 'required' | 'auto' | { type: 'function'; function: { name: string } };
+
 export interface CompletionRequest {
   model: string;
   messages: ChatMessage[];
   tools: ToolDef[];
-  tool_choice: 'required' | 'auto';
+  tool_choice: ToolChoice;
   temperature: number;
   max_tokens: number;
 }

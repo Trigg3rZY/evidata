@@ -229,6 +229,36 @@ describe('re-prompt on invalid final (spec 03 §1)', () => {
   });
 });
 
+describe('force-finalize on the last budget step', () => {
+  it('answers with gathered evidence instead of exhausting the budget', async () => {
+    const goodSql =
+      "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'";
+    // A model that would keep exploring forever — but finalizes when told it's the last step.
+    const provider: AgentProvider = {
+      next: (_input, history) => {
+        if (history.mustFinalize) {
+          return Promise.resolve({
+            kind: 'final',
+            draft: {
+              status: 'Answered',
+              confidence: 'Low',
+              directAnswer: 'best effort',
+              confidenceReason: 'reached the step limit',
+              keyFindings: [{ text: 'computed', evidenceIds: ['E1'] }],
+            },
+          });
+        }
+        return Promise.resolve({ kind: 'query', proposal: { purpose: 'explore', sql: goodSql } });
+      },
+    };
+    const { answer } = await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(
+      input('open-ended'),
+    );
+    expect(answer.status).toBe('Answered'); // an answer, not NoReliableAnswer
+    expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
 describe('executor error recovery', () => {
   it('records a failed query, feeds the error back, and still finishes', async () => {
     // The gate allows both (read-only, authorized table); the first SQL fails in

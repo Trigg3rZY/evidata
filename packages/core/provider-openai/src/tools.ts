@@ -75,7 +75,7 @@ export const AGENT_TOOLS: ToolDef[] = [
         type: 'object',
         additionalProperties: false,
         properties: {
-          status: { type: 'string', enum: ['Answered', 'Partial'] },
+          status: { type: 'string', enum: ['Answered'] },
           directAnswer: { type: 'string' },
           confidence: { type: 'string', enum: ['High', 'Medium', 'Low', 'CannotDetermine'] },
           confidenceReason: { type: 'string' },

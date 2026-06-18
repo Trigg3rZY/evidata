@@ -94,6 +94,9 @@ export class AgentRunner {
     let finalRetried = false;
 
     for (let iter = 0; iter < maxIterations; iter++) {
+      // On the last step, ask the provider to answer with what it has rather than
+      // keep exploring and run out of budget with no answer.
+      history.mustFinalize = iter === maxIterations - 1;
       const decision = await this.deps.provider.next(input, history);
 
       if (decision.kind === 'reasoning') {
