@@ -66,9 +66,12 @@ export interface QueryProposal {
   sql: string;
 }
 
-/** A final, answered draft. The runner attaches evidence, version meta, and validates. */
+/** A final, answered draft. The runner attaches evidence, version meta, and validates.
+ *  Always 'Answered': a non-'Answered' status requires an Unblock Path (contract),
+ *  which the `final` decision can't carry — partial/blocked outcomes go through the
+ *  `unblock` decision instead. */
 export interface AnswerDraft {
-  status: 'Answered' | 'Partial';
+  status: 'Answered';
   directAnswer: LocalizedText;
   confidence: Confidence;
   confidenceReason: LocalizedText;

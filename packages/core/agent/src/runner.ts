@@ -123,6 +123,9 @@ export class AgentRunner {
         const violations = validateAll(candidate);
         if (violations.length === 0) return { answer: candidate, queryRuns };
         // Re-prompt the provider once with the violations before downgrading (spec 03 §1).
+        // On the last step the loop exits before the re-prompt can run, so the retry
+        // is forfeited and we fall through to the budget-exhausted non-answer — the
+        // honest outcome when there's no budget left to correct.
         if (!finalRetried) {
           finalRetried = true;
           history.validationFeedback = violations;

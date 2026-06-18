@@ -257,6 +257,35 @@ describe('force-finalize on the last budget step', () => {
     expect(answer.status).toBe('Answered'); // an answer, not NoReliableAnswer
     expect(validateAnswer(answer)).toEqual([]);
   });
+
+  it('fails closed when the forced final is invalid (no budget left to retry)', async () => {
+    const goodSql =
+      "select sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted'";
+    // The forced final cites evidence that was never gathered → invalid, and the
+    // loop has no step left to re-prompt, so it downgrades to an honest non-answer.
+    const provider: AgentProvider = {
+      next: (_input, history) => {
+        if (history.mustFinalize) {
+          return Promise.resolve({
+            kind: 'final',
+            draft: {
+              status: 'Answered',
+              confidence: 'High',
+              directAnswer: 'overconfident',
+              confidenceReason: 'ignored the budget',
+              keyFindings: [{ text: 'cites nothing real', evidenceIds: ['E9'] }],
+            },
+          });
+        }
+        return Promise.resolve({ kind: 'query', proposal: { purpose: 'explore', sql: goodSql } });
+      },
+    };
+    const { answer } = await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(
+      input('open-ended'),
+    );
+    expect(answer.status).toBe('NoReliableAnswer');
+    expect(validateAnswer(answer)).toEqual([]);
+  });
 });
 
 describe('executor error recovery', () => {

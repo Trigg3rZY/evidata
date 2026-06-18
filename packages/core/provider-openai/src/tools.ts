@@ -1,7 +1,8 @@
 /**
  * Tool/function definitions + the system prompt. The model drives the loop by
- * calling exactly one of these per turn (tool_choice='required'); the
- * AgentRunner — not the model — runs the SafetyGate + execution behind `run_sql`.
+ * calling exactly one of these per turn (tool_choice='required', or pinned to
+ * final_answer on the last budget step); the AgentRunner — not the model — runs
+ * the SafetyGate + execution behind `run_sql`.
  */
 import type { AgentInput } from '@evidata/agent';
 import type { ToolDef } from './types';
