@@ -139,16 +139,22 @@ export function Thread({
         : status === 'aborted'
           ? { question, stopped: true }
           : { question, error: error ?? t('genericError') };
-    if (answer && wasRerun) {
-      // Regenerate-in-place: replace the latest exchange's answer (keep its question).
-      setHistory((h) =>
-        h.length > 0
-          ? [...h.slice(0, -1), { ...h[h.length - 1]!, answer, ...(usage ? { usage } : {}) }]
-          : [settled],
-      );
-    } else {
-      setHistory((h) => [...h, settled]);
+    if (wasRerun) {
+      // Regenerate-in-place: on success, replace the latest exchange's answer; on a
+      // failed/stopped rerun, keep the existing answer (never append a spurious turn).
+      if (answer) {
+        setHistory((h) =>
+          h.length > 0
+            ? [...h.slice(0, -1), { ...h[h.length - 1]!, answer, ...(usage ? { usage } : {}) }]
+            : [settled],
+        );
+        setInvestigationId(answer.investigationId);
+        onCreated?.();
+      }
+      reset();
+      return;
     }
+    setHistory((h) => [...h, settled]);
     // An Answer establishes/continues the Investigation; later turns continue it,
     // and the history rail refreshes (a new thread appears / order updates).
     if (answer) {

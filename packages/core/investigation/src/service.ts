@@ -83,7 +83,9 @@ function deriveTitle(question: string): string {
 /**
  * Reconstruct ordered (question → Direct Answer) pairs from a stored thread, to
  * seed a follow-up's model context. Walks turns in order, pairing each user
- * question with the next agent turn's answer version (by `meta.version`).
+ * question with its agent answer version. A rerun (agent turn with no preceding
+ * user turn) replaces the previous pair's answer with the newer version, so a
+ * later follow-up sees the latest regenerated answer, not the stale one (#56).
  */
 function priorTurns(inv: InvestigationWithAnswers): ConversationTurn[] {
   const byVersion = new Map(inv.answers.map((a) => [a.meta.version, a]));
@@ -94,10 +96,17 @@ function priorTurns(inv: InvestigationWithAnswers): ConversationTurn[] {
       pendingQuestion = t.question;
     } else if (t.role === 'agent' && t.answerVersion !== undefined) {
       const answer = byVersion.get(t.answerVersion);
-      if (pendingQuestion && answer?.directAnswer) {
+      if (!answer?.directAnswer) continue;
+      if (pendingQuestion !== undefined) {
         turns.push({ question: pendingQuestion, answer: answer.directAnswer });
+        pendingQuestion = undefined;
+      } else if (turns.length > 0) {
+        // Rerun: latest version for the prior question.
+        turns[turns.length - 1] = {
+          question: turns[turns.length - 1]!.question,
+          answer: answer.directAnswer,
+        };
       }
-      pendingQuestion = undefined;
     }
   }
   return turns;
@@ -129,6 +138,7 @@ export class InvestigationService {
     const isRerun = Boolean(params.rerun && params.investigationId);
     let rt: DataSourceRuntime;
     let investigationId: string;
+    let question = params.question;
     let history: ConversationTurn[] = [];
     let priorAnswers: ReadonlyArray<Answer> = [];
     if (params.investigationId) {
@@ -141,9 +151,14 @@ export class InvestigationService {
       investigationId = prior.id;
       history = priorTurns(prior);
       priorAnswers = prior.answers;
-      // A rerun regenerates the latest question, so drop that turn from the context
-      // (the model re-answers it fresh against the earlier turns).
-      if (isRerun) history = history.slice(0, -1);
+      if (isRerun) {
+        // A rerun regenerates the latest question authoritatively: use the latest
+        // STORED user turn (ignore a stale client-sent question), and drop that turn
+        // from the context so the model re-answers it fresh against the earlier turns.
+        const lastQuestion = [...prior.turns].reverse().find((t) => t.role === 'user')?.question;
+        if (lastQuestion) question = lastQuestion;
+        history = history.slice(0, -1);
+      }
     } else {
       rt = this.dataSource(params.dataSourceId);
       investigationId = this.newId('inv');
@@ -173,7 +188,7 @@ export class InvestigationService {
     const result = await runner.run(
       {
         investigationId,
-        question: params.question,
+        question,
         language: params.language,
         schema: rt.schema,
         context: rt.context,
