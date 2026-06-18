@@ -3,6 +3,7 @@ import type { Answer } from '@evidata/answer-contract';
 import type { AnswerLabels } from '@/lib/i18n';
 import { ConfidenceMeter } from './confidence-meter';
 import { EvidenceSection } from './evidence-section';
+import { QuickActions } from './quick-actions';
 import { StatusBadge } from './status-badge';
 import { UnblockPathView } from './unblock-path';
 
@@ -15,10 +16,13 @@ import { UnblockPathView } from './unblock-path';
 export function AnswerView({
   answer,
   onFollowup,
+  onRerun,
   labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
+  /** Re-ask the question that produced this answer (appends a new version). */
+  onRerun?: () => void;
   labels: AnswerLabels;
 }) {
   return (
@@ -115,6 +119,12 @@ export function AnswerView({
             </button>
           ))}
         </section>
+      )}
+
+      {onRerun && (
+        <div className="border-t border-border pt-2">
+          <QuickActions answer={answer} onRerun={onRerun} labels={labels.actions} />
+        </div>
       )}
     </article>
   );
