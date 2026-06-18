@@ -15,6 +15,7 @@ interface Exchange {
   answer?: Answer;
   error?: string;
   usage?: UsageInfo;
+  stopped?: boolean;
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -35,6 +36,14 @@ function ErrorBlock({ error }: { error: string }) {
   );
 }
 
+function StoppedBlock({ label }: { label: string }) {
+  return (
+    <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
 export function Thread({ onClear }: { onClear: () => void }) {
   const { t, lang } = useI18n();
   const labels = useMemo(() => answerLabels(t), [t]);
@@ -42,17 +51,19 @@ export function Thread({ onClear }: { onClear: () => void }) {
     requestFailed: t('errorRequestFailed'),
     networkError: t('errorNetworkInterrupted'),
   });
-  const { status, question, progress, answer, error, usage, ask, reset } = stream;
+  const { status, question, progress, answer, error, usage, ask, reset, stop } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
 
-  // When a turn settles (answered OR errored), move it into the conversation and
-  // free the stream for the next question — the thread accumulates, never wipes.
+  // When a turn settles (answered, errored, or stopped), move it into the
+  // conversation and free the stream — the thread accumulates, never wipes.
   useEffect(() => {
-    if (status !== 'done' && status !== 'error') return;
+    if (status !== 'done' && status !== 'error' && status !== 'aborted') return;
     if (!question) return;
     const settled: Exchange = answer
       ? { question, answer, ...(usage ? { usage } : {}) }
-      : { question, error: error ?? t('genericError') };
+      : status === 'aborted'
+        ? { question, stopped: true }
+        : { question, error: error ?? t('genericError') };
     setHistory((h) => [...h, settled]);
     reset();
   }, [status, question, answer, error, usage, reset, t]);
@@ -81,6 +92,8 @@ export function Thread({ onClear }: { onClear: () => void }) {
                 <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
                 {ex.usage && <UsageFooter usage={ex.usage} />}
               </>
+            ) : ex.stopped ? (
+              <StoppedBlock label={t('stopped')} />
             ) : (
               <ErrorBlock error={ex.error ?? t('genericError')} />
             )}
@@ -99,6 +112,8 @@ export function Thread({ onClear }: { onClear: () => void }) {
               </>
             ) : status === 'error' ? (
               <ErrorBlock error={error ?? t('genericError')} />
+            ) : status === 'aborted' ? (
+              <StoppedBlock label={t('stopped')} />
             ) : (
               <ReasoningStream progress={progress} />
             )}
@@ -113,9 +128,12 @@ export function Thread({ onClear }: { onClear: () => void }) {
       <div className="sticky bottom-0 bg-background pb-4 pt-2">
         <Composer
           onSubmit={submit}
+          onStop={stop}
+          streaming={status === 'streaming'}
           disabled={status === 'streaming'}
           dataSourceName={t('sample')}
           placeholder={t('composerPlaceholder')}
+          stopLabel={t('stop')}
         />
       </div>
     </div>

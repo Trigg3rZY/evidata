@@ -288,6 +288,40 @@ describe('force-finalize on the last budget step', () => {
   });
 });
 
+describe('cancellation (spec 13 §4)', () => {
+  it('throws AbortError without calling the provider when already aborted', async () => {
+    let calls = 0;
+    const provider: AgentProvider = {
+      next: () => {
+        calls += 1;
+        return Promise.resolve({ kind: 'reasoning', label: 'x' });
+      },
+    };
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      new AgentRunner(deps(provider)).run(input('endless'), { signal: controller.signal }),
+    ).rejects.toThrow(/abort/i);
+    expect(calls).toBe(0);
+  });
+
+  it('stops between steps once aborted (no further provider calls)', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const provider: AgentProvider = {
+      next: () => {
+        calls += 1;
+        controller.abort(); // abort while "thinking"
+        return Promise.resolve({ kind: 'reasoning', label: 'thinking…' });
+      },
+    };
+    await expect(
+      new AgentRunner(deps(provider)).run(input('endless'), { signal: controller.signal }),
+    ).rejects.toThrow(/abort/i);
+    expect(calls).toBe(1); // first step ran; the loop-top check stops the second
+  });
+});
+
 describe('executor error recovery', () => {
   it('records a failed query, feeds the error back, and still finishes', async () => {
     // The gate allows both (read-only, authorized table); the first SQL fails in

@@ -77,6 +77,7 @@ export async function askStream(
   deps: AskStreamDeps,
   body: AskBody,
   write: (chunk: string) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
     const provider = deps.providerFor(body.question);
@@ -85,6 +86,7 @@ export async function askStream(
       {
         provider,
         sink: (event: AgentRunEvent) => write(sseEvent(event.type, event)),
+        ...(signal ? { signal } : {}),
       },
     );
     write(sseEvent('answer', answer));
@@ -93,7 +95,13 @@ export async function askStream(
     const usage = readUsage(provider);
     if (usage) write(sseEvent('usage', { ...usage, queries: answer.evidence.length }));
     write(sseEvent('done', {}));
-  } catch {
+  } catch (e) {
+    // A cancelled turn (client Stop / disconnect) is not an error — emit `aborted`
+    // (best-effort; the client may already be gone) and persist nothing.
+    if (e instanceof Error && e.name === 'AbortError') {
+      write(sseEvent('aborted', {}));
+      return;
+    }
     write(sseEvent('error', { message: 'The investigation could not be completed.' }));
   }
 }

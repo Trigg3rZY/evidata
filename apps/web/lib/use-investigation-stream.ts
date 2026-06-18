@@ -5,7 +5,7 @@ import type { Answer } from '@evidata/answer-contract';
 import { parseSSE } from './sse';
 import type { Lang } from './ask-stream';
 
-export type StreamStatus = 'idle' | 'streaming' | 'done' | 'error';
+export type StreamStatus = 'idle' | 'streaming' | 'done' | 'error' | 'aborted';
 
 export interface ProgressStep {
   kind: 'reasoning' | 'query';
@@ -74,6 +74,8 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
       return { ...state, usage: JSON.parse(data) as UsageInfo };
     case 'done':
       return { ...state, status: 'done' };
+    case 'aborted':
+      return { ...state, status: 'aborted' };
     case 'error': {
       const { message } = JSON.parse(data) as { message: string };
       return { ...state, status: 'error', error: message };
@@ -86,6 +88,8 @@ function reduce(state: StreamState, event: string, data: string): StreamState {
 export interface UseInvestigationStream extends StreamState {
   ask: (question: string, dataSourceId?: string, language?: Lang) => Promise<void>;
   reset: () => void;
+  /** Interrupt the in-flight turn: aborts the request (the server stops too) and marks it stopped. */
+  stop: () => void;
 }
 
 /**
@@ -114,6 +118,14 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
   const reset = useCallback(() => {
     controllerRef.current?.abort();
     setState(INITIAL);
+  }, []);
+
+  // Stop the current turn: abort the request (the route's req.signal fires, so the
+  // server halts the runner too) and mark it stopped. The ask() catch sees the
+  // abort and returns without overwriting this terminal state.
+  const stop = useCallback(() => {
+    controllerRef.current?.abort();
+    setState((s) => (s.status === 'streaming' ? { ...s, status: 'aborted' } : s));
   }, []);
 
   const ask = useCallback(
@@ -165,5 +177,5 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
     [],
   );
 
-  return { ...state, ask, reset };
+  return { ...state, ask, reset, stop };
 }

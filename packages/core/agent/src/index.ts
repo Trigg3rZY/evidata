@@ -10,6 +10,7 @@ export {
   NEEDS_TIMERANGE,
 } from './scenarios';
 export { resolveUnblock, gateRejectToMissing, type UnblockResolution } from './unblock';
+export { RunAbortedError } from './types';
 export type {
   AgentContext,
   AgentDecision,
@@ -20,6 +21,7 @@ export type {
   AnswerDraft,
   QueryProposal,
   QueryRunRecord,
+  RunOptions,
   RunResult,
   ToolResult,
 } from './types';

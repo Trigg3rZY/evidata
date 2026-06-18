@@ -53,6 +53,8 @@ export interface AskParams {
 export interface AskOptions {
   provider: AgentProvider;
   sink?: (event: AgentRunEvent) => void;
+  /** Cancels the in-flight turn (client Stop / disconnect). An aborted run persists nothing. */
+  signal?: AbortSignal;
 }
 
 export interface AskResult {
@@ -86,12 +88,6 @@ export class InvestigationService {
     const rt = this.dataSource(params.dataSourceId);
     const investigationId = this.newId('inv');
 
-    await this.deps.store.createInvestigation({
-      id: investigationId,
-      dataSourceId: rt.id,
-      title: deriveTitle(params.question),
-    });
-
     const runner = new AgentRunner({
       provider: opts.provider,
       connector: rt.connector,
@@ -104,12 +100,24 @@ export class InvestigationService {
       ...(opts.sink ? { sink: opts.sink } : {}),
     });
 
-    const result = await runner.run({
-      investigationId,
-      question: params.question,
-      language: params.language,
-      schema: rt.schema,
-      context: rt.context,
+    // Run first, persist after: a cancelled turn (RunAbortedError) throws here and
+    // nothing is written — no orphan Investigation (spec 13 §4). The id is generated,
+    // not persisted, so it can still appear on streamed evidence during the run.
+    const result = await runner.run(
+      {
+        investigationId,
+        question: params.question,
+        language: params.language,
+        schema: rt.schema,
+        context: rt.context,
+      },
+      { ...(opts.signal ? { signal: opts.signal } : {}) },
+    );
+
+    await this.deps.store.createInvestigation({
+      id: investigationId,
+      dataSourceId: rt.id,
+      title: deriveTitle(params.question),
     });
 
     const answer = await this.deps.store.saveAnswer({

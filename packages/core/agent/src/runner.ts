@@ -26,9 +26,11 @@ import type {
   AgentRunEvent,
   AnswerDraft,
   QueryRunRecord,
+  RunOptions,
   RunResult,
   ToolResult,
 } from './types';
+import { RunAbortedError } from './types';
 import { gateRejectToMissing, resolveUnblock, type UnblockResolution } from './unblock';
 import type { Connector, Redactor, SafetyGate } from './deps';
 import {
@@ -79,7 +81,8 @@ function validateAll(answer: Answer): string[] {
 export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
-  async run(input: AgentInput): Promise<RunResult> {
+  async run(input: AgentInput, opts: RunOptions = {}): Promise<RunResult> {
+    const { signal } = opts;
     const now = this.deps.now ?? (() => new Date());
     let seq = 0;
     const newId = this.deps.newId ?? ((p: string) => `${p}_${(seq += 1)}`);
@@ -123,12 +126,17 @@ export class AgentRunner {
     };
 
     for (let iter = 0; iter < maxIterations; iter++) {
+      // Cancellation (spec 13 §4): stop between steps so we issue no further model
+      // call or query once the caller aborts. pglite queries are short, so a
+      // between-steps check + cancelling the in-flight model fetch (via `signal`
+      // passed to provider.next) is sufficient; executor-level cancel is M1 (08 §2.1).
+      if (signal?.aborted) throw new RunAbortedError();
       // Over the last two steps, ask the provider to answer with what it has rather
       // than keep exploring and run out of budget with no answer. Two steps (not one)
       // leaves room for the single re-prompt retry below if the forced final is
       // invalid — otherwise a forced answer gets no chance to meet the contract.
       history.mustFinalize = iter >= maxIterations - 2;
-      const decision = await this.deps.provider.next(input, history);
+      const decision = await this.deps.provider.next(input, history, signal);
 
       if (decision.kind === 'reasoning') {
         sink({ type: 'reasoning', label: decision.label });

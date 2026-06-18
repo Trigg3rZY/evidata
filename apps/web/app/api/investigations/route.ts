@@ -35,7 +35,14 @@ export async function POST(req: Request): Promise<Response> {
         }
       };
       // Real provider when configured (AGENT_PROVIDER=openai), else the FixtureProvider.
-      await askStream({ service: rt.service, providerFor: makeProvider }, parsed, write);
+      // `req.signal` fires on client disconnect / Stop, cancelling the in-flight run
+      // so the server stops spending (spec 13 §4).
+      await askStream(
+        { service: rt.service, providerFor: makeProvider },
+        parsed,
+        write,
+        req.signal,
+      );
       if (!closed) controller.close();
     },
     cancel() {
