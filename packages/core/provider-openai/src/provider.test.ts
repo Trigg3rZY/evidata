@@ -284,6 +284,18 @@ describe('OpenAIAgentProvider', () => {
     expect(d.draft.directAnswer).toContain('第二行');
     expect(d.draft.keyFindings).toHaveLength(1);
   });
+
+  it('fails closed (empty draft) on the known repair gap — never a silently-wrong answer', async () => {
+    // A content quote immediately before a structural char ("对",) is misread as the
+    // terminator and NOT repaired. The draft must come back empty (→ contract reject
+    // / honest non-answer), not silently altered. See lenientJson KNOWN GAP.
+    const raw =
+      '{"status":"Answered","directAnswer":"他说"对",然后离开了","confidence":"High","confidenceReason":"r","keyFindings":[{"text":"f","evidenceIds":["E1"]}]}';
+    const d = await provider(scripted([rawFinal(raw)]).complete).next(input, emptyHistory());
+    if (d.kind !== 'final') throw new Error('expected final');
+    expect(d.draft.directAnswer).toBe('');
+    expect(d.draft.keyFindings).toHaveLength(0);
+  });
 });
 
 describe('openAIConfigFromEnv', () => {
@@ -394,5 +406,17 @@ describe('fetchComplete transient retry', () => {
       /aborted/i,
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a 200 with a malformed body (not transient) — fails the turn', async () => {
+    const badBody = {
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+    } as unknown as Response;
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(badBody);
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchComplete(cfg)(req, {})).rejects.toThrow(/JSON/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

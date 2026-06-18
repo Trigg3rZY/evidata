@@ -54,7 +54,8 @@ export interface AgentRunnerDeps {
   sink?: (e: AgentRunEvent) => void;
   /** Per-turn step budget (provider↔execute turns). Default 16 — generous enough
    *  for a real model to explore multi-step before finalizing; fixtures use far
-   *  fewer. Tighten per data source/policy if cost matters. */
+   *  fewer. The last two steps are the force-finalize window (answer now, plus one
+   *  contract retry), so ~14 are free exploration. Tighten per policy if cost matters. */
   maxIterations?: number;
   /** Prior versions for a follow-up turn; empty ⇒ this is v1. */
   priorAnswers?: ReadonlyArray<Answer>;
