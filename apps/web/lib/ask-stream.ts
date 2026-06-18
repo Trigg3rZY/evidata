@@ -6,6 +6,7 @@
  */
 import type { AgentProvider, AgentRunEvent } from '@evidata/agent';
 import type { InvestigationService } from '@evidata/investigation';
+import type { ProviderUsage } from '@evidata/provider-openai';
 
 export type Lang = 'en' | 'zh-CN';
 
@@ -61,6 +62,12 @@ export interface AskStreamDeps {
   providerFor: (question: string) => AgentProvider;
 }
 
+/** Read cumulative cost off a provider that reports it (the real one), else null. */
+function readUsage(provider: AgentProvider): ProviderUsage | null {
+  const usage = (provider as Partial<{ usage: ProviderUsage }>).usage;
+  return usage && usage.calls > 0 ? usage : null;
+}
+
 /**
  * Run one Ask Data turn, writing SSE frames via `write`. Streams `reasoning`/
  * `query` events as they occur, then `answer` + `done`. Never throws — a failure
@@ -72,14 +79,19 @@ export async function askStream(
   write: (chunk: string) => void,
 ): Promise<void> {
   try {
+    const provider = deps.providerFor(body.question);
     const { answer } = await deps.service.ask(
       { dataSourceId: body.dataSourceId, question: body.question, language: body.language },
       {
-        provider: deps.providerFor(body.question),
+        provider,
         sink: (event: AgentRunEvent) => write(sseEvent(event.type, event)),
       },
     );
     write(sseEvent('answer', answer));
+    // Cost transparency: when the real model ran, report tokens + round-trips +
+    // queries so the UI can show what the turn cost (fixtures report nothing).
+    const usage = readUsage(provider);
+    if (usage) write(sseEvent('usage', { ...usage, queries: answer.evidence.length }));
     write(sseEvent('done', {}));
   } catch {
     write(sseEvent('error', { message: 'The investigation could not be completed.' }));

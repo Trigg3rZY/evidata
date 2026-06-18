@@ -10,7 +10,7 @@ import {
 } from '@evidata/connector-sample';
 import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
-import { fixtureFor } from '@evidata/agent';
+import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { InvestigationService } from '@evidata/investigation';
 import { askStream, parseAskBody, pickScenario, sseEvent } from './ask-stream';
 
@@ -97,5 +97,38 @@ describe('askStream (integration over the real Sample)', () => {
     const text = await collect('anything', 'does-not-exist');
     expect(text).toContain('event: error');
     expect(text).not.toContain('Unknown data source'); // no raw internals leaked
+  });
+
+  it('emits no usage frame for the fixture provider (it reports no cost)', async () => {
+    const text = await collect("Why is ACME's ad bill higher this month than last?");
+    expect(text).not.toContain('event: usage');
+  });
+
+  it('emits a usage frame (before done) when the provider reports cost', async () => {
+    // A provider that ends the turn immediately and reports cumulative usage.
+    const provider: AgentProvider & { usage: unknown } = {
+      next: () =>
+        Promise.resolve({
+          kind: 'unblock',
+          missing: [{ kind: 'insufficient_results', description: 'out of scope' }],
+        }),
+      usage: { promptTokens: 40, completionTokens: 8, totalTokens: 48, calls: 1 },
+    };
+    const chunks: string[] = [];
+    await askStream(
+      { service, providerFor: () => provider },
+      { dataSourceId: 'sample', question: 'hi', language: 'en' },
+      (c) => chunks.push(c),
+    );
+    const text = chunks.join('');
+    expect(text).toContain('event: usage');
+    const frame = text.split('\n\n').find((f) => f.startsWith('event: usage'))!;
+    expect(JSON.parse(frame.slice(frame.indexOf('data: ') + 6))).toMatchObject({
+      totalTokens: 48,
+      calls: 1,
+      queries: 0,
+    });
+    // usage precedes done
+    expect(text.indexOf('event: usage')).toBeLessThan(text.indexOf('event: done'));
   });
 });
