@@ -9,6 +9,10 @@ export function Composer({
   streaming,
   disabled,
   dataSourceName,
+  dataSources,
+  dataSourceId,
+  onDataSourceChange,
+  dataSourceLabel,
   placeholder,
   stopLabel,
 }: {
@@ -17,6 +21,11 @@ export function Composer({
   streaming?: boolean;
   disabled?: boolean;
   dataSourceName: string;
+  /** Available sources; a real selector renders only when there's more than one. */
+  dataSources?: ReadonlyArray<{ id: string; name: string }>;
+  dataSourceId?: string;
+  onDataSourceChange?: (id: string) => void;
+  dataSourceLabel?: string;
   placeholder: string;
   stopLabel: string;
 }) {
@@ -50,10 +59,28 @@ export function Composer({
         className="w-full resize-none rounded-2xl bg-transparent px-4 pt-3 text-sm outline-none placeholder:text-muted-foreground"
       />
       <div className="flex items-center justify-between px-3 pb-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
-          <Database className="h-3 w-3" aria-hidden />
-          {dataSourceName}
-        </span>
+        {dataSources && dataSources.length > 1 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+            <Database className="h-3 w-3" aria-hidden />
+            <select
+              value={dataSourceId}
+              onChange={(e) => onDataSourceChange?.(e.target.value)}
+              aria-label={dataSourceLabel ?? 'Data source'}
+              className="bg-transparent text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {dataSources.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+            <Database className="h-3 w-3" aria-hidden />
+            {dataSourceName}
+          </span>
+        )}
         {streaming ? (
           <button
             type="button"

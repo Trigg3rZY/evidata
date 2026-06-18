@@ -93,6 +93,25 @@ export function Thread({
     initialInvestigationId ?? null,
   );
   const [loading, setLoading] = useState(Boolean(initialInvestigationId));
+  // Available data sources + the active one (M0: just "sample"). The composer shows a
+  // real selector only when there's >1; the server binds a thread to its source for
+  // its lifetime, so changing this only affects new questions.
+  const [dataSources, setDataSources] = useState<ReadonlyArray<{ id: string; name: string }>>([]);
+  const [dataSourceId, setDataSourceId] = useState('sample');
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/data-sources')
+      .then((r) => (r.ok ? (r.json() as Promise<Array<{ id: string; name: string }>>) : []))
+      .then((d) => {
+        if (cancelled || !Array.isArray(d) || d.length === 0) return;
+        setDataSources(d);
+        setDataSourceId((cur) => (d.some((x) => x.id === cur) ? cur : (d[0]?.id ?? cur)));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load a past Investigation's saved thread when selected from the history rail.
   // (The component is remounted per selection via `key`, so this runs once.)
@@ -145,7 +164,7 @@ export function Thread({
       onClear();
       return;
     }
-    void ask(q, 'sample', lang, investigationId ?? undefined);
+    void ask(q, dataSourceId, lang, investigationId ?? undefined);
   };
   const isEmpty = history.length === 0 && status === 'idle';
 
@@ -221,6 +240,10 @@ export function Thread({
           streaming={status === 'streaming'}
           disabled={status === 'streaming' || loading}
           dataSourceName={t('sample')}
+          dataSources={dataSources}
+          dataSourceId={dataSourceId}
+          onDataSourceChange={setDataSourceId}
+          dataSourceLabel={t('dataSource')}
           placeholder={t('composerPlaceholder')}
           stopLabel={t('stop')}
         />
