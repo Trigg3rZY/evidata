@@ -182,11 +182,12 @@ export function Thread({
         ))}
 
         {/* The in-flight / just-settled turn (covers streaming and the transient
-            done|error commit before the effect moves it into history). aria-hidden:
-            it's a transient preview — the settled exchange is announced once it lands
-            in the log above, so streaming churn isn't read aloud. */}
+            done|error commit before the effect moves it into history). `inert`, not
+            aria-hidden: it's a transient preview, so we remove it from the a11y tree
+            AND make its controls (copy / follow-ups) non-focusable — never "hidden
+            but tabbable". The settled exchange is announced once it lands in the log. */}
         {status !== 'idle' && question && (
-          <div className="flex flex-col gap-4" aria-hidden>
+          <div className="flex flex-col gap-4" inert>
             <UserBubble text={question} />
             {answer ? (
               <>
