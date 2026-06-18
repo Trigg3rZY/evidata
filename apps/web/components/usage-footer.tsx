@@ -4,9 +4,11 @@ import { Coins } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { UsageInfo } from '@/lib/use-investigation-stream';
 
-/** Compact thousands formatting: 1234 → "1.2k", 980 → "980". */
+/** Compact formatting: 980 → "980", 1234 → "1.2k", 1_200_000 → "1.2M". */
 function fmt(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
 }
 
 /**

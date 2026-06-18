@@ -131,4 +131,22 @@ describe('askStream (integration over the real Sample)', () => {
     // usage precedes done
     expect(text.indexOf('event: usage')).toBeLessThan(text.indexOf('event: done'));
   });
+
+  it('omits the usage frame when a provider reports zero calls', async () => {
+    const provider: AgentProvider & { usage: unknown } = {
+      next: () =>
+        Promise.resolve({
+          kind: 'unblock',
+          missing: [{ kind: 'insufficient_results', description: 'x' }],
+        }),
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, calls: 0 },
+    };
+    const chunks: string[] = [];
+    await askStream(
+      { service, providerFor: () => provider },
+      { dataSourceId: 'sample', question: 'hi', language: 'en' },
+      (c) => chunks.push(c),
+    );
+    expect(chunks.join('')).not.toContain('event: usage');
+  });
 });
