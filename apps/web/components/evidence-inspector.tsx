@@ -20,7 +20,7 @@ export function EvidenceInspector({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-xs font-medium text-muted-foreground">{t('inspector')}</span>
         {evidence && (
@@ -36,7 +36,7 @@ export function EvidenceInspector({
       </div>
 
       {evidence ? (
-        <div className="flex flex-col gap-2 overflow-y-auto p-3 text-sm">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3 text-sm">
           <div className="flex items-center gap-2">
             <Database className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
             <span className="font-medium">{evidence.id}</span>

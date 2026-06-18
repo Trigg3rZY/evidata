@@ -92,7 +92,7 @@ export default function Home() {
 
       {/* On small screens the inspector is a dismissible bottom sheet. */}
       {inspected && (
-        <div className="fixed inset-x-0 bottom-0 z-20 max-h-[55vh] overflow-hidden border-t border-border bg-card shadow-lg lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-20 flex max-h-[55vh] flex-col border-t border-border bg-card shadow-lg lg:hidden">
           <EvidenceInspector evidence={inspected} onClose={() => setInspected(null)} />
         </div>
       )}
