@@ -160,7 +160,7 @@ export interface AnswerLabels {
   whatIDid: string;
   evidence: string;
   assumptions: string;
-  unblock: { whatsMissing: string; recordedForAdmin: string };
+  unblock: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
 }
 
 /** Resolve the active catalog into a typed `AnswerLabels` bundle. */
@@ -188,6 +188,7 @@ export function answerLabels(t: (key: MessageKey) => string): AnswerLabels {
     unblock: {
       whatsMissing: t('unblockWhatsMissing'),
       recordedForAdmin: t('unblockRecordedForAdmin'),
+      notExecuted: t('notExecuted'),
     },
   };
 }

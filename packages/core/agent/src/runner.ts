@@ -207,6 +207,11 @@ export class AgentRunner {
         // back like an engine error so the model can correct, instead of aborting.
         if (gate.reason === 'not_read_only' || gate.reason === 'admin_or_maintenance') {
           const res = resolveUnblock(gateRejectToMissing(gate.reason, gate.detail));
+          // Surface the proposed (un-executed) write so the UI can show it as a draft
+          // (it was rejected by the gate and never ran).
+          for (const step of res.unblock.nextSteps) {
+            if (step.kind === 'view_mutation_draft') step.draftSql = sql;
+          }
           return this.finalize(input, this.nonAnswer(input, res), evidence, queryRuns, now);
         }
         recordFailure(purpose, sql, `The safety gate rejected this query: ${gate.detail}`);
