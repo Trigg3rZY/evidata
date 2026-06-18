@@ -77,7 +77,7 @@ export function Sidebar({
   return (
     <nav
       aria-label={t('history')}
-      className="hidden w-64 shrink-0 flex-col gap-1 border-r border-border bg-card px-2 py-3 md:flex"
+      className="hidden min-h-0 w-64 shrink-0 flex-col gap-1 border-r border-border bg-card px-2 py-3 md:flex"
     >
       <Button variant="outline" size="sm" className="mx-1 justify-start" onClick={onNewChat}>
         <Plus className="h-4 w-4" aria-hidden />
