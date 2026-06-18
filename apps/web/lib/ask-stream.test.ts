@@ -122,6 +122,27 @@ describe('askStream (integration over the real Sample)', () => {
     expect((await service.list()).length).toBe(before); // no orphan investigation
   });
 
+  it('streams a message frame (not an answer) and persists nothing for a conversational reply', async () => {
+    const before = (await service.list()).length;
+    const provider: AgentProvider = {
+      next: () => Promise.resolve({ kind: 'message', text: 'Hi! Ask me about the data.' }),
+    };
+    const chunks: string[] = [];
+    await askStream(
+      { service, providerFor: () => provider },
+      { dataSourceId: 'sample', question: 'just chatting', language: 'en' },
+      (c) => chunks.push(c),
+    );
+    const text = chunks.join('');
+    expect(text).toContain('event: message');
+    expect(text).not.toContain('event: answer');
+    const frame = text.split('\n\n').find((f) => f.startsWith('event: message'))!;
+    expect(JSON.parse(frame.slice(frame.indexOf('data: ') + 6))).toMatchObject({
+      text: 'Hi! Ask me about the data.',
+    });
+    expect((await service.list()).length).toBe(before); // ephemeral — not persisted
+  });
+
   it('emits no usage frame for the fixture provider (it reports no cost)', async () => {
     const text = await collect("Why is ACME's ad bill higher this month than last?");
     expect(text).not.toContain('event: usage');

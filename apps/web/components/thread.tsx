@@ -3,16 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Answer } from '@evidata/answer-contract';
 import { answerLabels, useI18n } from '@/lib/i18n';
-import { useInvestigationStream, type UsageInfo } from '@/lib/use-investigation-stream';
+import {
+  useInvestigationStream,
+  type MessageInfo,
+  type UsageInfo,
+} from '@/lib/use-investigation-stream';
 import { AnswerView } from './answer-view';
 import { Composer } from './composer';
 import { EmptyState } from './empty-state';
+import { MessageBubble } from './message-bubble';
 import { ReasoningStream } from './reasoning-stream';
 import { UsageFooter } from './usage-footer';
 
 interface Exchange {
   question: string;
   answer?: Answer;
+  message?: MessageInfo;
   error?: string;
   usage?: UsageInfo;
   stopped?: boolean;
@@ -51,22 +57,24 @@ export function Thread({ onClear }: { onClear: () => void }) {
     requestFailed: t('errorRequestFailed'),
     networkError: t('errorNetworkInterrupted'),
   });
-  const { status, question, progress, answer, error, usage, ask, reset, stop } = stream;
+  const { status, question, progress, answer, message, error, usage, ask, reset, stop } = stream;
   const [history, setHistory] = useState<Exchange[]>([]);
 
-  // When a turn settles (answered, errored, or stopped), move it into the
+  // When a turn settles (answered, replied, errored, or stopped), move it into the
   // conversation and free the stream — the thread accumulates, never wipes.
   useEffect(() => {
     if (status !== 'done' && status !== 'error' && status !== 'aborted') return;
     if (!question) return;
     const settled: Exchange = answer
       ? { question, answer, ...(usage ? { usage } : {}) }
-      : status === 'aborted'
-        ? { question, stopped: true }
-        : { question, error: error ?? t('genericError') };
+      : message
+        ? { question, message, ...(usage ? { usage } : {}) }
+        : status === 'aborted'
+          ? { question, stopped: true }
+          : { question, error: error ?? t('genericError') };
     setHistory((h) => [...h, settled]);
     reset();
-  }, [status, question, answer, error, usage, reset, t]);
+  }, [status, question, answer, message, error, usage, reset, t]);
 
   // `/clear` is a conversation command, not a question — reset to the empty state
   // (matches the chat-app convention the composer placeholder advertises).
@@ -92,6 +100,11 @@ export function Thread({ onClear }: { onClear: () => void }) {
                 <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
                 {ex.usage && <UsageFooter usage={ex.usage} />}
               </>
+            ) : ex.message ? (
+              <>
+                <MessageBubble message={ex.message} />
+                {ex.usage && <UsageFooter usage={ex.usage} />}
+              </>
             ) : ex.stopped ? (
               <StoppedBlock label={t('stopped')} />
             ) : (
@@ -108,6 +121,11 @@ export function Thread({ onClear }: { onClear: () => void }) {
             {answer ? (
               <>
                 <AnswerView answer={answer} onFollowup={submit} labels={labels} />
+                {usage && <UsageFooter usage={usage} />}
+              </>
+            ) : message ? (
+              <>
+                <MessageBubble message={message} />
                 {usage && <UsageFooter usage={usage} />}
               </>
             ) : status === 'error' ? (

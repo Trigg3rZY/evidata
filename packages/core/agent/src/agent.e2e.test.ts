@@ -18,6 +18,7 @@ import type {
   AgentInput,
   AgentProvider,
   AgentRunEvent,
+  RunResult,
 } from './types';
 
 let handle: SampleConnectorHandle;
@@ -66,12 +67,24 @@ const deps = (provider: AgentProvider, sink?: (e: AgentRunEvent) => void): Agent
 const numbers = (rows: ReadonlyArray<Record<string, unknown>>, key: string): number[] =>
   rows.map((r) => Number(r[key]));
 
+// These scenarios all produce an Answer (not a conversational Message); narrow the
+// RunResult union so the assertions can read `.answer` / `.queryRuns`.
+function asAnswer(r: RunResult): {
+  answer: import('@evidata/answer-contract').Answer;
+  queryRuns: import('./types').QueryRunRecord[];
+} {
+  if (r.kind !== 'answer') throw new Error(`expected an answer result, got ${r.kind}`);
+  return { answer: r.answer, queryRuns: r.queryRuns };
+}
+
 describe('acme-bill-up — happy path (spec 05 §4.1)', () => {
   it('produces a valid Answered/Medium answer with three evidence items from real data', async () => {
     const events: AgentRunEvent[] = [];
-    const { answer, queryRuns } = await new AgentRunner(
-      deps(fixtureFor('acme-bill-up'), (e) => events.push(e)),
-    ).run(input("Why is ACME's ad bill higher this month than last month?"));
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('acme-bill-up'), (e) => events.push(e))).run(
+        input("Why is ACME's ad bill higher this month than last month?"),
+      ),
+    );
 
     expect(answer.status).toBe('Answered');
     expect(answer.confidence).toBe('Medium');
@@ -100,8 +113,10 @@ describe('acme-bill-up — happy path (spec 05 §4.1)', () => {
 
 describe('mutation-attempt — guardrail (spec 05 §4.5)', () => {
   it('blocks the write before execution and records no query run', async () => {
-    const { answer, queryRuns } = await new AgentRunner(deps(fixtureFor('mutation-attempt'))).run(
-      input('Void the duplicate spend row for ACME'),
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('mutation-attempt'))).run(
+        input('Void the duplicate spend row for ACME'),
+      ),
     );
 
     expect(answer.status).toBe('BlockedByPolicy');
@@ -113,9 +128,11 @@ describe('mutation-attempt — guardrail (spec 05 §4.5)', () => {
 
 describe('cross-area-reconcile — Unblock Path (spec 05 §4.3)', () => {
   it('gathers each area but blocks on the unverified mapping', async () => {
-    const { answer, queryRuns } = await new AgentRunner(
-      deps(fixtureFor('cross-area-reconcile')),
-    ).run(input("Why don't usage and billing reconcile for ACME?"));
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('cross-area-reconcile'))).run(
+        input("Why don't usage and billing reconcile for ACME?"),
+      ),
+    );
 
     expect(answer.status).toBe('NoReliableAnswer');
     expect(answer.confidence).toBe('CannotDetermine');
@@ -131,8 +148,10 @@ describe('cross-area-reconcile — Unblock Path (spec 05 §4.3)', () => {
 
 describe('needs-timerange — clarification (spec 05 §4.4)', () => {
   it('asks for a time range', async () => {
-    const { answer } = await new AgentRunner(deps(fixtureFor('needs-timerange'))).run(
-      input('How is spend trending?'),
+    const { answer } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('needs-timerange'))).run(
+        input('How is spend trending?'),
+      ),
     );
     expect(answer.status).toBe('NeedsClarification');
     expect(answer.unblock?.nextSteps.some((a) => a.kind === 'set_time_range')).toBe(true);
@@ -142,13 +161,15 @@ describe('needs-timerange — clarification (spec 05 §4.4)', () => {
 
 describe('localization', () => {
   it('produces non-answer text in the question language (zh-CN)', async () => {
-    const { answer } = await new AgentRunner(deps(fixtureFor('needs-timerange'))).run({
-      investigationId: 'inv_zh',
-      question: '最近花费趋势如何?',
-      language: 'zh-CN',
-      schema: SAMPLE_SCHEMA_SNAPSHOT,
-      context: verifiedContext(),
-    });
+    const { answer } = asAnswer(
+      await new AgentRunner(deps(fixtureFor('needs-timerange'))).run({
+        investigationId: 'inv_zh',
+        question: '最近花费趋势如何?',
+        language: 'zh-CN',
+        schema: SAMPLE_SCHEMA_SNAPSHOT,
+        context: verifiedContext(),
+      }),
+    );
     expect(answer.status).toBe('NeedsClarification');
     expect(answer.directAnswer).toBe('我需要更多信息才能可靠地回答。');
     expect(validateAnswer(answer)).toEqual([]);
@@ -160,10 +181,9 @@ describe('step budget', () => {
     const looping: AgentProvider = {
       next: () => Promise.resolve({ kind: 'reasoning', label: 'thinking…' }),
     };
-    const { answer, queryRuns } = await new AgentRunner({
-      ...deps(looping),
-      maxIterations: 3,
-    }).run(input('endless'));
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner({ ...deps(looping), maxIterations: 3 }).run(input('endless')),
+    );
 
     expect(answer.status).toBe('NoReliableAnswer');
     expect(queryRuns).toHaveLength(0);
@@ -173,8 +193,8 @@ describe('step budget', () => {
 
 describe('FixtureProvider', () => {
   it('exits with an honest non-answer when the script is exhausted', async () => {
-    const { answer } = await new AgentRunner(deps(new FixtureProvider([]))).run(
-      input('nothing scripted'),
+    const { answer } = asAnswer(
+      await new AgentRunner(deps(new FixtureProvider([]))).run(input('nothing scripted')),
     );
     expect(answer.status).toBe('NoReliableAnswer');
   });
@@ -207,7 +227,7 @@ describe('re-prompt on invalid final (spec 03 §1)', () => {
         return Promise.resolve(draft(['E1'])); // corrected
       },
     };
-    const { answer } = await new AgentRunner(deps(provider)).run(input('total?'));
+    const { answer } = asAnswer(await new AgentRunner(deps(provider)).run(input('total?')));
     expect(answer.status).toBe('Answered');
     expect(answer.keyFindings[0]?.evidenceIds).toEqual(['E1']);
     expect(sawFeedback?.length).toBeGreaterThan(0); // the provider received the violations
@@ -223,7 +243,7 @@ describe('re-prompt on invalid final (spec 03 §1)', () => {
         return Promise.resolve(draft(['E9'])); // always cites missing evidence
       },
     };
-    const { answer } = await new AgentRunner(deps(provider)).run(input('total?'));
+    const { answer } = asAnswer(await new AgentRunner(deps(provider)).run(input('total?')));
     expect(answer.status).toBe('NoReliableAnswer');
     expect(validateAnswer(answer)).toEqual([]);
   });
@@ -251,8 +271,8 @@ describe('force-finalize on the last budget step', () => {
         return Promise.resolve({ kind: 'query', proposal: { purpose: 'explore', sql: goodSql } });
       },
     };
-    const { answer } = await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(
-      input('open-ended'),
+    const { answer } = asAnswer(
+      await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(input('open-ended')),
     );
     expect(answer.status).toBe('Answered'); // an answer, not NoReliableAnswer
     expect(validateAnswer(answer)).toEqual([]);
@@ -280,11 +300,44 @@ describe('force-finalize on the last budget step', () => {
         return Promise.resolve({ kind: 'query', proposal: { purpose: 'explore', sql: goodSql } });
       },
     };
-    const { answer } = await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(
-      input('open-ended'),
+    const { answer } = asAnswer(
+      await new AgentRunner({ ...deps(provider), maxIterations: 3 }).run(input('open-ended')),
     );
     expect(answer.status).toBe('NoReliableAnswer');
     expect(validateAnswer(answer)).toEqual([]);
+  });
+});
+
+describe('intent: Answer vs Message (spec 13)', () => {
+  it('replies to a greeting with a Message — zero provider calls and zero queries', async () => {
+    let calls = 0;
+    const provider: AgentProvider = {
+      next: () => {
+        calls += 1;
+        return Promise.resolve({ kind: 'reasoning', label: 'x' });
+      },
+    };
+    const r = await new AgentRunner(deps(provider)).run(input('你好'));
+    expect(r.kind).toBe('message');
+    if (r.kind === 'message') expect(r.message.text.length).toBeGreaterThan(0);
+    expect(calls).toBe(0); // the greeting guard short-circuits before any model call
+  });
+
+  it('returns a Message (drafted, unexecuted SQL) when the provider asks to draft', async () => {
+    const provider: AgentProvider = {
+      next: () =>
+        Promise.resolve({
+          kind: 'message',
+          text: 'Here is the statement (not run):',
+          sql: 'DELETE FROM campaign_spend WHERE amount > 30',
+        }),
+    };
+    const r = await new AgentRunner(deps(provider)).run(input('write me a delete statement'));
+    expect(r.kind).toBe('message');
+    if (r.kind === 'message') {
+      expect(r.message.sql).toContain('DELETE');
+      expect(r.message.text).toContain('not run');
+    }
   });
 });
 
@@ -348,9 +401,11 @@ describe('executor error recovery', () => {
       },
     ];
     const events: AgentRunEvent[] = [];
-    const { answer, queryRuns } = await new AgentRunner(
-      deps(new FixtureProvider(script), (e) => events.push(e)),
-    ).run(input('total spend?'));
+    const { answer, queryRuns } = asAnswer(
+      await new AgentRunner(deps(new FixtureProvider(script), (e) => events.push(e))).run(
+        input('total spend?'),
+      ),
+    );
 
     expect(answer.status).toBe('Answered');
     expect(answer.evidence.map((e) => e.id)).toEqual(['E1']); // only the successful query is evidence

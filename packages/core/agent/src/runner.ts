@@ -34,6 +34,8 @@ import { RunAbortedError } from './types';
 import { gateRejectToMissing, resolveUnblock, type UnblockResolution } from './unblock';
 import type { Connector, Redactor, SafetyGate } from './deps';
 import {
+  greetingReply,
+  isGreeting,
   type Lang,
   nonAnswerReason,
   nonAnswerSentence,
@@ -91,6 +93,12 @@ export class AgentRunner {
     const policy = this.deps.safetyContext.policy;
     const executor = this.deps.connector.getExecutor();
 
+    // Greeting guard (spec 13 §3): an unmistakable greeting gets a canned reply with
+    // ZERO model calls or queries — the deterministic backstop for "你好" over-exploring.
+    if (isGreeting(input.question)) {
+      return { kind: 'message', message: { text: greetingReply(input.language) } };
+    }
+
     const history: AgentHistory = { toolResults: [], reasoning: [] };
     const evidence: Evidence[] = [];
     const queryRuns: QueryRunRecord[] = [];
@@ -144,6 +152,14 @@ export class AgentRunner {
         continue;
       }
 
+      if (decision.kind === 'message') {
+        // A conversational reply / drafted SQL — no data claim, no gate, no validate.
+        return {
+          kind: 'message',
+          message: { text: decision.text, ...(decision.sql ? { sql: decision.sql } : {}) },
+        };
+      }
+
       if (decision.kind === 'unblock') {
         return this.finalize(
           input,
@@ -160,7 +176,7 @@ export class AgentRunner {
           now,
         );
         const violations = validateAll(candidate);
-        if (violations.length === 0) return { answer: candidate, queryRuns };
+        if (violations.length === 0) return { kind: 'answer', answer: candidate, queryRuns };
         // Re-prompt the provider once with the violations before downgrading (spec 03 §1).
         // This retry is preserved even when finalizing is forced (see the two-step
         // mustFinalize window above); if the corrected answer is still invalid we fall
@@ -376,7 +392,7 @@ export class AgentRunner {
         `non-answer failed validation: ${JSON.stringify(violations)} ${JSON.stringify(schema.errors)}`,
       );
     }
-    return { answer, queryRuns };
+    return { kind: 'answer', answer, queryRuns };
   }
 
   private applyVersion(answer: Answer, now: () => Date): Answer {

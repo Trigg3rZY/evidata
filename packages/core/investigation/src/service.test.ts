@@ -51,7 +51,7 @@ afterAll(async () => {
 describe('InvestigationService', () => {
   it('runs acme-bill-up end to end, streams events, and persists the answer', async () => {
     const events: string[] = [];
-    const { investigationId, answer } = await service.ask(
+    const result = await service.ask(
       {
         dataSourceId: 'sample',
         question: "Why is ACME's ad bill higher this month?",
@@ -59,6 +59,8 @@ describe('InvestigationService', () => {
       },
       { provider: fixtureFor('acme-bill-up'), sink: (e) => events.push(e.type) },
     );
+    if (result.kind !== 'answer') throw new Error('expected an answer result');
+    const { investigationId, answer } = result;
 
     expect(answer.status).toBe('Answered');
     expect(answer.evidence).toHaveLength(3);
@@ -75,10 +77,12 @@ describe('InvestigationService', () => {
   });
 
   it('blocks a mutation attempt and persists it as BlockedByPolicy with no query runs', async () => {
-    const { investigationId, answer } = await service.ask(
+    const result = await service.ask(
       { dataSourceId: 'sample', question: 'Void the duplicate spend row', language: 'en' },
       { provider: fixtureFor('mutation-attempt') },
     );
+    if (result.kind !== 'answer') throw new Error('expected an answer result');
+    const { investigationId, answer } = result;
     expect(answer.status).toBe('BlockedByPolicy');
 
     const thread = await service.getThread(investigationId);
