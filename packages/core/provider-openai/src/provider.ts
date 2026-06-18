@@ -86,7 +86,7 @@ function toKeyFindings(u: unknown): KeyFinding[] {
 function toDraft(args: Record<string, unknown>): AnswerDraft {
   const confidence = asString(args.confidence);
   const draft: AnswerDraft = {
-    status: args.status === 'Partial' ? 'Partial' : 'Answered',
+    status: 'Answered', // the final_answer tool only offers 'Answered' (see AnswerDraft)
     directAnswer: asString(args.directAnswer),
     confidence: CONFIDENCES.has(confidence) ? (confidence as Confidence) : 'Medium',
     confidenceReason: asString(args.confidenceReason),
