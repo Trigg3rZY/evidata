@@ -1,18 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowUp, Database } from 'lucide-react';
+import { ArrowUp, Database, Square } from 'lucide-react';
 
 export function Composer({
   onSubmit,
+  onStop,
+  streaming,
   disabled,
   dataSourceName,
   placeholder,
+  stopLabel,
 }: {
   onSubmit: (question: string) => void;
+  onStop?: () => void;
+  streaming?: boolean;
   disabled?: boolean;
   dataSourceName: string;
   placeholder: string;
+  stopLabel: string;
 }) {
   const [value, setValue] = useState('');
 
@@ -30,7 +36,10 @@ export function Composer({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          // Don't submit while an IME composition is active — the Enter that
+          // confirms candidates (e.g. a Chinese IME) must not send the message.
+          // `isComposing` covers modern browsers; keyCode 229 is the legacy signal.
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
             e.preventDefault();
             submit();
           }
@@ -45,15 +54,27 @@ export function Composer({
           <Database className="h-3 w-3" aria-hidden />
           {dataSourceName}
         </span>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={disabled || !value.trim()}
-          aria-label="Send"
-          className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
-        >
-          <ArrowUp className="h-4 w-4" />
-        </button>
+        {streaming ? (
+          <button
+            type="button"
+            onClick={onStop}
+            aria-label={stopLabel}
+            title={stopLabel}
+            className="grid h-8 w-8 place-items-center rounded-lg bg-secondary text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={disabled || !value.trim()}
+            aria-label="Send"
+            className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );

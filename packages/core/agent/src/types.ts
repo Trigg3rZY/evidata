@@ -90,7 +90,20 @@ export type AgentDecision =
   | { kind: 'final'; draft: AnswerDraft };
 
 export interface AgentProvider {
-  next(input: AgentInput, history: AgentHistory): Promise<AgentDecision>;
+  next(input: AgentInput, history: AgentHistory, signal?: AbortSignal): Promise<AgentDecision>;
+}
+
+/** Per-run options. `signal` lets the caller cancel an in-flight turn (spec 13 §4). */
+export interface RunOptions {
+  signal?: AbortSignal;
+}
+
+/** Thrown by AgentRunner.run when the turn is cancelled via an AbortSignal. */
+export class RunAbortedError extends Error {
+  constructor() {
+    super('The run was aborted.');
+    this.name = 'AbortError'; // matches fetch's AbortError so callers detect both uniformly
+  }
 }
 
 /** Domain events emitted during a run (phase 6 adapts these to SSE; spec 03 §6). */

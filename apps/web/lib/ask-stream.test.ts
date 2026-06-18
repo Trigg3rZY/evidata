@@ -99,6 +99,27 @@ describe('askStream (integration over the real Sample)', () => {
     expect(text).not.toContain('Unknown data source'); // no raw internals leaked
   });
 
+  it('emits an aborted frame (not an answer) and persists nothing when already aborted', async () => {
+    const before = (await service.list()).length;
+    const controller = new AbortController();
+    controller.abort();
+    const chunks: string[] = [];
+    await askStream(
+      { service, providerFor: (q) => fixtureFor(pickScenario(q)) },
+      {
+        dataSourceId: 'sample',
+        question: "Why is ACME's ad bill higher this month than last?",
+        language: 'en',
+      },
+      (c) => chunks.push(c),
+      controller.signal,
+    );
+    const text = chunks.join('');
+    expect(text).toContain('event: aborted');
+    expect(text).not.toContain('event: answer');
+    expect((await service.list()).length).toBe(before); // no orphan investigation
+  });
+
   it('emits no usage frame for the fixture provider (it reports no cost)', async () => {
     const text = await collect("Why is ACME's ad bill higher this month than last?");
     expect(text).not.toContain('event: usage');

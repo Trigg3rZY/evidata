@@ -36,6 +36,8 @@ const dict = {
       'Answers come from a live model that may only read — every result is gated, redacted, and shown with its status, evidence, and SQL.',
     answerReady: 'Answer ready.',
     genericError: 'Something went wrong.',
+    stop: 'Stop',
+    stopped: 'Stopped.',
     // Answer chrome (StatusBadge / ConfidenceMeter / AnswerView / UnblockPathView).
     // AI answer *content* stays in the question's language; only these labels switch.
     statusAnswered: 'Answered',
@@ -78,6 +80,8 @@ const dict = {
     demoNote: '答案来自实时模型,且只能读取——每条结果都经过安全门、脱敏,并附带状态、证据与 SQL。',
     answerReady: '回答已就绪。',
     genericError: '出了点问题。',
+    stop: '停止',
+    stopped: '已停止。',
     statusAnswered: '已回答',
     statusNeedsClarification: '需要澄清',
     statusPartial: '部分回答',
