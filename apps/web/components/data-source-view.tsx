@@ -84,6 +84,27 @@ export function DataSourceView() {
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-6 py-8">
+          {/* The list rail is hidden below md; on mobile a multi-source deployment
+              still needs a way to pick another source before asking (Codex P2). */}
+          {dataSources.length > 1 && (
+            <div className="mb-4 md:hidden">
+              <label htmlFor="ds-picker" className="sr-only">
+                {t('dataSources')}
+              </label>
+              <select
+                id="ds-picker"
+                value={effectiveId}
+                onChange={(e) => setViewId(e.target.value)}
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {dataSources.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {displayName(d.id, d.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {loading || !overview ? (
             <p className="text-sm text-muted-foreground">…</p>
           ) : (
