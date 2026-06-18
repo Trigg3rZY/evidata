@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { AnswerStatus, Confidence } from '@evidata/answer-contract';
 
 export type Lang = 'en' | 'zh-CN';
@@ -13,14 +21,19 @@ const dict = {
     title: 'Ask Data',
     tagline: 'Trusted, evidence-backed answers over your data.',
     ask: 'Ask a question',
-    composerPlaceholder: 'Ask a question about your data…',
+    composerPlaceholder: 'Ask a question about your data… (type /clear to start over)',
+    newChat: 'New chat',
+    home: 'Home',
     sample: 'Sample Data Source',
     sampleBadge: 'Sample',
     sampleOverview:
       'A demo "Advertising Platform": accounts run campaigns that accrue daily ad spend and are billed monthly via invoices. Good for spend trends, per-campaign breakdowns, and customer rankings.',
     tryAsking: 'Try asking',
+    example1: "Why is ACME's ad spend higher this month than last?",
+    example2: 'Who are the top customers by spend?',
+    example3: 'How is spend trending?',
     demoNote:
-      'Demo answers are scripted (no live model yet) — see the status, evidence, and SQL behind each one.',
+      'Answers come from a live model that may only read — every result is gated, redacted, and shown with its status, evidence, and SQL.',
     answerReady: 'Answer ready.',
     genericError: 'Something went wrong.',
     // Answer chrome (StatusBadge / ConfidenceMeter / AnswerView / UnblockPathView).
@@ -49,13 +62,18 @@ const dict = {
     title: '数据问答',
     tagline: '基于证据、可信赖的数据回答。',
     ask: '提个问题',
-    composerPlaceholder: '就你的数据提个问题…',
+    composerPlaceholder: '就你的数据提个问题…(输入 /clear 可重新开始)',
+    newChat: '新对话',
+    home: '首页',
     sample: '示例数据源',
     sampleBadge: '示例',
     sampleOverview:
       '一个演示用的"广告平台":账户投放营销活动、产生每日广告消费,并按月开具账单。适合看消费趋势、按活动拆解、以及客户排名。',
     tryAsking: '试着问',
-    demoNote: '演示答案是脚本化的(尚未接入实时模型)——重点看每条回答背后的状态、证据与 SQL。',
+    example1: '为什么 ACME 这个月的广告花费比上个月高?',
+    example2: '谁是花费最高的客户?',
+    example3: '最近的消费趋势如何?',
+    demoNote: '答案来自实时模型,且只能读取——每条结果都经过安全门、脱敏,并附带状态、证据与 SQL。',
     answerReady: '回答已就绪。',
     genericError: '出了点问题。',
     statusAnswered: '已回答',
@@ -89,12 +107,28 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function LangProvider({ children }: { children: ReactNode }) {
+  // SSR starts at 'en' (deterministic markup); on the client we follow the
+  // system/browser language after hydration. A manual toggle wins for the session.
   const [lang, setLang] = useState<Lang>('en');
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (!touched && navigator.language.toLowerCase().startsWith('zh')) setLang('zh-CN');
+  }, [touched]);
+
+  const choose = useCallback((next: Lang) => {
+    setTouched(true);
+    setLang(next);
+  }, []);
+
   // Keep <html lang> in sync so assistive tech announces in the right language (spec 04 §4).
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
-  const value = useMemo<I18nValue>(() => ({ lang, setLang, t: (key) => dict[lang][key] }), [lang]);
+  const value = useMemo<I18nValue>(
+    () => ({ lang, setLang: choose, t: (key) => dict[lang][key] }),
+    [lang, choose],
+  );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

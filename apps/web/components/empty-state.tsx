@@ -3,17 +3,11 @@
 import { Database, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
-// Canonical demo questions (English — the M0 fixtures are English). Each maps to a
-// distinct scenario/status via the route's pickScenario, so the cards showcase
-// the Answer Contract surface: Answered, NoReliableAnswer+Unblock, NeedsClarification.
-const EXAMPLES = [
-  "Why is ACME's ad bill higher this month than last?",
-  "Why don't usage and billing reconcile for ACME?",
-  'How is spend trending?',
-];
-
 export function EmptyState({ onPick }: { onPick: (question: string) => void }) {
   const { t } = useI18n();
+  // Localized starter questions — they follow the active UI language so a zh-CN
+  // visitor sees Chinese prompts. Each is a natural question the live model handles.
+  const examples = [t('example1'), t('example2'), t('example3')];
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-lg border border-border bg-card p-5">
@@ -33,7 +27,7 @@ export function EmptyState({ onPick }: { onPick: (question: string) => void }) {
           {t('tryAsking')}
         </div>
         <div className="flex flex-col gap-2">
-          {EXAMPLES.map((q) => (
+          {examples.map((q) => (
             <button
               key={q}
               type="button"
