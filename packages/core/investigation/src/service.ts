@@ -53,6 +53,9 @@ export interface AskParams {
   /** Continue an existing Investigation (a follow-up): append a new Answer version
    *  and seed the model with prior turns. Omit to start a new Investigation. */
   investigationId?: string;
+  /** Regenerate the latest answer: append a version with NO new user turn and
+   *  versionTrigger 'rerun' (requires investigationId). */
+  rerun?: boolean;
 }
 
 export interface AskOptions {
@@ -123,6 +126,7 @@ export class InvestigationService {
    */
   async ask(params: AskParams, opts: AskOptions): Promise<AskResult> {
     const isFollowup = !!params.investigationId;
+    const isRerun = Boolean(params.rerun && params.investigationId);
     let rt: DataSourceRuntime;
     let investigationId: string;
     let history: ConversationTurn[] = [];
@@ -137,6 +141,9 @@ export class InvestigationService {
       investigationId = prior.id;
       history = priorTurns(prior);
       priorAnswers = prior.answers;
+      // A rerun regenerates the latest question, so drop that turn from the context
+      // (the model re-answers it fresh against the earlier turns).
+      if (isRerun) history = history.slice(0, -1);
     } else {
       rt = this.dataSource(params.dataSourceId);
       investigationId = this.newId('inv');
@@ -152,10 +159,12 @@ export class InvestigationService {
       now: this.now,
       newId: this.newId,
       ...(opts.sink ? { sink: opts.sink } : {}),
-      // Drive the runner's version stamping so a follow-up records its audit
-      // provenance (createdAfter: { kind: 'followup', fromVersion }); the store
-      // still re-stamps the authoritative version/isLatest.
-      ...(priorAnswers.length ? { priorAnswers, versionTrigger: 'followup' as const } : {}),
+      // Drive the runner's version stamping so the answer records its audit
+      // provenance (createdAfter: { kind, fromVersion }); the store still re-stamps
+      // the authoritative version/isLatest.
+      ...(priorAnswers.length
+        ? { priorAnswers, versionTrigger: isRerun ? ('rerun' as const) : ('followup' as const) }
+        : {}),
     });
 
     // Run first, persist after: a cancelled turn (RunAbortedError) throws here and
@@ -188,10 +197,11 @@ export class InvestigationService {
     }
 
     // saveAnswer is authoritative for versioning: it appends version N+1 and demotes
-    // the prior head, and records the user/agent turns for this question.
+    // the prior head. A rerun OMITS `question` so no duplicate user turn is recorded
+    // (it regenerates the existing turn's answer); a normal turn records the question.
     const answer = await this.deps.store.saveAnswer({
       investigationId,
-      question: params.question,
+      ...(isRerun ? {} : { question: params.question }),
       answer: result.answer,
       queryRuns: result.queryRuns,
     });

@@ -16,6 +16,8 @@ export interface AskBody {
   language: Lang;
   /** Set for a follow-up turn (continue this Investigation, append a version). */
   investigationId?: string;
+  /** Regenerate the latest answer in place: a new version with no new user turn. */
+  rerun?: boolean;
 }
 
 /** Encode one Server-Sent Event frame. */
@@ -68,7 +70,7 @@ export function parseAskBody(raw: unknown): AskBody | { error: string } {
   const dataSourceId =
     typeof body.dataSourceId === 'string' && body.dataSourceId ? body.dataSourceId : 'sample';
   const language: Lang = body.language === 'zh-CN' ? 'zh-CN' : 'en';
-  return { dataSourceId, question, language };
+  return { dataSourceId, question, language, ...(body.rerun === true ? { rerun: true } : {}) };
 }
 
 export interface AskStreamDeps {
@@ -101,6 +103,7 @@ export async function askStream(
         question: body.question,
         language: body.language,
         ...(body.investigationId ? { investigationId: body.investigationId } : {}),
+        ...(body.rerun ? { rerun: true } : {}),
       },
       {
         provider,
