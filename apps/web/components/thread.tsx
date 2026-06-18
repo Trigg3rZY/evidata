@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { Answer, InvestigationWithAnswers } from '@evidata/answer-contract';
+import type { Answer, Evidence, InvestigationWithAnswers } from '@evidata/answer-contract';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import { answerLabels, useI18n } from '@/lib/i18n';
 import {
@@ -73,12 +73,15 @@ export function Thread({
   onClear,
   initialInvestigationId,
   onCreated,
+  onInspect,
 }: {
   onClear: () => void;
   /** When set, load and render this Investigation's saved thread (a follow-up continues it). */
   initialInvestigationId?: string | null;
   /** Called after an Answer settles, so the history rail can refresh. */
   onCreated?: () => void;
+  /** Open an evidence item in the right-pane inspector (issue #49). */
+  onInspect?: (evidence: Evidence) => void;
 }) {
   const { t, lang } = useI18n();
   const labels = useMemo(() => answerLabels(t), [t]);
@@ -190,7 +193,12 @@ export function Thread({
             <UserBubble text={ex.question} />
             {ex.answer ? (
               <>
-                <AnswerView answer={ex.answer} onFollowup={submit} labels={labels} />
+                <AnswerView
+                  answer={ex.answer}
+                  onFollowup={submit}
+                  onInspect={onInspect}
+                  labels={labels}
+                />
                 {ex.usage && <UsageFooter usage={ex.usage} />}
               </>
             ) : ex.message ? (

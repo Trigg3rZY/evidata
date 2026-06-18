@@ -30,6 +30,9 @@ const dict = {
     noHistory: 'No conversations yet',
     conversation: 'Conversation',
     dataSource: 'Data source',
+    inspector: 'Evidence',
+    inspectorEmpty: 'Select a citation (E1, E2…) to inspect its evidence here.',
+    close: 'Close',
     sample: 'Sample Data Source',
     sampleBadge: 'Sample',
     sampleOverview:
@@ -84,6 +87,9 @@ const dict = {
     noHistory: '还没有对话',
     conversation: '对话',
     dataSource: '数据源',
+    inspector: '证据',
+    inspectorEmpty: '点击关键发现里的引用(E1、E2…)在此查看对应证据。',
+    close: '关闭',
     sample: '示例数据源',
     sampleBadge: '示例',
     sampleOverview:

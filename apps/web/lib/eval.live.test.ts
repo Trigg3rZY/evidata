@@ -94,7 +94,6 @@ describe.runIf(cfg)('agent eval — live model', () => {
     }
     const report = scoreReport(results);
     // The report IS the deliverable — print it for inspection.
-    // eslint-disable-next-line no-console
     console.log(`\n${formatReport(report)}\n`);
     expect(report.total).toBe(EVAL_CASES.length);
   }, 300_000);
