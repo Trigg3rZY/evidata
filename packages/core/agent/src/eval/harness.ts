@@ -30,22 +30,20 @@ export interface TurnTrace {
 export function runResultToTrace(result: RunResult, usage?: UsageLike): TurnTrace {
   const modelCalls = usage?.calls ?? 0;
   const tokens = usage?.totalTokens ?? 0;
+  // Count executed queries for BOTH outcomes — a Message that ran queries before
+  // replying must not read as zero (Codex review): that's the over-exploration the
+  // eval is meant to catch.
+  const queries = result.queryRuns.filter((q) => q.status === 'ok').length;
   if (result.kind === 'message') {
     return {
       route: result.message.sql ? 'draft_sql' : 'reply',
       status: 'message',
-      queries: 0,
+      queries,
       modelCalls,
       tokens,
     };
   }
-  return {
-    route: 'answer',
-    status: result.answer.status,
-    queries: result.queryRuns.filter((q) => q.status === 'ok').length,
-    modelCalls,
-    tokens,
-  };
+  return { route: 'answer', status: result.answer.status, queries, modelCalls, tokens };
 }
 
 export interface CaseResult {
