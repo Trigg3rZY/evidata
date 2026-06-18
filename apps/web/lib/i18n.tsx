@@ -24,6 +24,10 @@ const dict = {
     composerPlaceholder: 'Ask a question about your data… (type /clear to start over)',
     newChat: 'New chat',
     home: 'Home',
+    history: 'History',
+    today: 'Today',
+    earlier: 'Earlier',
+    noHistory: 'No conversations yet',
     sample: 'Sample Data Source',
     sampleBadge: 'Sample',
     sampleOverview:
@@ -70,6 +74,10 @@ const dict = {
     composerPlaceholder: '就你的数据提个问题…(输入 /clear 可重新开始)',
     newChat: '新对话',
     home: '首页',
+    history: '历史',
+    today: '今天',
+    earlier: '更早',
+    noHistory: '还没有对话',
     sample: '示例数据源',
     sampleBadge: '示例',
     sampleOverview:
