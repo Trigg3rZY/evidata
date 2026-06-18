@@ -32,6 +32,11 @@ const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   ],
   [/reconcile|usage.*billing|billing.*usage/i, 'cross-area-reconcile'],
   [/trend|trending/i, 'needs-timerange'],
+  [/\b(email|contact)s?\b/i, 'sensitive-redaction'],
+  [
+    /top\s+(customer|account|spender)|highest|biggest.*(customer|account|spend)|by spend/i,
+    'top-customers',
+  ],
 ];
 
 /**

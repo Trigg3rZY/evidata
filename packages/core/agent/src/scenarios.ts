@@ -116,11 +116,68 @@ export const NEEDS_TIMERANGE: AgentDecision[] = [
   },
 ];
 
+/** Answered/High: a single clean aggregate ranks accounts by total posted spend. */
+export const TOP_CUSTOMERS: AgentDecision[] = [
+  { kind: 'reasoning', label: 'Ranking accounts by total posted spend' },
+  {
+    kind: 'query',
+    proposal: {
+      purpose: 'Total posted spend per account',
+      sql: "select a.name, sum(s.amount) as total from campaign_spend s join accounts a on a.id = s.account_id where s.status = 'posted' group by a.name order by total desc",
+    },
+  },
+  {
+    kind: 'final',
+    draft: {
+      status: 'Answered',
+      confidence: 'High',
+      directAnswer:
+        'The top customers by total posted ad spend are ACME Corp (83,100), Hooli (72,000), and Globex (56,000).',
+      confidenceReason:
+        'A single aggregate over all posted spend — no ambiguous definitions or unverified joins.',
+      keyFindings: [
+        kf('ACME Corp leads with 83,100 in total posted spend.', 'E1'),
+        kf('Hooli (72,000) and Globex (56,000) follow.', 'E1'),
+      ],
+    },
+  },
+];
+
+/** Redaction path: the query selects a sensitive column, so the Redactor masks it
+ *  (•••) and the Answer carries a redaction caveat — the column is never shown. */
+export const SENSITIVE_REDACTION: AgentDecision[] = [
+  { kind: 'reasoning', label: 'Looking up the active accounts and their contacts' },
+  {
+    kind: 'query',
+    proposal: {
+      purpose: 'Active accounts and their contact emails',
+      sql: "select name, contact_email from accounts where status = 'active' order by name",
+    },
+  },
+  {
+    kind: 'final',
+    draft: {
+      status: 'Answered',
+      confidence: 'Medium',
+      directAnswer:
+        'There are five active accounts: ACME Corp, Globex, Hooli, Initech, and Umbrella. Their contact emails are a sensitive field and are not shown.',
+      confidenceReason:
+        'The account list is exact; the contact-email column is masked by Policy, so emails cannot be reported.',
+      keyFindings: [kf('Five active accounts were found.', 'E1')],
+      caveats: [
+        'Contact emails are sensitive — masked by Policy (•••) and withheld from the answer and its evidence.',
+      ],
+    },
+  },
+];
+
 export const SAMPLE_SCENARIOS: Readonly<Record<string, AgentDecision[]>> = {
   'acme-bill-up': ACME_BILL_UP,
   'mutation-attempt': MUTATION_ATTEMPT,
   'cross-area-reconcile': CROSS_AREA_RECONCILE,
   'needs-timerange': NEEDS_TIMERANGE,
+  'top-customers': TOP_CUSTOMERS,
+  'sensitive-redaction': SENSITIVE_REDACTION,
 };
 
 export function fixtureFor(scenarioId: string): FixtureProvider {

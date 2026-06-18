@@ -24,6 +24,10 @@ describe('ask-stream helpers', () => {
     expect(pickScenario('Please update that spend row')).toBe('mutation-attempt');
     expect(pickScenario("usage and billing don't reconcile")).toBe('cross-area-reconcile');
     expect(pickScenario('How is spend trending?')).toBe('needs-timerange');
+    expect(pickScenario('Who are the top customers by spend?')).toBe('top-customers');
+    expect(pickScenario('List the active accounts and their contact emails')).toBe(
+      'sensitive-redaction',
+    );
   });
 
   it('validates and normalizes the body', () => {
