@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { Answer } from '@evidata/answer-contract';
+import type { Answer, InvestigationWithAnswers } from '@evidata/answer-contract';
 import { answerLabels, useI18n } from '@/lib/i18n';
 import {
   useInvestigationStream,
@@ -50,7 +50,35 @@ function StoppedBlock({ label }: { label: string }) {
   );
 }
 
-export function Thread({ onClear }: { onClear: () => void }) {
+/** Rebuild the conversation from a stored thread: pair each user question with the
+ *  agent turn's answer version (issue #40 — loading a past Investigation). */
+function exchangesFrom(thread: InvestigationWithAnswers): Exchange[] {
+  const byVersion = new Map(thread.answers.map((a) => [a.meta.version, a]));
+  const out: Exchange[] = [];
+  let pendingQuestion: string | undefined;
+  for (const turn of thread.turns) {
+    if (turn.role === 'user') {
+      pendingQuestion = turn.question;
+    } else if (turn.role === 'agent' && turn.answerVersion !== undefined) {
+      const answer = byVersion.get(turn.answerVersion);
+      if (pendingQuestion && answer) out.push({ question: pendingQuestion, answer });
+      pendingQuestion = undefined;
+    }
+  }
+  return out;
+}
+
+export function Thread({
+  onClear,
+  initialInvestigationId,
+  onCreated,
+}: {
+  onClear: () => void;
+  /** When set, load and render this Investigation's saved thread (a follow-up continues it). */
+  initialInvestigationId?: string | null;
+  /** Called after an Answer settles, so the history rail can refresh. */
+  onCreated?: () => void;
+}) {
   const { t, lang } = useI18n();
   const labels = useMemo(() => answerLabels(t), [t]);
   const stream = useInvestigationStream({
@@ -61,7 +89,30 @@ export function Thread({ onClear }: { onClear: () => void }) {
   const [history, setHistory] = useState<Exchange[]>([]);
   // The active Investigation: set from the first/most-recent Answer; subsequent
   // questions continue it as versioned follow-ups (a Message doesn't establish one).
-  const [investigationId, setInvestigationId] = useState<string | null>(null);
+  const [investigationId, setInvestigationId] = useState<string | null>(
+    initialInvestigationId ?? null,
+  );
+  const [loading, setLoading] = useState(Boolean(initialInvestigationId));
+
+  // Load a past Investigation's saved thread when selected from the history rail.
+  // (The component is remounted per selection via `key`, so this runs once.)
+  useEffect(() => {
+    if (!initialInvestigationId) return;
+    let cancelled = false;
+    fetch(`/api/investigations/${encodeURIComponent(initialInvestigationId)}`)
+      .then((r) => (r.ok ? (r.json() as Promise<InvestigationWithAnswers>) : null))
+      .then((thread) => {
+        if (cancelled) return;
+        if (thread) setHistory(exchangesFrom(thread));
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialInvestigationId]);
 
   // When a turn settles (answered, replied, errored, or stopped), move it into the
   // conversation and free the stream — the thread accumulates, never wipes.
@@ -76,10 +127,14 @@ export function Thread({ onClear }: { onClear: () => void }) {
           ? { question, stopped: true }
           : { question, error: error ?? t('genericError') };
     setHistory((h) => [...h, settled]);
-    // An Answer establishes/continues the Investigation; later turns continue it.
-    if (answer) setInvestigationId(answer.investigationId);
+    // An Answer establishes/continues the Investigation; later turns continue it,
+    // and the history rail refreshes (a new thread appears / order updates).
+    if (answer) {
+      setInvestigationId(answer.investigationId);
+      onCreated?.();
+    }
     reset();
-  }, [status, question, answer, message, error, usage, reset, t]);
+  }, [status, question, answer, message, error, usage, reset, t, onCreated]);
 
   // `/clear` is a conversation command, not a question — reset to the empty state
   // (matches the chat-app convention the composer placeholder advertises).
@@ -95,7 +150,11 @@ export function Thread({ onClear }: { onClear: () => void }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-1 flex-col gap-6 pb-4">
-        {isEmpty && <EmptyState onPick={submit} />}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">…</p>
+        ) : (
+          isEmpty && <EmptyState onPick={submit} />
+        )}
 
         {history.map((ex, i) => (
           <div key={i} className="flex flex-col gap-4">
