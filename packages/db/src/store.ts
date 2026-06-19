@@ -8,7 +8,7 @@
  * are not globally unique).
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import {
   type Answer,
   type Investigation,
@@ -22,10 +22,13 @@ import type {
   ListOpts,
   MetadataStore,
   NewInvestigation,
+  NewSession,
+  NewUser,
   SaveAnswerInput,
+  UserRecord,
 } from '@evidata/ports';
 import type { MetadataDb } from './client';
-import { answers, evidence, investigations, queryRuns, turns } from './schema';
+import { answers, evidence, investigations, queryRuns, sessions, turns, users } from './schema';
 
 export interface MetadataStoreOptions {
   now?: () => Date;
@@ -246,4 +249,73 @@ export class DrizzleMetadataStore implements MetadataStore {
       updatedAt: r.updatedAt.toISOString(),
     }));
   }
+
+  // --- M1 identity (spec 08 §5) ---
+
+  async countUsers(): Promise<number> {
+    const [row] = await this.db.select({ n: sql<number>`count(*)::int` }).from(users);
+    return row?.n ?? 0;
+  }
+
+  async createUser(user: NewUser): Promise<UserRecord> {
+    const createdAt = this.now();
+    await this.db.insert(users).values({
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      passwordHash: user.passwordHash,
+      createdAt,
+    });
+    return { ...user, createdAt: createdAt.toISOString() };
+  }
+
+  async getUserByEmail(email: string): Promise<UserRecord | null> {
+    const [row] = await this.db.select().from(users).where(eq(users.email, email));
+    return row ? toUserRecord(row) : null;
+  }
+
+  async createSession(session: NewSession): Promise<void> {
+    await this.db.insert(sessions).values({
+      id: session.id,
+      userId: session.userId,
+      tokenHash: session.tokenHash,
+      createdAt: this.now(),
+      expiresAt: session.expiresAt,
+    });
+  }
+
+  async getSessionUser(tokenHash: string): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        passwordHash: users.passwordHash,
+        createdAt: users.createdAt,
+      })
+      .from(sessions)
+      .innerJoin(users, eq(users.id, sessions.userId))
+      .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, this.now())));
+    return row ? toUserRecord(row) : null;
+  }
+
+  async deleteSession(tokenHash: string): Promise<void> {
+    await this.db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
+  }
+}
+
+function toUserRecord(row: {
+  id: string;
+  email: string;
+  displayName: string;
+  passwordHash: string;
+  createdAt: Date;
+}): UserRecord {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+    passwordHash: row.passwordHash,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

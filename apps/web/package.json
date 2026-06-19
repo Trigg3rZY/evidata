@@ -12,6 +12,7 @@
   "dependencies": {
     "@evidata/agent": "workspace:*",
     "@evidata/answer-contract": "workspace:*",
+    "@evidata/auth": "workspace:*",
     "@evidata/connector-sample": "workspace:*",
     "@evidata/db": "workspace:*",
     "@evidata/investigation": "workspace:*",
