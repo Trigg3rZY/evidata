@@ -117,4 +117,21 @@ run('PostgresExecutor (real Postgres)', () => {
       /no_such_table_xyz|does not exist/i,
     );
   });
+
+  it('maps a connect-time auth failure without leaking host/credentials', async () => {
+    const bad = new PostgresExecutor({ ...roParams, password: 'definitely-wrong' });
+    try {
+      const err = await bad.run('SELECT 1', opts).then(
+        () => null,
+        (e: Error) => e,
+      );
+      expect(err).toBeInstanceOf(Error);
+      expect(err?.message).toMatch(/authentication/i);
+      // The mapped message must not echo host/port/role from the raw driver error.
+      expect(err?.message).not.toContain(roParams.host);
+      expect(err?.message).not.toContain(RO_USER);
+    } finally {
+      await bad.close();
+    }
+  });
 });

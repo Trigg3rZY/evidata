@@ -101,10 +101,10 @@ export class PostgresExecutor implements QueryExecutor {
 
   async run(sql: string, opts: ExecOptions): Promise<QueryRunResult> {
     if (opts.signal?.aborted) throw abortError();
-    const client = await this.getPool().connect();
-    const pid = (await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]
-      ?.pid;
+    const client = await this.connect();
+
     let cancelling = false;
+    let pid: number | undefined;
     const onAbort = (): void => {
       cancelling = true;
       if (pid !== undefined) void this.cancelBackend(pid);
@@ -114,6 +114,11 @@ export class PostgresExecutor implements QueryExecutor {
     const start = performance.now();
     const timeout = Math.max(0, Math.floor(opts.statementTimeoutMs ?? opts.timeoutMs));
     try {
+      pid = (await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]?.pid;
+      // The signal may have fired during connect/PID acquisition, before the listener
+      // could observe it — recheck before issuing any SQL so a Stop cancels promptly.
+      if (opts.signal?.aborted) throw abortError();
+
       await client.query('BEGIN TRANSACTION READ ONLY');
       await client.query(`SET LOCAL statement_timeout = ${timeout}`);
       await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${timeout}`);
@@ -143,6 +148,16 @@ export class PostgresExecutor implements QueryExecutor {
     } finally {
       if (opts.signal) opts.signal.removeEventListener('abort', onAbort);
       client.release();
+    }
+  }
+
+  /** Acquire a pooled client, mapping connect-time auth/host/TLS errors so raw pg
+   *  text (which can echo host/port/user) never leaks to the model/UI (Codex P2). */
+  private async connect(): Promise<PoolClient> {
+    try {
+      return await this.getPool().connect();
+    } catch (err) {
+      throw mapError(err);
     }
   }
 
