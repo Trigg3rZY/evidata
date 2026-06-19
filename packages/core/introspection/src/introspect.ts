@@ -25,6 +25,7 @@ export interface IntrospectionOptions {
 }
 
 interface TableRow {
+  oid: string; // relation OID (as text) — used to scope dependent queries
   schema: string;
   table_name: string;
   comment: string | null;
@@ -69,24 +70,23 @@ export class IntrospectionService {
     const client = new Client({ ...params, application_name: 'evidata-introspect' });
     await client.connect();
     try {
-      const tables = (
-        await client.query<TableRow>(
-          `SELECT n.nspname AS schema, c.relname AS table_name,
-                  obj_description(c.oid) AS comment, c.reltuples::bigint AS row_estimate
-           FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-           WHERE ${RELKINDS} AND ${USER_SCHEMAS}
-           ORDER BY n.nspname, c.relname`,
-        )
-      ).rows;
+      // Cap server-side: order, take maxTables (read +1 to detect overflow → partial).
+      const tableRes = await client.query<TableRow>(
+        `SELECT c.oid::text AS oid, n.nspname AS schema, c.relname AS table_name,
+                obj_description(c.oid) AS comment, c.reltuples::bigint AS row_estimate
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE ${RELKINDS} AND ${USER_SCHEMAS}
+         ORDER BY n.nspname, c.relname
+         LIMIT ${maxTables + 1}`,
+      );
+      const partial = tableRes.rows.length > maxTables;
+      const kept = partial ? tableRes.rows.slice(0, maxTables) : tableRes.rows;
+      const keptOids = kept.map((t) => t.oid);
 
-      const partial = tables.length > maxTables;
-      const kept = partial ? tables.slice(0, maxTables) : tables;
-      const keptKeys = new Set(kept.map((t) => `${t.schema}.${t.table_name}`));
-      const inScope = (schema: string, table: string): boolean =>
-        keptKeys.has(`${schema}.${table}`);
-
-      // Sequential, not Promise.all — a single pg Client serializes queries (parallel
-      // use on one connection is deprecated and gives no real concurrency anyway).
+      // All dependent metadata is scoped to the kept relations — don't scan the whole
+      // catalog when a large schema is capped (Codex P2). Sequential, not Promise.all:
+      // a single pg Client serializes queries anyway.
+      const scoped = `c.oid = ANY($1::oid[])`;
       const cols = await client.query<ColumnRow>(
         `SELECT n.nspname AS schema, c.relname AS table_name, a.attname AS column_name,
                 format_type(a.atttypid, a.atttypmod) AS data_type,
@@ -94,8 +94,9 @@ export class IntrospectionService {
          FROM pg_attribute a
          JOIN pg_class c ON c.oid = a.attrelid
          JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE a.attnum > 0 AND NOT a.attisdropped AND ${RELKINDS} AND ${USER_SCHEMAS}
+         WHERE a.attnum > 0 AND NOT a.attisdropped AND ${scoped}
          ORDER BY n.nspname, c.relname, a.attnum`,
+        [keptOids],
       );
       const pks = await client.query<KeyRow>(
         `SELECT n.nspname AS schema, c.relname AS table_name, a.attname AS column_name
@@ -103,8 +104,11 @@ export class IntrospectionService {
          JOIN pg_class c ON c.oid = con.conrelid
          JOIN pg_namespace n ON n.oid = c.relnamespace
          JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY(con.conkey)
-         WHERE con.contype = 'p' AND ${USER_SCHEMAS}`,
+         WHERE con.contype = 'p' AND ${scoped}`,
+        [keptOids],
       );
+      // Composite FKs: unnest conkey/confkey in parallel so EVERY column pair is
+      // recorded (each local column gets its own reference), not just the first (Codex P2).
       const fks = await client.query<FkRow>(
         `SELECT n.nspname AS schema, c.relname AS table_name, a.attname AS column_name,
                 fn.nspname AS ref_schema, fc.relname AS ref_table, fa.attname AS ref_column
@@ -113,9 +117,11 @@ export class IntrospectionService {
          JOIN pg_namespace n ON n.oid = c.relnamespace
          JOIN pg_class fc ON fc.oid = con.confrelid
          JOIN pg_namespace fn ON fn.oid = fc.relnamespace
-         JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
-         JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = con.confkey[1]
-         WHERE con.contype = 'f' AND ${USER_SCHEMAS}`,
+         JOIN LATERAL unnest(con.conkey, con.confkey) AS k(local_attnum, ref_attnum) ON true
+         JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.local_attnum
+         JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = k.ref_attnum
+         WHERE con.contype = 'f' AND ${scoped}`,
+        [keptOids],
       );
       const idx = await client.query<IndexRow>(
         `SELECT n.nspname AS schema, c.relname AS table_name, i.relname AS index_name
@@ -123,8 +129,9 @@ export class IntrospectionService {
          JOIN pg_class c ON c.oid = x.indrelid
          JOIN pg_class i ON i.oid = x.indexrelid
          JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE ${USER_SCHEMAS}
+         WHERE ${scoped}
          ORDER BY n.nspname, c.relname, i.relname`,
+        [keptOids],
       );
 
       const pkSet = new Set(pks.rows.map((r) => `${r.schema}.${r.table_name}.${r.column_name}`));
@@ -132,9 +139,10 @@ export class IntrospectionService {
       for (const r of fks.rows) fkMap.set(`${r.schema}.${r.table_name}.${r.column_name}`, r);
       const idxByTable = new Map<string, string[]>();
       for (const r of idx.rows) {
-        if (!inScope(r.schema, r.table_name)) continue;
         const key = `${r.schema}.${r.table_name}`;
-        (idxByTable.get(key) ?? idxByTable.set(key, []).get(key)!).push(r.index_name);
+        const list = idxByTable.get(key) ?? [];
+        list.push(r.index_name);
+        idxByTable.set(key, list);
       }
 
       const tableMap = new Map<string, SchemaTable>();
