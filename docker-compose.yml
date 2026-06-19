@@ -1,0 +1,26 @@
+# Local Postgres for evidata's M1 work — runs the connector/introspection
+# integration tests and gives you a real database to try the "add connection"
+# flow against. The product's own metadata defaults to file-backed pglite (no
+# server needed); this is for *business* data sources + tests.
+#
+#   docker compose up -d
+#   export TEST_DATABASE_URL=postgres://postgres:postgres@localhost:55432/evidata_test
+#   pnpm test            # the gated Postgres tests now run
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: evidata_test
+    ports:
+      - '55432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - evidata_pg:/var/lib/postgresql/data
+
+volumes:
+  evidata_pg:
