@@ -37,6 +37,7 @@ type ResolverStore = Pick<
   | 'getGlossaryTerms'
   | 'getEntityMappings'
   | 'getLatestSnapshot'
+  | 'getConnectionRole'
 >;
 
 export class PublishedDataSourceResolver implements DataSourceResolver {
@@ -47,19 +48,29 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     private readonly staticIds: ReadonlySet<string>,
   ) {}
 
-  async list(): Promise<Array<{ id: string; name: string }>> {
+  async list(userId?: string): Promise<Array<{ id: string; name: string }>> {
+    if (!userId) return []; // real sources are never anonymous (the Sample is static)
     const published = await this.store.listPublishedDataSources();
-    return published
-      .filter((d) => !this.staticIds.has(d.id))
-      .map((d) => ({ id: d.id, name: d.name }));
+    const out: Array<{ id: string; name: string }> = [];
+    for (const d of published) {
+      if (this.staticIds.has(d.id)) continue;
+      if (await this.authorizedConnection(d.id, userId)) out.push({ id: d.id, name: d.name });
+    }
+    return out;
   }
 
-  async resolve(id: string): Promise<DataSourceRuntime | null> {
+  async resolve(id: string, userId?: string): Promise<DataSourceRuntime | null> {
     if (this.staticIds.has(id)) return null; // owned by the static list
     const ds = await this.store.getDataSource(id);
     if (!ds || ds.lifecycle !== 'published') return null;
     const binding = await this.store.getDataSourceConnection(id);
     if (!binding) return null;
+    // Authz (owner-gated for the slice, spec 09 §2): the caller must have a role on
+    // the backing Connection. Anonymous callers get nothing. Returns null (not an
+    // error) so an unauthorized id is indistinguishable from a missing one.
+    if (!userId || !(await this.store.getConnectionRole(userId, binding.connectionId))) {
+      return null;
+    }
 
     // Freshest captured schema for what the model sees.
     const schema = await this.store.getLatestSnapshot(binding.connectionId);
@@ -81,6 +92,13 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
       safetyContext: buildSafetyContext(policy, binding),
       context: buildContext(ctx?.overview ?? '', glossary, mappings),
     };
+  }
+
+  /** True when `userId` has a role on the connection backing this published source. */
+  private async authorizedConnection(dataSourceId: string, userId: string): Promise<boolean> {
+    const binding = await this.store.getDataSourceConnection(dataSourceId);
+    if (!binding) return false;
+    return (await this.store.getConnectionRole(userId, binding.connectionId)) !== null;
   }
 
   private async connectorOrNull(connectionId: string): Promise<Connector | null> {

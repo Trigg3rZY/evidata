@@ -24,11 +24,12 @@ export const MASK = '••••••';
 /** Max rows surfaced as a provider/Evidence sample, regardless of rowLimit. */
 export const SAMPLE_ROW_CAP = 50;
 
-/** Column parts of the sensitive "table.column" set, lower-cased. */
+/** Column parts of the sensitive "table.column" set, lower-cased. The table may be
+ *  schema-qualified ("schema.table.column"), so take the column after the LAST dot. */
 function sensitiveColumnNames(sensitive: ReadonlySet<string>): Set<string> {
   const names = new Set<string>();
   for (const entry of sensitive) {
-    const dot = entry.indexOf('.');
+    const dot = entry.lastIndexOf('.');
     const col = dot >= 0 ? entry.slice(dot + 1) : entry;
     if (col) names.add(col.toLowerCase());
   }

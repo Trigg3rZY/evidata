@@ -92,4 +92,15 @@ describe('ResultRedactor (spec 03 §4)', () => {
     const r = redactor.redact(result(), ctx({ sensitiveColumns: new Set(['contact_email']) }));
     expect(r.redactedColumns).toEqual(['contact_email']);
   });
+
+  it('handles a schema-qualified sensitive column (schema.table.column)', () => {
+    // Real introspected schemas qualify non-public tables; the column is the part
+    // after the LAST dot, so this must still mask `contact_email` (Codex P1).
+    const r = redactor.redact(
+      result(),
+      ctx({ sensitiveColumns: new Set(['sales.accounts.contact_email']) }),
+    );
+    expect(r.sampleRows[0]).toEqual({ id: 1, name: 'ACME', contact_email: MASK });
+    expect(r.redactedColumns).toEqual(['contact_email']);
+  });
 });

@@ -18,6 +18,9 @@ export interface AskBody {
   investigationId?: string;
   /** Regenerate the latest answer in place: a new version with no new user turn. */
   rerun?: boolean;
+  /** Authenticated user id — server-injected from the session, NEVER parsed from
+   *  the client body. Authorizes access to a real published source. */
+  userId?: string;
 }
 
 /** Encode one Server-Sent Event frame. */
@@ -113,6 +116,7 @@ export async function askStream(
         language: body.language,
         ...(body.investigationId ? { investigationId: body.investigationId } : {}),
         ...(body.rerun ? { rerun: true } : {}),
+        ...(body.userId ? { userId: body.userId } : {}),
       },
       {
         provider,

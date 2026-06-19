@@ -125,13 +125,15 @@ run('PublishedDataSourceResolver → real Postgres (M2-S2)', () => {
       updatedAt: now,
     });
 
-    // Resolve → a real runtime over the live connection.
-    const rt = await resolver.resolve(DS_ID);
+    // Resolve as the owner (who has a membership on the backing connection).
+    const rt = await resolver.resolve(DS_ID, ownerId);
     expect(rt).not.toBeNull();
     expect([...rt!.safetyContext.allowedTables]).toContain('m2_widgets');
     expect(rt!.schema.tables.some((t) => t.name === 'm2_widgets')).toBe(true);
-    // It shows up in the picker.
-    expect((await resolver.list()).some((d) => d.id === DS_ID)).toBe(true);
+    // It shows up in the owner's picker, but not for a non-member / anonymous.
+    expect((await resolver.list(ownerId)).some((d) => d.id === DS_ID)).toBe(true);
+    expect(await resolver.list('stranger')).toEqual([]);
+    expect(await resolver.resolve(DS_ID)).toBeNull(); // anonymous is denied
 
     // The connector runs a real read-only SELECT against Postgres.
     const exec = rt!.connector.getExecutor();

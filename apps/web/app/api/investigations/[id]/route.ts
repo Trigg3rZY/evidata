@@ -1,5 +1,6 @@
 import { askSseResponse } from '@/lib/ask-route';
 import { parseAskBody } from '@/lib/ask-stream';
+import { currentUser } from '@/lib/auth';
 import { getRuntime } from '@/lib/runtime';
 
 export const runtime = 'nodejs';
@@ -34,5 +35,9 @@ export async function POST(
   if ('error' in parsed) {
     return Response.json({ error: parsed.error }, { status: 400 });
   }
-  return askSseResponse({ ...parsed, investigationId: id }, req.signal);
+  const user = await currentUser(req);
+  return askSseResponse(
+    { ...parsed, investigationId: id, ...(user ? { userId: user.id } : {}) },
+    req.signal,
+  );
 }
