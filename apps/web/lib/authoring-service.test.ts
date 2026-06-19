@@ -21,7 +21,7 @@ beforeAll(async () => {
 
   const owner = await store.createFirstUser({
     id: 'owner',
-    email: 'o@x.com',
+    username: 'o@x.com',
     displayName: 'Owner',
     passwordHash: 'x',
   });

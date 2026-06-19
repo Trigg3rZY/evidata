@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 /** Sign in to the admin area. Redirects to first-run setup if no account exists yet. */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,11 +29,11 @@ export default function LoginPage() {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
     });
     setBusy(false);
     if (res.ok) router.push('/admin/connections');
-    else setError('Invalid email or password.');
+    else setError('Invalid username or password.');
   };
 
   return (
@@ -42,10 +42,10 @@ export default function LoginPage() {
         <h1 className="text-xl font-medium">Sign in</h1>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
           <Field
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
+            label="Username"
+            type="text"
+            value={username}
+            onChange={setUsername}
             required
             autoComplete="username"
           />

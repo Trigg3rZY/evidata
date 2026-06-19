@@ -306,7 +306,7 @@ export class DrizzleMetadataStore implements MetadataStore {
       const createdAt = this.now();
       await tx.insert(users).values({
         id: user.id,
-        email: user.email,
+        username: user.username,
         displayName: user.displayName,
         passwordHash: user.passwordHash,
         createdAt,
@@ -315,8 +315,8 @@ export class DrizzleMetadataStore implements MetadataStore {
     });
   }
 
-  async getUserByEmail(email: string): Promise<UserRecord | null> {
-    const [row] = await this.db.select().from(users).where(eq(users.email, email));
+  async getUserByUsername(username: string): Promise<UserRecord | null> {
+    const [row] = await this.db.select().from(users).where(eq(users.username, username));
     return row ? toUserRecord(row) : null;
   }
 
@@ -334,7 +334,7 @@ export class DrizzleMetadataStore implements MetadataStore {
     const [row] = await this.db
       .select({
         id: users.id,
-        email: users.email,
+        username: users.username,
         displayName: users.displayName,
         passwordHash: users.passwordHash,
         createdAt: users.createdAt,
@@ -712,14 +712,14 @@ function toSummary(row: {
 
 function toUserRecord(row: {
   id: string;
-  email: string;
+  username: string;
   displayName: string;
   passwordHash: string;
   createdAt: Date;
 }): UserRecord {
   return {
     id: row.id,
-    email: row.email,
+    username: row.username,
     displayName: row.displayName,
     passwordHash: row.passwordHash,
     createdAt: row.createdAt.toISOString(),

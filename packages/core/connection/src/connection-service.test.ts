@@ -44,7 +44,7 @@ run('ConnectionService (real Postgres + store + vault)', () => {
 
     const owner = await store.createFirstUser({
       id: 'owner',
-      email: 'owner@example.com',
+      username: 'owner@example.com',
       displayName: 'Owner',
       passwordHash: 'x',
     });

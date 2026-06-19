@@ -236,7 +236,7 @@ describe('file-backed metadata persistence (spec 08 §9)', () => {
       const h1 = await createMetadataDb({ dataDir: dir });
       await new DrizzleMetadataStore(h1.db).createFirstUser({
         id: 'p1',
-        email: 'persist@example.com',
+        username: 'persist@example.com',
         displayName: 'P',
         passwordHash: 'x',
       });
@@ -305,7 +305,7 @@ describe('M1 metadata schema (spec 12)', () => {
     const { db } = handle;
     await db.insert(users).values({
       id: 'u1',
-      email: 'owner@example.com',
+      username: 'owner@example.com',
       passwordHash: 'argon2id$…',
       displayName: 'Owner',
       createdAt: at('2026-06-02T00:00:00Z'),
@@ -314,7 +314,7 @@ describe('M1 metadata schema (spec 12)', () => {
     await expect(
       db.insert(users).values({
         id: 'u2',
-        email: 'owner@example.com',
+        username: 'owner@example.com',
         passwordHash: 'x',
         displayName: 'Dup',
         createdAt: at('2026-06-02T00:00:01Z'),

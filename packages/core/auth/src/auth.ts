@@ -34,7 +34,7 @@ const P = 1;
 const KEYLEN = 32;
 const MAXMEM = 64 * 1024 * 1024;
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-// A well-formed hash to verify against when an email is unknown, so login timing
+// A well-formed hash to verify against when the username is unknown, so login timing
 // doesn't reveal whether the account exists (mitigates user enumeration).
 const DUMMY_HASH = `scrypt$${N}$${R}$${P}$${'a'.repeat(24)}$${'b'.repeat(44)}`;
 
@@ -43,7 +43,7 @@ export type AuthStore = Pick<
   MetadataStore,
   | 'countUsers'
   | 'createFirstUser'
-  | 'getUserByEmail'
+  | 'getUserByUsername'
   | 'createSession'
   | 'getSessionUser'
   | 'deleteSession'
@@ -52,7 +52,8 @@ export type AuthStore = Pick<
 /** A user as exposed to callers — never the password hash. */
 export interface AuthedUser {
   id: string;
-  email: string;
+  /** Login identifier (username-style; not RFC-email-enforced). */
+  username: string;
   displayName: string;
 }
 
@@ -64,7 +65,7 @@ export interface AuthServiceDeps {
 }
 
 export interface Credentials {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -114,25 +115,25 @@ export class AuthService {
     // for the zero-user invariant (a pre-check would still race).
     const user = await this.deps.store.createFirstUser({
       id: this.newId('usr'),
-      email: input.email,
+      username: input.username,
       displayName: input.displayName,
       passwordHash: await this.hashPassword(input.password),
     });
     if (!user) throw new Error('Setup is already complete.');
     const token = await this.startSession(user.id);
-    return { user: publicUser(user.id, user.email, user.displayName), token };
+    return { user: publicUser(user.id, user.username, user.displayName), token };
   }
 
   /** Verify credentials and start a session; null on any failure (generic by design). */
   async login(input: Credentials): Promise<{ user: AuthedUser; token: string } | null> {
-    const user = await this.deps.store.getUserByEmail(input.email);
+    const user = await this.deps.store.getUserByUsername(input.username);
     if (!user) {
       await this.verifyPassword(input.password, DUMMY_HASH); // constant-ish time
       return null;
     }
     if (!(await this.verifyPassword(input.password, user.passwordHash))) return null;
     const token = await this.startSession(user.id);
-    return { user: publicUser(user.id, user.email, user.displayName), token };
+    return { user: publicUser(user.id, user.username, user.displayName), token };
   }
 
   async logout(token: string): Promise<void> {
@@ -143,7 +144,7 @@ export class AuthService {
   async resolve(token: string | undefined | null): Promise<AuthedUser | null> {
     if (!token) return null;
     const user = await this.deps.store.getSessionUser(hashToken(token));
-    return user ? publicUser(user.id, user.email, user.displayName) : null;
+    return user ? publicUser(user.id, user.username, user.displayName) : null;
   }
 
   private async startSession(userId: string): Promise<string> {
@@ -162,6 +163,6 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('base64');
 }
 
-function publicUser(id: string, email: string, displayName: string): AuthedUser {
-  return { id, email, displayName };
+function publicUser(id: string, username: string, displayName: string): AuthedUser {
+  return { id, username, displayName };
 }

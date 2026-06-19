@@ -65,7 +65,7 @@ run('PublishedDataSourceResolver → real Postgres (M2-S2)', () => {
 
     const owner = await store.createFirstUser({
       id: 'owner',
-      email: 'owner@example.com',
+      username: 'owner@example.com',
       displayName: 'Owner',
       passwordHash: 'x',
     });
