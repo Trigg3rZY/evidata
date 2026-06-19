@@ -18,17 +18,38 @@ import {
   validateAnswerSchema,
 } from '@evidata/answer-contract';
 import type {
+  ConnectionHealth,
+  ConnectionMembershipInput,
+  ConnectionRecord,
+  ConnectionRole,
+  ConnectionSummary,
   InvestigationListItem,
   ListOpts,
   MetadataStore,
+  NewConnection,
+  NewDataSourceRecord,
   NewInvestigation,
+  NewSchemaSnapshotRecord,
   NewSession,
   NewUser,
   SaveAnswerInput,
+  SchemaSnapshot,
   UserRecord,
 } from '@evidata/ports';
 import type { MetadataDb } from './client';
-import { answers, evidence, investigations, queryRuns, sessions, turns, users } from './schema';
+import {
+  answers,
+  connectionMemberships,
+  connections,
+  dataSources,
+  evidence,
+  investigations,
+  queryRuns,
+  schemaSnapshots,
+  sessions,
+  turns,
+  users,
+} from './schema';
 
 export interface MetadataStoreOptions {
   now?: () => Date;
@@ -309,6 +330,146 @@ export class DrizzleMetadataStore implements MetadataStore {
   async deleteSession(tokenHash: string): Promise<void> {
     await this.db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
   }
+
+  // --- M1 connections (spec 08 §6) ---
+
+  async createConnection(c: NewConnection): Promise<ConnectionRecord> {
+    const at = this.now();
+    await this.db.insert(connections).values({
+      id: c.id,
+      kind: c.kind,
+      name: c.name,
+      host: c.host,
+      port: c.port,
+      database: c.database,
+      sslMode: c.sslMode,
+      credentialBlob: c.credentialBlob,
+      health: c.health,
+      createdBy: c.createdBy,
+      createdAt: at,
+      updatedAt: at,
+    });
+    return { ...c, createdAt: at.toISOString(), updatedAt: at.toISOString() };
+  }
+
+  async listConnections(): Promise<ConnectionSummary[]> {
+    const rows = await this.db.select().from(connections).orderBy(desc(connections.createdAt));
+    return rows.map(toSummary);
+  }
+
+  async getConnection(id: string): Promise<ConnectionRecord | null> {
+    const [row] = await this.db.select().from(connections).where(eq(connections.id, id));
+    if (!row) return null;
+    return {
+      ...toSummary(row),
+      credentialBlob: row.credentialBlob as ConnectionRecord['credentialBlob'],
+    };
+  }
+
+  async setConnectionHealth(id: string, health: ConnectionHealth): Promise<void> {
+    await this.db
+      .update(connections)
+      .set({ health, updatedAt: this.now() })
+      .where(eq(connections.id, id));
+  }
+
+  async deleteConnection(id: string): Promise<void> {
+    // No ON DELETE cascade in the schema — remove dependents first.
+    await this.db.delete(schemaSnapshots).where(eq(schemaSnapshots.connectionId, id));
+    await this.db.delete(connectionMemberships).where(eq(connectionMemberships.connectionId, id));
+    await this.db.delete(dataSources).where(eq(dataSources.connectionId, id));
+    await this.db.delete(connections).where(eq(connections.id, id));
+  }
+
+  async createConnectionMembership(m: ConnectionMembershipInput): Promise<void> {
+    await this.db.insert(connectionMemberships).values({
+      id: m.id,
+      userId: m.userId,
+      connectionId: m.connectionId,
+      role: m.role,
+    });
+  }
+
+  async getConnectionRole(userId: string, connectionId: string): Promise<ConnectionRole | null> {
+    const [row] = await this.db
+      .select({ role: connectionMemberships.role })
+      .from(connectionMemberships)
+      .where(
+        and(
+          eq(connectionMemberships.userId, userId),
+          eq(connectionMemberships.connectionId, connectionId),
+        ),
+      );
+    return row?.role ?? null;
+  }
+
+  async saveSchemaSnapshot(s: NewSchemaSnapshotRecord): Promise<void> {
+    await this.db.insert(schemaSnapshots).values({
+      id: s.id,
+      connectionId: s.connectionId,
+      status: s.status,
+      partial: s.partial,
+      payload: s.payload,
+      capturedAt: s.capturedAt,
+    });
+  }
+
+  async getLatestSnapshot(connectionId: string): Promise<SchemaSnapshot | null> {
+    const [row] = await this.db
+      .select({ payload: schemaSnapshots.payload })
+      .from(schemaSnapshots)
+      .where(eq(schemaSnapshots.connectionId, connectionId))
+      .orderBy(desc(schemaSnapshots.capturedAt))
+      .limit(1);
+    return row ? (row.payload as SchemaSnapshot) : null;
+  }
+
+  async createDataSource(ds: NewDataSourceRecord): Promise<void> {
+    await this.db.insert(dataSources).values({
+      id: ds.id,
+      name: ds.name,
+      kind: ds.kind,
+      connectionId: ds.connectionId,
+      createdAt: this.now(),
+    });
+  }
+
+  async listDataSourcesByConnection(
+    connectionId: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    return this.db
+      .select({ id: dataSources.id, name: dataSources.name })
+      .from(dataSources)
+      .where(eq(dataSources.connectionId, connectionId));
+  }
+}
+
+function toSummary(row: {
+  id: string;
+  kind: string;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  sslMode: string;
+  health: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): ConnectionSummary {
+  return {
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    host: row.host,
+    port: row.port,
+    database: row.database,
+    sslMode: row.sslMode,
+    health: row.health as ConnectionHealth,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 function toUserRecord(row: {

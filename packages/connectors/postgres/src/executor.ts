@@ -70,7 +70,7 @@ function mapError(err: unknown): Error {
 }
 
 function readCursor(
-  cursor: Cursor,
+  cursor: Cursor<Record<string, unknown>>,
   rowCount: number,
 ): Promise<{
   rows: Array<Record<string, unknown>>;
@@ -79,7 +79,7 @@ function readCursor(
   return new Promise((resolve, reject) => {
     cursor.read(rowCount, (err, rows, result) => {
       if (err) reject(err);
-      else resolve({ rows, fields: result?.fields ?? [] });
+      else resolve({ rows, fields: result.fields });
     });
   });
 }
@@ -123,7 +123,7 @@ export class PostgresExecutor implements QueryExecutor {
       await client.query(`SET LOCAL statement_timeout = ${timeout}`);
       await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${timeout}`);
 
-      const cursor = client.query(new Cursor(sql));
+      const cursor = client.query(new Cursor<Record<string, unknown>>(sql));
       const { rows: read, fields } = await readCursor(cursor, opts.rowLimit + 1);
       await new Promise<void>((resolve) => cursor.close(() => resolve()));
       await client.query('COMMIT');

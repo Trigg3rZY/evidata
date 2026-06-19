@@ -7,6 +7,8 @@
  * is authoritative for version numbering and the single `is_latest` head.
  */
 import type { Answer, Investigation, InvestigationWithAnswers } from '@evidata/answer-contract';
+import type { SchemaSnapshot } from './connector';
+import type { EncryptedSecret } from './secrets';
 
 /** Audit record of one executed query (G4). Shared with the AgentRunner's RunResult. */
 export interface QueryRunRecord {
@@ -74,6 +76,90 @@ export interface MetadataStore {
   /** The user for a non-expired session token hash, or null (expiry checked in the store). */
   getSessionUser(tokenHash: string): Promise<UserRecord | null>;
   deleteSession(tokenHash: string): Promise<void>;
+
+  // --- M1 connections (spec 08 §6 / 12 §2). Credentials stay encrypted at rest. ---
+  createConnection(c: NewConnection): Promise<ConnectionRecord>;
+  /** Public summaries (never the credential blob). */
+  listConnections(): Promise<ConnectionSummary[]>;
+  /** Full record incl. the encrypted blob — internal use (test/introspect); never returned by the API. */
+  getConnection(id: string): Promise<ConnectionRecord | null>;
+  setConnectionHealth(id: string, health: ConnectionHealth): Promise<void>;
+  deleteConnection(id: string): Promise<void>;
+  createConnectionMembership(m: ConnectionMembershipInput): Promise<void>;
+  /** The user's role on a connection, or null if they have none (authz). */
+  getConnectionRole(userId: string, connectionId: string): Promise<ConnectionRole | null>;
+  saveSchemaSnapshot(s: NewSchemaSnapshotRecord): Promise<void>;
+  getLatestSnapshot(connectionId: string): Promise<SchemaSnapshot | null>;
+  createDataSource(ds: NewDataSourceRecord): Promise<void>;
+  /** Data Sources backed by a connection — shown before an edit/disable (08 §6). */
+  listDataSourcesByConnection(connectionId: string): Promise<Array<{ id: string; name: string }>>;
+}
+
+export type ConnectionHealth =
+  | 'Untested'
+  | 'Healthy'
+  | 'AuthFailed'
+  | 'Unreachable'
+  | 'TLSError'
+  | 'PermissionInsufficient'
+  | 'Disabled';
+export type ConnectionRole = 'owner' | 'admin';
+
+export interface NewConnection {
+  id: string;
+  kind: string;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  sslMode: string;
+  credentialBlob: EncryptedSecret;
+  health: ConnectionHealth;
+  createdBy: string;
+}
+
+/** Full stored connection, incl. the encrypted credential blob (internal use only). */
+export interface ConnectionRecord extends NewConnection {
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Public connection shape — what the API returns (no credential blob). */
+export interface ConnectionSummary {
+  id: string;
+  kind: string;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  sslMode: string;
+  health: ConnectionHealth;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConnectionMembershipInput {
+  id: string;
+  userId: string;
+  connectionId: string;
+  role: ConnectionRole;
+}
+
+export interface NewSchemaSnapshotRecord {
+  id: string;
+  connectionId: string;
+  status: string;
+  partial: boolean;
+  payload: SchemaSnapshot;
+  capturedAt: Date;
+}
+
+export interface NewDataSourceRecord {
+  id: string;
+  name: string;
+  kind: string;
+  connectionId: string | null;
 }
 
 /** A local account (never carries the plaintext password). */

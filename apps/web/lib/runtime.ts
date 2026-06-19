@@ -15,6 +15,8 @@ import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
 import { InvestigationService, type DataSourceRuntime } from '@evidata/investigation';
 import { AuthService } from '@evidata/auth';
+import { ConnectionService } from '@evidata/connection';
+import { credentialVaultFromEnv } from '@evidata/secrets';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
@@ -34,6 +36,7 @@ export function makeProvider(question: string): AgentProvider {
 export interface Runtime {
   service: InvestigationService;
   auth: AuthService;
+  connections: ConnectionService;
 }
 
 // Stash on globalThis so `next dev` hot-reloads reuse one in-memory DB instead
@@ -63,8 +66,11 @@ async function build(): Promise<Runtime> {
     store,
   });
   const auth = new AuthService({ store });
+  // Credential vault from env (null without APP_ENCRYPTION_KEY → connection
+  // create/test/introspect surface a clear "not configured" error).
+  const connections = new ConnectionService({ store, vault: credentialVaultFromEnv(process.env) });
 
-  return { service, auth };
+  return { service, auth, connections };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
