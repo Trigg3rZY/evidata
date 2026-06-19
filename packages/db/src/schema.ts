@@ -26,7 +26,11 @@ export const meta = pgSchema('evidata_meta');
 
 export const investigations = meta.table('investigations', {
   id: text('id').primaryKey(),
-  dataSourceId: text('data_source_id').notNull(), // M0: always 'sample'
+  // M1 (spec 12 §3): now a real FK to data_sources; the migration seeds the
+  // built-in Sample row so existing 'sample' rows satisfy the constraint.
+  dataSourceId: text('data_source_id')
+    .notNull()
+    .references(() => dataSources.id),
   title: text('title').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
@@ -133,7 +137,94 @@ export const suggestions = meta.table('suggestions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 });
 
-/** The full M0 metadata schema, for the migrator and typed queries. */
+// --- M1 additions: identity, connections, snapshots, data sources (spec 12 §2) ---
+
+export const users = meta.table(
+  'users',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(), // Argon2id (08 §5)
+    displayName: text('display_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('users_email_uq').on(t.email)],
+);
+
+export const sessions = meta.table(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    tokenHash: text('token_hash').notNull(), // SHA-256 of the cookie token; never the token
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('sessions_token_uq').on(t.tokenHash),
+    index('sessions_user_idx').on(t.userId),
+  ],
+);
+
+export const connections = meta.table('connections', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(), // 'postgres'
+  name: text('name').notNull(),
+  host: text('host').notNull(),
+  port: integer('port').notNull(),
+  database: text('database').notNull(),
+  sslMode: text('ssl_mode').notNull(), // 'require' | 'verify-full' | 'disable' | …
+  credentialBlob: jsonb('credential_blob').notNull(), // EncryptedSecret (08 §3) — never returned
+  health: text('health').notNull(), // Connection state machine (08 §7)
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+});
+
+export const connectionMemberships = meta.table(
+  'connection_memberships',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    role: text('role', { enum: ['owner', 'admin'] }).notNull(),
+  },
+  (t) => [uniqueIndex('conn_member_uq').on(t.userId, t.connectionId)],
+);
+
+export const schemaSnapshots = meta.table(
+  'schema_snapshots',
+  {
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    status: text('status').notNull(), // 'complete' | 'partial' | 'failed'
+    partial: boolean('partial').notNull(),
+    payload: jsonb('payload').notNull(), // the SchemaSnapshot document (08 §4)
+    capturedAt: timestamp('captured_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('snapshots_connection_idx').on(t.connectionId, t.capturedAt)],
+);
+
+// Minimal Data Source so Investigation.dataSourceId is a real FK (M2 extends this).
+export const dataSources = meta.table('data_sources', {
+  id: text('id').primaryKey(), // 'sample' for the built-in Sample
+  name: text('name').notNull(),
+  kind: text('kind').notNull(), // 'sample' | 'postgres'
+  connectionId: text('connection_id').references(() => connections.id), // null for the Sample
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+});
+
+/** The full metadata schema (M0 + M1), for the migrator and typed queries. */
 export const schema = {
   investigations,
   turns,
@@ -141,4 +232,10 @@ export const schema = {
   queryRuns,
   evidence,
   suggestions,
+  users,
+  sessions,
+  connections,
+  connectionMemberships,
+  schemaSnapshots,
+  dataSources,
 };
