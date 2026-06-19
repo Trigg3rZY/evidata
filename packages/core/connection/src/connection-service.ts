@@ -9,9 +9,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
-import { sslFor, type PostgresConnectionParams } from '@evidata/connector-postgres';
+import {
+  PostgresConnector,
+  sslFor,
+  type PostgresConnectionParams,
+} from '@evidata/connector-postgres';
 import { IntrospectionService } from '@evidata/introspection';
 import type {
+  Connector,
   ConnectionHealth,
   ConnectionRecord,
   ConnectionSummary,
@@ -35,6 +40,14 @@ export class VaultUnavailableError extends Error {
   }
 }
 
+/** Raised when a connection has no captured SchemaSnapshot yet (introspect first). */
+export class SchemaUnavailableError extends Error {
+  constructor() {
+    super('Connection schema has not been captured yet (introspect the connection first).');
+    this.name = 'SchemaUnavailableError';
+  }
+}
+
 export type ConnectionStore = Pick<
   MetadataStore,
   | 'createConnection'
@@ -45,6 +58,7 @@ export type ConnectionStore = Pick<
   | 'createConnectionMembership'
   | 'getConnectionRole'
   | 'saveSchemaSnapshot'
+  | 'getLatestSnapshot'
   | 'createDataSource'
   | 'listDataSourcesByConnection'
 >;
@@ -78,10 +92,38 @@ export interface IntrospectResult {
 export class ConnectionService {
   private readonly introspection: IntrospectionService;
   private readonly newId: (prefix: string) => string;
+  /** Live read-only connectors keyed by connection id; the pool is reused across turns. */
+  private readonly connectors = new Map<string, PostgresConnector>();
 
   constructor(private readonly deps: ConnectionServiceDeps) {
     this.introspection = deps.introspection ?? new IntrospectionService();
     this.newId = deps.newId ?? ((p) => `${p}_${randomUUID()}`);
+  }
+
+  /**
+   * Build (and cache) a read-only connector for a stored connection — the
+   * server-side query path for a published Data Source (spec 09 §2). Decrypts the
+   * credentials via the vault and binds the latest captured SchemaSnapshot; cached
+   * by connection id so the pg pool is reused across turns. No per-user authz here:
+   * the caller (the DataSource resolver) gates on the source's published state.
+   */
+  async connectorFor(connectionId: string): Promise<Connector> {
+    const cached = this.connectors.get(connectionId);
+    if (cached) return cached;
+    const record = await this.deps.store.getConnection(connectionId);
+    if (!record) throw new ConnectionAccessError();
+    const snapshot = await this.deps.store.getLatestSnapshot(connectionId);
+    if (!snapshot) throw new SchemaUnavailableError();
+    const connector = new PostgresConnector(connectionId, this.paramsFor(record), snapshot);
+    this.connectors.set(connectionId, connector);
+    return connector;
+  }
+
+  /** Close all pooled connectors (graceful shutdown / connection mutation). */
+  async closeAll(): Promise<void> {
+    const all = [...this.connectors.values()];
+    this.connectors.clear();
+    await Promise.all(all.map((c) => c.close().catch(() => {})));
   }
 
   /** Create a Connection (encrypting its credentials), with the creator as owner

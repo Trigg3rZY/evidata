@@ -20,6 +20,7 @@ import { credentialVaultFromEnv } from '@evidata/secrets';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
+import { PublishedDataSourceResolver } from './data-source-resolver';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
 // set (DeepSeek by default); otherwise we fall back to the deterministic
@@ -63,16 +64,24 @@ async function build(): Promise<Runtime> {
   };
 
   const store = new DrizzleMetadataStore(db.db);
+  // Credential vault from env (null without APP_ENCRYPTION_KEY → connection
+  // create/test/introspect surface a clear "not configured" error).
+  const connections = new ConnectionService({ store, vault: credentialVaultFromEnv(process.env) });
+  // Published real Data Sources are resolved on demand into the same runtime shape
+  // as the Sample (M2-S2); the Sample stays static so it never needs a connection.
+  const resolver = new PublishedDataSourceResolver(
+    store,
+    connections,
+    new Set([SAMPLE_DATA_SOURCE_ID]),
+  );
   const service = new InvestigationService({
     dataSources: [sampleRuntime],
+    resolver,
     gate: createSafetyGate(),
     redactor: createRedactor(),
     store,
   });
   const auth = new AuthService({ store });
-  // Credential vault from env (null without APP_ENCRYPTION_KEY → connection
-  // create/test/introspect surface a clear "not configured" error).
-  const connections = new ConnectionService({ store, vault: credentialVaultFromEnv(process.env) });
 
   return { service, auth, connections };
 }

@@ -37,11 +37,26 @@ export interface DataSourceRuntime {
   context: AgentContext;
 }
 
+/**
+ * Resolves a Data Source not in the static `dataSources` list into a runtime on
+ * demand — e.g. a *published* real Postgres source (spec 09 §2). The static array
+ * is checked first; this is the fallback. Keeps the AgentRunner unchanged: the
+ * resolved runtime feeds the same loop as the built-in Sample.
+ */
+export interface DataSourceResolver {
+  /** Published, runnable sources to add to the picker (beyond the static ones). */
+  list(): Promise<Array<{ id: string; name: string }>>;
+  /** Build a runtime for a source id, or null if it isn't published/runnable. */
+  resolve(id: string): Promise<DataSourceRuntime | null>;
+}
+
 export interface InvestigationServiceDeps {
   dataSources: DataSourceRuntime[];
   gate: SafetyGate;
   redactor: Redactor;
   store: MetadataStore;
+  /** Optional: resolve non-static (e.g. published real) sources on demand. */
+  resolver?: DataSourceResolver;
   now?: () => Date;
   newId?: (prefix: string) => string;
 }
@@ -143,15 +158,21 @@ export class InvestigationService {
     this.newId = deps.newId ?? ((prefix) => `${prefix}_${randomUUID()}`);
   }
 
-  /** Available Data Sources for the picker (no internals leaked). */
-  listDataSources(): Array<{ id: string; name: string }> {
-    return this.deps.dataSources.map((d) => ({ id: d.id, name: d.name }));
+  /** Available Data Sources for the picker (no internals leaked): the static
+   *  sources plus any the resolver exposes (published real sources), deduped. */
+  async listDataSources(): Promise<Array<{ id: string; name: string }>> {
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const d of this.deps.dataSources) seen.set(d.id, { id: d.id, name: d.name });
+    if (this.deps.resolver) {
+      for (const d of await this.deps.resolver.list()) if (!seen.has(d.id)) seen.set(d.id, d);
+    }
+    return [...seen.values()];
   }
 
   /** Read-only overview for the Data Sources view (spec 04 §1): schema + trust
    *  posture only, never credentials/connector internals. Null if unknown. */
-  getDataSourceOverview(id: string): DataSourceOverview | null {
-    const rt = this.deps.dataSources.find((d) => d.id === id);
+  async getDataSourceOverview(id: string): Promise<DataSourceOverview | null> {
+    const rt = await this.resolveOrNull(id);
     if (!rt) return null;
     return {
       id: rt.id,
@@ -187,7 +208,7 @@ export class InvestigationService {
       // The data source is bound for the Investigation's lifetime — run against the
       // STORED one, not the client-supplied params.dataSourceId (which a follow-up
       // request may omit or get wrong).
-      rt = this.dataSource(prior.dataSourceId);
+      rt = await this.dataSource(prior.dataSourceId);
       investigationId = prior.id;
       history = priorTurns(prior);
       priorAnswers = prior.answers;
@@ -200,7 +221,7 @@ export class InvestigationService {
         history = history.slice(0, -1);
       }
     } else {
-      rt = this.dataSource(params.dataSourceId);
+      rt = await this.dataSource(params.dataSourceId);
       investigationId = this.newId('inv');
     }
 
@@ -272,9 +293,17 @@ export class InvestigationService {
     return this.deps.store.listInvestigations(opts);
   }
 
-  private dataSource(id: string): DataSourceRuntime {
-    const rt = this.deps.dataSources.find((d) => d.id === id);
+  /** Static-first lookup; falls back to the resolver. Throws if unknown/unrunnable. */
+  private async dataSource(id: string): Promise<DataSourceRuntime> {
+    const rt = await this.resolveOrNull(id);
     if (!rt) throw new Error(`Unknown data source: ${id}`);
     return rt;
+  }
+
+  /** Static-first lookup; resolver fallback; null if neither has it. */
+  private async resolveOrNull(id: string): Promise<DataSourceRuntime | null> {
+    const stat = this.deps.dataSources.find((d) => d.id === id);
+    if (stat) return stat;
+    return this.deps.resolver ? this.deps.resolver.resolve(id) : null;
   }
 }

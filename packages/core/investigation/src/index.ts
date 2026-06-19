@@ -5,6 +5,7 @@ export type {
   AskParams,
   AskResult,
   DataSourceOverview,
+  DataSourceResolver,
   DataSourceRuntime,
   DataSourceSafetyPosture,
   InvestigationServiceDeps,

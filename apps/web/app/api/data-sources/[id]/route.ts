@@ -11,7 +11,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   const rt = await getRuntime();
-  const overview = rt.service.getDataSourceOverview(id);
+  const overview = await rt.service.getDataSourceOverview(id);
   if (!overview) return Response.json({ error: 'Not found' }, { status: 404 });
   return Response.json(overview);
 }

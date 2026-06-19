@@ -2,7 +2,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import type { Answer } from '@evidata/answer-contract';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from './index';
-import { answers, dataSourceContexts, dataSourceConnections, policies } from './schema';
+import {
+  answers,
+  businessGlossaryTerms,
+  dataSourceContexts,
+  dataSourceConnections,
+  dataSources,
+  entityMappings,
+  policies,
+} from './schema';
 
 let handle: MetadataDbHandle;
 let store: DrizzleMetadataStore;
@@ -318,5 +326,165 @@ describe('DrizzleMetadataStore — connections (spec 08 §6)', () => {
     expect(
       (await handle.db.select().from(policies).where(eq(policies.dataSourceId, 'ds-2'))).length,
     ).toBe(0);
+  });
+});
+
+describe('DrizzleMetadataStore — M2 authoring reads (spec 09 §2/§5)', () => {
+  const blob = { v: 1, keyId: 'k1', iv: 'aaa', ciphertext: 'bbb', authTag: 'ccc' };
+  const at = new Date('2026-06-18T00:00:00.000Z');
+
+  beforeAll(async () => {
+    // A connection (FK target for the binding), created by the identity test's user.
+    await store.createConnection({
+      id: 'c-pub',
+      kind: 'postgres',
+      name: 'Real PG',
+      host: 'h',
+      port: 5432,
+      database: 'd',
+      sslMode: 'require',
+      credentialBlob: blob,
+      health: 'Healthy',
+      createdBy: 'u-1',
+    });
+    // One published source + one draft (the draft must NOT appear in listPublished).
+    await handle.db.insert(dataSources).values([
+      {
+        id: 'ds-pub',
+        name: 'Published Source',
+        kind: 'postgres',
+        connectionId: 'c-pub',
+        description: 'A real one',
+        lifecycle: 'published',
+        createdAt: at,
+      },
+      {
+        id: 'ds-draft',
+        name: 'Draft Source',
+        kind: 'postgres',
+        connectionId: 'c-pub',
+        lifecycle: 'draft',
+        createdAt: at,
+      },
+    ]);
+    await handle.db.insert(dataSourceConnections).values({
+      id: 'dsc-pub',
+      dataSourceId: 'ds-pub',
+      connectionId: 'c-pub',
+      alias: 'main',
+      includedTables: ['accounts', 'invoices'],
+      fieldRules: { sensitiveColumns: ['accounts.email'] },
+      createdAt: at,
+    });
+    await handle.db.insert(policies).values({
+      id: 'pol-pub',
+      dataSourceId: 'ds-pub',
+      rowLimit: 500,
+      timeoutMs: 8000,
+      statementTimeoutMs: 7000,
+      confirmOnBroadScan: true,
+      confirmOnSensitiveAccess: false,
+      updatedAt: at,
+    });
+    await handle.db.insert(dataSourceContexts).values({
+      id: 'ctx-pub',
+      dataSourceId: 'ds-pub',
+      overview: 'Billing data.',
+      payload: { entities: [] },
+      updatedAt: at,
+    });
+    await handle.db.insert(businessGlossaryTerms).values([
+      {
+        id: 'g1',
+        dataSourceId: 'ds-pub',
+        term: 'MRR',
+        definition: 'monthly recurring revenue',
+        status: 'verified',
+        provenance: 'admin',
+        createdAt: at,
+      },
+      {
+        id: 'g2',
+        dataSourceId: 'ds-pub',
+        term: 'churn',
+        definition: 'lost accounts',
+        status: 'suggested',
+        provenance: 'ai_draft',
+        createdAt: at,
+      },
+    ]);
+    await handle.db.insert(entityMappings).values([
+      {
+        id: 'm1',
+        dataSourceId: 'ds-pub',
+        fromRef: 'acct',
+        toRef: 'accounts',
+        status: 'verified',
+        provenance: 'admin',
+        createdAt: at,
+      },
+      {
+        id: 'm2',
+        dataSourceId: 'ds-pub',
+        fromRef: 'inv',
+        toRef: 'invoices',
+        status: 'suggested',
+        provenance: 'ai_draft',
+        createdAt: at,
+      },
+    ]);
+  });
+
+  it('getDataSource returns the row with lifecycle; null when unknown', async () => {
+    const ds = await store.getDataSource('ds-pub');
+    expect(ds).toMatchObject({
+      id: 'ds-pub',
+      name: 'Published Source',
+      kind: 'postgres',
+      connectionId: 'c-pub',
+      description: 'A real one',
+      lifecycle: 'published',
+    });
+    expect(await store.getDataSource('nope')).toBeNull();
+  });
+
+  it('listPublishedDataSources returns only published sources', async () => {
+    const list = await store.listPublishedDataSources();
+    const ids = list.map((d) => d.id);
+    expect(ids).toContain('ds-pub');
+    expect(ids).not.toContain('ds-draft'); // a draft must never be runnable
+  });
+
+  it('getDataSourceConnection returns scope + field rules', async () => {
+    const binding = await store.getDataSourceConnection('ds-pub');
+    expect(binding).toMatchObject({
+      connectionId: 'c-pub',
+      alias: 'main',
+      includedTables: ['accounts', 'invoices'],
+      fieldRules: { sensitiveColumns: ['accounts.email'] },
+    });
+    expect(await store.getDataSourceConnection('ds-draft')).toBeNull();
+  });
+
+  it('getPolicy + getDataSourceContext read the authored governance', async () => {
+    expect(await store.getPolicy('ds-pub')).toMatchObject({
+      rowLimit: 500,
+      timeoutMs: 8000,
+      statementTimeoutMs: 7000,
+      confirmOnBroadScan: true,
+      confirmOnSensitiveAccess: false,
+    });
+    expect((await store.getDataSourceContext('ds-pub'))?.overview).toBe('Billing data.');
+    expect(await store.getPolicy('nope')).toBeNull();
+  });
+
+  it('glossary + mappings filter by status (verified-only for the model)', async () => {
+    const verifiedTerms = await store.getGlossaryTerms('ds-pub', 'verified');
+    expect(verifiedTerms.map((t) => t.term)).toEqual(['MRR']);
+    expect((await store.getGlossaryTerms('ds-pub')).length).toBe(2); // unfiltered
+
+    const verifiedMaps = await store.getEntityMappings('ds-pub', 'verified');
+    expect(verifiedMaps.map((m) => m.toRef)).toEqual(['accounts']);
+    expect((await store.getEntityMappings('ds-pub')).length).toBe(2);
   });
 });
