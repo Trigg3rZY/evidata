@@ -165,6 +165,21 @@ describe('SafetyGate — allow + flags', () => {
     if (d.verdict === 'allow') expect(d.touchedSensitive).toEqual(['accounts.contact_email']);
   });
 
+  it('flags a schema-qualified sensitive column (schema.table.column)', () => {
+    // Non-public tables are qualified as schema.table; the column is the part after
+    // the LAST dot, so the table "sales.orders" must still be matched (Codex P1).
+    const c = ctx({
+      allowedTables: new Set(['sales.orders']),
+      sensitiveColumns: new Set(['sales.orders.amount']),
+    });
+    const d = check('SELECT amount FROM sales.orders WHERE id = 1', c);
+    expect(d.verdict).toBe('allow');
+    if (d.verdict === 'allow') {
+      expect(d.touchedSensitive).toEqual(['sales.orders.amount']);
+      expect(d.needsConfirmation).toBe(true);
+    }
+  });
+
   it('honours a Policy that disables confirmation triggers', () => {
     const c = ctx({
       policy: policy({ confirmation: { onBroadScan: false, onSensitiveAccess: false } }),

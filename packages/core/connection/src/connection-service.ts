@@ -126,6 +126,15 @@ export class ConnectionService {
     await Promise.all(all.map((c) => c.close().catch(() => {})));
   }
 
+  /** Evict + close the cached connector for one connection (on delete/mutate) so its
+   *  pg pool doesn't outlive the connection. No-op if nothing is cached. */
+  async evictConnector(connectionId: string): Promise<void> {
+    const cached = this.connectors.get(connectionId);
+    if (!cached) return;
+    this.connectors.delete(connectionId);
+    await cached.close().catch(() => {});
+  }
+
   /** Create a Connection (encrypting its credentials), with the creator as owner
    *  and a minimal Data Source (M2 attaches context/policy to make it queryable). */
   async create(userId: string, input: CreateConnectionInput): Promise<ConnectionSummary> {
@@ -180,6 +189,8 @@ export class ConnectionService {
     await this.authorized(userId, id);
     const affectedDataSources = await this.deps.store.listDataSourcesByConnection(id);
     await this.deps.store.deleteConnection(id);
+    // Drop any live pool for this connection so it doesn't leak past the delete.
+    await this.evictConnector(id);
     return { affectedDataSources };
   }
 

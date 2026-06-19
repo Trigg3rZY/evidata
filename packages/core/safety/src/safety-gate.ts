@@ -184,11 +184,14 @@ function detectSensitive(
 ): string[] {
   const out: string[] = [];
   for (const entry of sensitive) {
-    const dot = entry.indexOf('.');
-    if (dot <= 0) continue;
-    const table = entry.slice(0, dot);
-    const column = entry.slice(dot + 1).toLowerCase();
-    if (!touchedTables.has(table)) continue;
+    // `touchedTables` holds BARE table names, so match the column (last segment)
+    // against the bare table (second-to-last segment). This handles both
+    // "table.column" and schema-qualified "schema.table.column" (Codex P1).
+    const parts = entry.split('.');
+    if (parts.length < 2) continue;
+    const column = (parts[parts.length - 1] ?? '').toLowerCase();
+    const table = parts[parts.length - 2] ?? '';
+    if (!table || !touchedTables.has(table)) continue;
     if (c.star || c.columns.has(column)) out.push(entry);
   }
   return out;

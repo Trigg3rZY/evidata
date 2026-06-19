@@ -95,17 +95,20 @@ function makeStore(over: Partial<Record<string, unknown>> = {}) {
     getEntityMappings: (_id: string, status?: GlossaryStatus) =>
       Promise.resolve(status ? mappings.filter((m) => m.status === status) : mappings),
     getLatestSnapshot: () => Promise.resolve(snapshot),
+    // 'member' has a role on the backing connection; anyone else does not.
+    getConnectionRole: (userId: string) => Promise.resolve(userId === 'member' ? 'owner' : null),
     ...over,
   };
 }
 
 const okConnections = { connectorFor: () => Promise.resolve(fakeConnector as Connector) };
 const STATIC = new Set(['sample']);
+const MEMBER = 'member';
 
 describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
   it('assembles a runtime: scope→allowedTables, rules→sensitive, policy, verified-only context', async () => {
     const r = new PublishedDataSourceResolver(makeStore(), okConnections, STATIC);
-    const rt = await r.resolve('ds-x');
+    const rt = await r.resolve('ds-x', MEMBER);
     expect(rt).not.toBeNull();
     expect(rt!.id).toBe('ds-x');
     expect([...rt!.safetyContext.allowedTables].sort()).toEqual(['accounts', 'invoices']);
@@ -123,9 +126,16 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
 
   it('refuses non-published, static, and unknown sources', async () => {
     const r = new PublishedDataSourceResolver(makeStore(), okConnections, STATIC);
-    expect(await r.resolve('ds-draft')).toBeNull(); // draft is not runnable
-    expect(await r.resolve('sample')).toBeNull(); // owned by the static list
-    expect(await r.resolve('ghost')).toBeNull(); // unknown
+    expect(await r.resolve('ds-draft', MEMBER)).toBeNull(); // draft is not runnable
+    expect(await r.resolve('sample', MEMBER)).toBeNull(); // owned by the static list
+    expect(await r.resolve('ghost', MEMBER)).toBeNull(); // unknown
+  });
+
+  it('gates a real source on connection membership (owner-gated slice)', async () => {
+    const r = new PublishedDataSourceResolver(makeStore(), okConnections, STATIC);
+    expect(await r.resolve('ds-x')).toBeNull(); // anonymous → withheld
+    expect(await r.resolve('ds-x', 'stranger')).toBeNull(); // no role → withheld
+    expect(await r.resolve('ds-x', MEMBER)).not.toBeNull(); // member → allowed
   });
 
   it('is not runnable without a captured snapshot or a usable connector', async () => {
@@ -134,14 +144,14 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
       okConnections,
       STATIC,
     );
-    expect(await noSnap.resolve('ds-x')).toBeNull();
+    expect(await noSnap.resolve('ds-x', MEMBER)).toBeNull();
 
     const vaultDown = new PublishedDataSourceResolver(
       makeStore(),
       { connectorFor: () => Promise.reject(new Error('vault unconfigured')) },
       STATIC,
     );
-    expect(await vaultDown.resolve('ds-x')).toBeNull(); // error → not runnable, not a crash
+    expect(await vaultDown.resolve('ds-x', MEMBER)).toBeNull(); // error → not runnable, not a crash
   });
 
   it('falls back to safe Policy defaults when none is authored', async () => {
@@ -150,13 +160,15 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
       okConnections,
       STATIC,
     );
-    const rt = await r.resolve('ds-x');
+    const rt = await r.resolve('ds-x', MEMBER);
     expect(rt!.safetyContext.policy.rowLimit).toBe(1000);
     expect(rt!.safetyContext.policy.confirmation.onSensitiveAccess).toBe(true);
   });
 
-  it('list() returns published sources, excluding the static ones', async () => {
+  it('list() returns the member’s published sources, excluding static; nothing for anon/non-member', async () => {
     const r = new PublishedDataSourceResolver(makeStore(), okConnections, STATIC);
-    expect(await r.list()).toEqual([{ id: 'ds-x', name: 'Real PG' }]);
+    expect(await r.list(MEMBER)).toEqual([{ id: 'ds-x', name: 'Real PG' }]);
+    expect(await r.list()).toEqual([]); // anonymous → no real sources
+    expect(await r.list('stranger')).toEqual([]); // non-member → none
   });
 });

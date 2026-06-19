@@ -44,10 +44,12 @@ export interface DataSourceRuntime {
  * resolved runtime feeds the same loop as the built-in Sample.
  */
 export interface DataSourceResolver {
-  /** Published, runnable sources to add to the picker (beyond the static ones). */
-  list(): Promise<Array<{ id: string; name: string }>>;
-  /** Build a runtime for a source id, or null if it isn't published/runnable. */
-  resolve(id: string): Promise<DataSourceRuntime | null>;
+  /** Published, runnable sources the user may access (beyond the static ones).
+   *  Without a user, real sources are withheld (only static sources are open). */
+  list(userId?: string): Promise<Array<{ id: string; name: string }>>;
+  /** Build a runtime for a source id, or null if it isn't published/runnable OR the
+   *  user isn't authorized for it (owner-gated for the slice — spec 09 §2). */
+  resolve(id: string, userId?: string): Promise<DataSourceRuntime | null>;
 }
 
 export interface InvestigationServiceDeps {
@@ -65,6 +67,9 @@ export interface AskParams {
   dataSourceId: string;
   question: string;
   language: 'en' | 'zh-CN';
+  /** The authenticated user (server-injected, never client-supplied): authorizes
+   *  access to a real published source. Omit for the open Sample. */
+  userId?: string;
   /** Continue an existing Investigation (a follow-up): append a new Answer version
    *  and seed the model with prior turns. Omit to start a new Investigation. */
   investigationId?: string;
@@ -159,20 +164,22 @@ export class InvestigationService {
   }
 
   /** Available Data Sources for the picker (no internals leaked): the static
-   *  sources plus any the resolver exposes (published real sources), deduped. */
-  async listDataSources(): Promise<Array<{ id: string; name: string }>> {
+   *  sources plus any the resolver exposes for this user (published real sources
+   *  they may access), deduped. */
+  async listDataSources(userId?: string): Promise<Array<{ id: string; name: string }>> {
     const seen = new Map<string, { id: string; name: string }>();
     for (const d of this.deps.dataSources) seen.set(d.id, { id: d.id, name: d.name });
     if (this.deps.resolver) {
-      for (const d of await this.deps.resolver.list()) if (!seen.has(d.id)) seen.set(d.id, d);
+      for (const d of await this.deps.resolver.list(userId)) if (!seen.has(d.id)) seen.set(d.id, d);
     }
     return [...seen.values()];
   }
 
   /** Read-only overview for the Data Sources view (spec 04 §1): schema + trust
-   *  posture only, never credentials/connector internals. Null if unknown. */
-  async getDataSourceOverview(id: string): Promise<DataSourceOverview | null> {
-    const rt = await this.resolveOrNull(id);
+   *  posture only, never credentials/connector internals. Null if unknown or the
+   *  user isn't authorized for a real source. */
+  async getDataSourceOverview(id: string, userId?: string): Promise<DataSourceOverview | null> {
+    const rt = await this.resolveOrNull(id, userId);
     if (!rt) return null;
     return {
       id: rt.id,
@@ -208,7 +215,7 @@ export class InvestigationService {
       // The data source is bound for the Investigation's lifetime — run against the
       // STORED one, not the client-supplied params.dataSourceId (which a follow-up
       // request may omit or get wrong).
-      rt = await this.dataSource(prior.dataSourceId);
+      rt = await this.dataSource(prior.dataSourceId, params.userId);
       investigationId = prior.id;
       history = priorTurns(prior);
       priorAnswers = prior.answers;
@@ -221,7 +228,7 @@ export class InvestigationService {
         history = history.slice(0, -1);
       }
     } else {
-      rt = await this.dataSource(params.dataSourceId);
+      rt = await this.dataSource(params.dataSourceId, params.userId);
       investigationId = this.newId('inv');
     }
 
@@ -293,17 +300,19 @@ export class InvestigationService {
     return this.deps.store.listInvestigations(opts);
   }
 
-  /** Static-first lookup; falls back to the resolver. Throws if unknown/unrunnable. */
-  private async dataSource(id: string): Promise<DataSourceRuntime> {
-    const rt = await this.resolveOrNull(id);
+  /** Static-first lookup; falls back to the resolver. Throws if unknown/unrunnable
+   *  or the user isn't authorized (the error is generic — no existence leak). */
+  private async dataSource(id: string, userId?: string): Promise<DataSourceRuntime> {
+    const rt = await this.resolveOrNull(id, userId);
     if (!rt) throw new Error(`Unknown data source: ${id}`);
     return rt;
   }
 
-  /** Static-first lookup; resolver fallback; null if neither has it. */
-  private async resolveOrNull(id: string): Promise<DataSourceRuntime | null> {
+  /** Static-first lookup (static sources are open); resolver fallback (authorized
+   *  per userId); null if neither yields a runtime. */
+  private async resolveOrNull(id: string, userId?: string): Promise<DataSourceRuntime | null> {
     const stat = this.deps.dataSources.find((d) => d.id === id);
     if (stat) return stat;
-    return this.deps.resolver ? this.deps.resolver.resolve(id) : null;
+    return this.deps.resolver ? this.deps.resolver.resolve(id, userId) : null;
   }
 }
