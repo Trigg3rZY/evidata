@@ -573,7 +573,8 @@ export class DrizzleMetadataStore implements MetadataStore {
           eq(businessGlossaryTerms.status, status),
         )
       : eq(businessGlossaryTerms.dataSourceId, dataSourceId);
-    const rows = await this.db
+    // drizzle types the enum columns as their unions, so the row IS a GlossaryTermRecord.
+    return this.db
       .select({
         term: businessGlossaryTerms.term,
         definition: businessGlossaryTerms.definition,
@@ -582,12 +583,6 @@ export class DrizzleMetadataStore implements MetadataStore {
       })
       .from(businessGlossaryTerms)
       .where(where);
-    return rows.map((r) => ({
-      term: r.term,
-      definition: r.definition,
-      status: r.status as GlossaryTermRecord['status'],
-      provenance: r.provenance as GlossaryTermRecord['provenance'],
-    }));
   }
 
   async getEntityMappings(
@@ -597,7 +592,8 @@ export class DrizzleMetadataStore implements MetadataStore {
     const where = status
       ? and(eq(entityMappings.dataSourceId, dataSourceId), eq(entityMappings.status, status))
       : eq(entityMappings.dataSourceId, dataSourceId);
-    const rows = await this.db
+    // drizzle types the enum columns as their unions, so the row IS an EntityMappingRecord.
+    return this.db
       .select({
         fromRef: entityMappings.fromRef,
         toRef: entityMappings.toRef,
@@ -606,12 +602,6 @@ export class DrizzleMetadataStore implements MetadataStore {
       })
       .from(entityMappings)
       .where(where);
-    return rows.map((r) => ({
-      fromRef: r.fromRef,
-      toRef: r.toRef,
-      status: r.status as EntityMappingRecord['status'],
-      provenance: r.provenance as EntityMappingRecord['provenance'],
-    }));
   }
 }
 
