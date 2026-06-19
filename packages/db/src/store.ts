@@ -33,6 +33,8 @@ import type {
   FieldRules,
   GlossaryStatus,
   GlossaryTermRecord,
+  ModelProviderRecord,
+  ModelProviderSummary,
   PolicyInput,
   InvestigationListItem,
   ListOpts,
@@ -40,6 +42,7 @@ import type {
   NewConnection,
   NewDataSourceRecord,
   NewInvestigation,
+  NewModelProvider,
   NewSchemaSnapshotRecord,
   NewSession,
   NewUser,
@@ -61,6 +64,7 @@ import {
   entityMappings,
   evidence,
   investigations,
+  modelProviders,
   policies,
   queryRuns,
   schemaSnapshots,
@@ -473,6 +477,47 @@ export class DrizzleMetadataStore implements MetadataStore {
     return row ? (row.payload as SchemaSnapshot) : null;
   }
 
+  // --- BYO-key model providers (epic #106). Keys stay encrypted at rest. ---
+
+  async createModelProvider(p: NewModelProvider): Promise<ModelProviderRecord> {
+    const at = this.now();
+    await this.db.insert(modelProviders).values({
+      id: p.id,
+      name: p.name,
+      kind: p.kind,
+      baseUrl: p.baseUrl,
+      model: p.model,
+      params: p.params,
+      capabilities: p.capabilities,
+      credentialBlob: p.credentialBlob,
+      createdBy: p.createdBy,
+      createdAt: at,
+      updatedAt: at,
+    });
+    return { ...p, createdAt: at.toISOString(), updatedAt: at.toISOString() };
+  }
+
+  async listModelProviders(): Promise<ModelProviderSummary[]> {
+    const rows = await this.db
+      .select()
+      .from(modelProviders)
+      .orderBy(desc(modelProviders.createdAt));
+    return rows.map(toModelProviderSummary);
+  }
+
+  async getModelProvider(id: string): Promise<ModelProviderRecord | null> {
+    const [row] = await this.db.select().from(modelProviders).where(eq(modelProviders.id, id));
+    if (!row) return null;
+    return {
+      ...toModelProviderSummary(row),
+      credentialBlob: row.credentialBlob as ModelProviderRecord['credentialBlob'],
+    };
+  }
+
+  async deleteModelProvider(id: string): Promise<void> {
+    await this.db.delete(modelProviders).where(eq(modelProviders.id, id));
+  }
+
   async createDataSource(ds: NewDataSourceRecord): Promise<void> {
     await this.db.insert(dataSources).values({
       id: ds.id,
@@ -704,6 +749,32 @@ function toSummary(row: {
     database: row.database,
     sslMode: row.sslMode,
     health: row.health as ConnectionHealth,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toModelProviderSummary(row: {
+  id: string;
+  name: string;
+  kind: string;
+  baseUrl: string | null;
+  model: string;
+  params: unknown;
+  capabilities: unknown;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): ModelProviderSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    baseUrl: row.baseUrl,
+    model: row.model,
+    params: row.params as ModelProviderSummary['params'],
+    capabilities: row.capabilities as ModelProviderSummary['capabilities'],
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

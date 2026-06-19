@@ -488,3 +488,37 @@ describe('DrizzleMetadataStore — M2 authoring reads (spec 09 §2/§5)', () => 
     expect((await store.getEntityMappings('ds-pub')).length).toBe(2);
   });
 });
+
+describe('DrizzleMetadataStore — model providers (epic #106)', () => {
+  const blob = { v: 1, keyId: 'k1', iv: 'aaa', ciphertext: 'bbb', authTag: 'ccc' };
+
+  it('creates a provider; summary omits the blob, record keeps it; delete removes it', async () => {
+    const rec = await store.createModelProvider({
+      id: 'mp-1',
+      name: 'Team DeepSeek',
+      kind: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      params: { temperature: 0, effort: 'low' },
+      capabilities: { toolChoice: 'required' },
+      credentialBlob: blob,
+      createdBy: 'u-1', // created by the identity test's first user
+    });
+    expect(rec.credentialBlob).toEqual(blob);
+    expect(rec.createdAt).toBeTruthy();
+
+    const summary = (await store.listModelProviders()).find((p) => p.id === 'mp-1');
+    expect(summary?.model).toBe('deepseek-chat');
+    expect(summary?.params).toEqual({ temperature: 0, effort: 'low' });
+    expect(summary?.capabilities).toEqual({ toolChoice: 'required' });
+    expect((summary as Record<string, unknown> | undefined)?.credentialBlob).toBeUndefined();
+
+    // The full record (internal) keeps the encrypted blob.
+    expect((await store.getModelProvider('mp-1'))?.credentialBlob).toEqual(blob);
+    expect(await store.getModelProvider('nope')).toBeNull();
+
+    await store.deleteModelProvider('mp-1');
+    expect(await store.getModelProvider('mp-1')).toBeNull();
+    expect((await store.listModelProviders()).some((p) => p.id === 'mp-1')).toBe(false);
+  });
+});

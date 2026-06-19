@@ -56,6 +56,7 @@ describe('M0 metadata schema (spec 10)', () => {
       'entity_mappings',
       'evidence',
       'investigations',
+      'model_providers',
       'policies',
       'query_runs',
       'schema_snapshots',
