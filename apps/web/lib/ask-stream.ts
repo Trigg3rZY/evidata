@@ -33,11 +33,13 @@ const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
     'mutation-attempt',
   ],
   [/reconcile|usage.*billing|billing.*usage/i, 'cross-area-reconcile'],
-  // A spend trend WITH a time grain ("by month", "monthly", "over time") carries an
+  // A SPEND trend WITH a time grain ("by month", "monthly", "over time") carries an
   // implicit window, so it answers with an inline chart — it must be matched before
-  // the bare `trend` rule (which, lacking a window, routes to a clarification).
+  // the bare `trend` rule (which, lacking a window, routes to a clarification). Scoped
+  // to spend only: the fixture is campaign_spend, so a revenue question must NOT match
+  // it (it would otherwise stream a spend answer for a revenue ask — Codex P2).
   [
-    /\b(spend|revenue)\b.*\b(by month|monthly|month over month|over time|each month|per month)\b|\b(monthly|month over month)\b.*\b(spend|revenue|trend)\b/i,
+    /\bspend\b.*\b(by month|monthly|month over month|over time|each month|per month)\b|\b(monthly|month over month)\b.*\b(spend|trend)\b/i,
     'spend-trend',
   ],
   [/trend|trending/i, 'needs-timerange'],

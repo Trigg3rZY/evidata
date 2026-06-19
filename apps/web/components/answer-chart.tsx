@@ -1,22 +1,30 @@
-import type { Chart, ChartPoint } from '@evidata/answer-contract';
+import type { Chart, ChartKind, ChartPoint } from '@evidata/answer-contract';
 
 /**
  * Inline, dependency-free chart for an Answer (issue #67). Hand-rolled SVG so the
  * bundle stays lean and theming flows through the CSS design tokens (globals.css).
- * Bar and line only — the highest-value enrichment; `table`/`comparison` kinds fall
- * back to the visually-hidden data table the chart already renders for a11y.
  *
- * Accessibility: the <svg> is `role="img"` with a summarizing aria-label, and a
- * visually-hidden <table> carries the exact figures so screen readers (and the
- * WCAG-AA smoke matrix) get the data, not just decorative bars. Colors come from
- * tokens that already pass AA in both themes, so the chart adds no new violations.
+ * `bar`/`line` render as an SVG plot; `table`/`comparison` render the figures as a
+ * real data table (never as bars). Either way a screen-reader-accessible table of
+ * the exact figures is present, and the accessible label states the actual kind.
+ *
+ * Accessibility: the <svg> is `role="img"` with a summarizing aria-label; colors
+ * come from tokens that already pass AA in both themes, so no new WCAG violations.
  */
+import type { ReactNode } from 'react';
 
 const VIEW_W = 320;
 const VIEW_H = 160;
 const PAD_X = 8;
 const PAD_TOP = 8;
 const PAD_BOTTOM = 22; // room for x-axis category labels
+
+const KIND_LABEL: Record<ChartKind, string> = {
+  bar: 'Bar chart',
+  line: 'Line chart',
+  table: 'Table',
+  comparison: 'Comparison',
+};
 
 /** Keep only finite-valued points; a producer should pre-clean, but never trust NaN/Infinity. */
 function finitePoints(points: readonly ChartPoint[]): ChartPoint[] {
@@ -31,15 +39,73 @@ function fmt(n: number): string {
 }
 
 function summarize(chart: Chart, points: readonly ChartPoint[]): string {
-  const kind = chart.kind === 'line' ? 'Line chart' : 'Bar chart';
   const title = chart.spec.title ? `: ${chart.spec.title}` : '';
   const series = points.map((p) => `${p.label} ${fmt(p.value)}`).join(', ');
-  return `${kind}${title}. ${series}.`;
+  return `${KIND_LABEL[chart.kind]}${title}. ${series}.`;
+}
+
+/** The exact figures as a table — visually-hidden alongside a plot, or shown for
+ *  `table`/`comparison` kinds (the chart's actual representation). */
+function FiguresTable({
+  chart,
+  points,
+  summary,
+  visible,
+}: {
+  chart: Chart;
+  points: readonly ChartPoint[];
+  summary: string;
+  visible: boolean;
+}): ReactNode {
+  return (
+    <table className={visible ? 'w-full text-sm' : 'sr-only'}>
+      <caption className={visible ? 'sr-only' : undefined}>{summary}</caption>
+      <thead>
+        <tr className={visible ? 'border-b border-border text-left text-muted-foreground' : ''}>
+          <th scope="col" className={visible ? 'py-1 pr-3 font-medium' : undefined}>
+            {chart.spec.xLabel ?? 'Category'}
+          </th>
+          <th scope="col" className={visible ? 'py-1 text-right font-medium' : undefined}>
+            {chart.spec.yLabel ?? 'Value'}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {points.map((p, i) => (
+          <tr key={i} className={visible ? 'border-b border-border last:border-0' : ''}>
+            <th scope="row" className={visible ? 'py-1 pr-3 text-left font-normal' : undefined}>
+              {p.label}
+            </th>
+            <td className={visible ? 'py-1 text-right tabular-nums' : undefined}>
+              {p.value.toLocaleString()}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 export function AnswerChart({ chart }: { chart: Chart }) {
   const points = finitePoints(chart.spec.points);
   if (points.length === 0) return null;
+
+  const summary = summarize(chart, points);
+  const isPlot = chart.kind === 'bar' || chart.kind === 'line';
+
+  // table / comparison → show the figures as a table; never draw misleading bars.
+  if (!isPlot) {
+    return (
+      <figure className="m-0 flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+        {chart.spec.title && (
+          <figcaption className="text-xs font-medium text-muted-foreground">
+            {chart.spec.title}
+          </figcaption>
+        )}
+        <FiguresTable chart={chart} points={points} summary={summary} visible />
+      </figure>
+    );
+  }
 
   const max = Math.max(...points.map((p) => p.value), 0);
   const min = Math.min(...points.map((p) => p.value), 0);
@@ -52,8 +118,6 @@ export function AnswerChart({ chart }: { chart: Chart }) {
   const yOf = (v: number): number => baseY - ((v - min) / span) * plotH;
   const bandW = plotW / points.length;
   const cx = (i: number): number => PAD_X + bandW * i + bandW / 2;
-
-  const summary = summarize(chart, points);
 
   return (
     <figure className="m-0 flex flex-col gap-2 rounded-md border border-border bg-background p-3">
@@ -127,24 +191,8 @@ export function AnswerChart({ chart }: { chart: Chart }) {
         ))}
       </svg>
 
-      {/* Visually-hidden table fallback: the exact figures for assistive tech. */}
-      <table className="sr-only">
-        <caption>{summary}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{chart.spec.xLabel ?? 'Category'}</th>
-            <th scope="col">{chart.spec.yLabel ?? 'Value'}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p, i) => (
-            <tr key={i}>
-              <th scope="row">{p.label}</th>
-              <td>{p.value.toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Visually-hidden table: the exact figures for assistive tech. */}
+      <FiguresTable chart={chart} points={points} summary={summary} visible={false} />
     </figure>
   );
 }
