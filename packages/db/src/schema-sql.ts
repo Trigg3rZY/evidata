@@ -1,15 +1,23 @@
 /**
- * Inlined schema DDL — the concatenation of the committed `drizzle/*.sql`
- * migrations, verbatim (the `--> statement-breakpoint` lines are valid `--` SQL
- * comments). `createMetadataDb` execs this for the embedded pglite client.
+ * Inlined, ordered metadata migrations — the contents of each committed
+ * `drizzle/*.sql`, verbatim. `createMetadataDb` applies any not yet recorded in a
+ * journal table, so a fresh database gets all of them and an existing (file-backed)
+ * one only gets the new ones — upgrades don't try to re-create existing objects.
  *
- * Why inline rather than the fs migrator: `new URL('../drizzle', import.meta.url)`
- * is not resolvable once the package is bundled (e.g. by Next/Turbopack). The
- * generated `drizzle/*.sql` remain the source of truth and the M1 real-Postgres
- * path uses the file-based migrator (it runs unbundled, spec 08 §9). `schema-sql.test.ts`
- * asserts this constant stays in sync with those files.
+ * Inlined rather than read from disk because `new URL('../drizzle', import.meta.url)`
+ * isn't resolvable once bundled (Next/Turbopack). The generated SQL stays the source
+ * of truth; `schema-sql.test.ts` asserts these stay in sync. The real-Postgres host
+ * uses the file-based migrator instead (spec 08 §9).
  */
-export const SCHEMA_SQL = `CREATE SCHEMA "evidata_meta";
+export interface Migration {
+  name: string;
+  sql: string;
+}
+
+export const MIGRATIONS: ReadonlyArray<Migration> = [
+  {
+    name: '0000_fearless_crusher_hogan',
+    sql: `CREATE SCHEMA "evidata_meta";
 --> statement-breakpoint
 CREATE TABLE "evidata_meta"."answers" (
 	"id" text PRIMARY KEY NOT NULL,
@@ -93,11 +101,15 @@ CREATE UNIQUE INDEX "answers_version_uq" ON "evidata_meta"."answers" USING btree
 CREATE INDEX "answers_latest_idx" ON "evidata_meta"."answers" USING btree ("investigation_id","is_latest");--> statement-breakpoint
 CREATE UNIQUE INDEX "evidence_ref_uq" ON "evidata_meta"."evidence" USING btree ("investigation_id","answer_version","evidence_ref");--> statement-breakpoint
 CREATE INDEX "query_runs_version_idx" ON "evidata_meta"."query_runs" USING btree ("investigation_id","answer_version");--> statement-breakpoint
-CREATE INDEX "turns_investigation_idx" ON "evidata_meta"."turns" USING btree ("investigation_id","created_at");
---> statement-breakpoint
-CREATE UNIQUE INDEX "answers_one_latest_uq" ON "evidata_meta"."answers" USING btree ("investigation_id") WHERE "evidata_meta"."answers"."is_latest";
---> statement-breakpoint
-CREATE TABLE "evidata_meta"."connection_memberships" (
+CREATE INDEX "turns_investigation_idx" ON "evidata_meta"."turns" USING btree ("investigation_id","created_at");`,
+  },
+  {
+    name: '0001_optimal_kree',
+    sql: `CREATE UNIQUE INDEX "answers_one_latest_uq" ON "evidata_meta"."answers" USING btree ("investigation_id") WHERE "evidata_meta"."answers"."is_latest";`,
+  },
+  {
+    name: '0002_redundant_jasper_sitwell',
+    sql: `CREATE TABLE "evidata_meta"."connection_memberships" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"connection_id" text NOT NULL,
@@ -164,9 +176,11 @@ CREATE UNIQUE INDEX "sessions_token_uq" ON "evidata_meta"."sessions" USING btree
 CREATE INDEX "sessions_user_idx" ON "evidata_meta"."sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "users_email_uq" ON "evidata_meta"."users" USING btree ("email");--> statement-breakpoint
 INSERT INTO "evidata_meta"."data_sources" ("id", "name", "kind", "connection_id", "created_at") VALUES ('sample', 'Sample — Advertising Platform', 'sample', NULL, now()) ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
-ALTER TABLE "evidata_meta"."investigations" ADD CONSTRAINT "investigations_data_source_id_data_sources_id_fk" FOREIGN KEY ("data_source_id") REFERENCES "evidata_meta"."data_sources"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-CREATE TABLE "evidata_meta"."business_glossary_terms" (
+ALTER TABLE "evidata_meta"."investigations" ADD CONSTRAINT "investigations_data_source_id_data_sources_id_fk" FOREIGN KEY ("data_source_id") REFERENCES "evidata_meta"."data_sources"("id") ON DELETE no action ON UPDATE no action;`,
+  },
+  {
+    name: '0003_certain_triton',
+    sql: `CREATE TABLE "evidata_meta"."business_glossary_terms" (
 	"id" text PRIMARY KEY NOT NULL,
 	"data_source_id" text NOT NULL,
 	"term" text NOT NULL,
@@ -238,4 +252,6 @@ ALTER TABLE "evidata_meta"."policies" ADD CONSTRAINT "policies_data_source_id_da
 CREATE INDEX "glossary_ds_idx" ON "evidata_meta"."business_glossary_terms" USING btree ("data_source_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "ds_conn_uq" ON "evidata_meta"."data_source_connections" USING btree ("data_source_id","connection_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "ds_member_uq" ON "evidata_meta"."data_source_memberships" USING btree ("user_id","data_source_id");--> statement-breakpoint
-CREATE INDEX "mappings_ds_idx" ON "evidata_meta"."entity_mappings" USING btree ("data_source_id");`;
+CREATE INDEX "mappings_ds_idx" ON "evidata_meta"."entity_mappings" USING btree ("data_source_id");`,
+  },
+];

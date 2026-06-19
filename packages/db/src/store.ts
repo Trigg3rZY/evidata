@@ -8,7 +8,7 @@
  * are not globally unique).
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import {
   type Answer,
   type Investigation,
@@ -39,11 +39,17 @@ import type {
 import type { MetadataDb } from './client';
 import {
   answers,
+  businessGlossaryTerms,
   connectionMemberships,
   connections,
+  dataSourceConnections,
+  dataSourceContexts,
+  dataSourceMemberships,
   dataSources,
+  entityMappings,
   evidence,
   investigations,
+  policies,
   queryRuns,
   schemaSnapshots,
   sessions,
@@ -380,7 +386,32 @@ export class DrizzleMetadataStore implements MetadataStore {
   }
 
   async deleteConnection(id: string): Promise<void> {
-    // No ON DELETE cascade in the schema — remove dependents first.
+    // No ON DELETE cascade in the schema — remove dependents first, deepest first.
+    // Data Sources backed (M1-style) by this connection, plus their M2 child rows.
+    const ownedDs = (
+      await this.db
+        .select({ id: dataSources.id })
+        .from(dataSources)
+        .where(eq(dataSources.connectionId, id))
+    ).map((r) => r.id);
+    if (ownedDs.length > 0) {
+      await this.db
+        .delete(dataSourceConnections)
+        .where(inArray(dataSourceConnections.dataSourceId, ownedDs));
+      await this.db
+        .delete(dataSourceContexts)
+        .where(inArray(dataSourceContexts.dataSourceId, ownedDs));
+      await this.db.delete(policies).where(inArray(policies.dataSourceId, ownedDs));
+      await this.db
+        .delete(businessGlossaryTerms)
+        .where(inArray(businessGlossaryTerms.dataSourceId, ownedDs));
+      await this.db.delete(entityMappings).where(inArray(entityMappings.dataSourceId, ownedDs));
+      await this.db
+        .delete(dataSourceMemberships)
+        .where(inArray(dataSourceMemberships.dataSourceId, ownedDs));
+    }
+    // M2-style links to this connection (the join may point at sources we don't own).
+    await this.db.delete(dataSourceConnections).where(eq(dataSourceConnections.connectionId, id));
     await this.db.delete(schemaSnapshots).where(eq(schemaSnapshots.connectionId, id));
     await this.db.delete(connectionMemberships).where(eq(connectionMemberships.connectionId, id));
     await this.db.delete(dataSources).where(eq(dataSources.connectionId, id));

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import type { Answer } from '@evidata/answer-contract';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from './index';
-import { answers } from './schema';
+import { answers, dataSourceContexts, dataSourceConnections, policies } from './schema';
 
 let handle: MetadataDbHandle;
 let store: DrizzleMetadataStore;
@@ -263,5 +263,60 @@ describe('DrizzleMetadataStore — connections (spec 08 §6)', () => {
     expect(await store.getConnection('c-1')).toBeNull();
     expect(await store.getLatestSnapshot('c-1')).toBeNull();
     expect(await store.listDataSourcesByConnection('c-1')).toEqual([]);
+  });
+
+  it('deleteConnection cascades M2 child rows (no FK block)', async () => {
+    await store.createConnection({
+      id: 'c-2',
+      kind: 'postgres',
+      name: 'WithM2',
+      host: 'h',
+      port: 5432,
+      database: 'd',
+      sslMode: 'require',
+      credentialBlob: blob,
+      health: 'Untested',
+      createdBy: 'u-1', // created by the identity test's first user
+    });
+    await store.createDataSource({
+      id: 'ds-2',
+      name: 'WithM2',
+      kind: 'postgres',
+      connectionId: 'c-2',
+    });
+    const now = new Date();
+    await handle.db.insert(dataSourceConnections).values({
+      id: 'dsc-2',
+      dataSourceId: 'ds-2',
+      connectionId: 'c-2',
+      alias: null,
+      includedTables: [],
+      fieldRules: {},
+      createdAt: now,
+    });
+    await handle.db.insert(policies).values({
+      id: 'pol-2',
+      dataSourceId: 'ds-2',
+      rowLimit: 1000,
+      timeoutMs: 5000,
+      statementTimeoutMs: null,
+      confirmOnBroadScan: false,
+      confirmOnSensitiveAccess: false,
+      updatedAt: now,
+    });
+    await handle.db.insert(dataSourceContexts).values({
+      id: 'ctx-2',
+      dataSourceId: 'ds-2',
+      overview: '',
+      payload: {},
+      updatedAt: now,
+    });
+
+    // Despite the data_source_connections FK + M2 children, delete must succeed.
+    await store.deleteConnection('c-2');
+    expect(await store.getConnection('c-2')).toBeNull();
+    expect(
+      (await handle.db.select().from(policies).where(eq(policies.dataSourceId, 'ds-2'))).length,
+    ).toBe(0);
   });
 });
