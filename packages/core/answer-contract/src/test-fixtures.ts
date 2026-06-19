@@ -1,5 +1,12 @@
 /** Shared fixtures for contract tests. Not part of the public export surface. */
-import type { Answer, AnswerStatus, Confidence, Evidence, UnblockPath } from './answer-contract';
+import type {
+  Answer,
+  AnswerStatus,
+  Chart,
+  Confidence,
+  Evidence,
+  UnblockPath,
+} from './answer-contract';
 
 export function evidenceFixture(id: string): Evidence {
   return {
@@ -46,6 +53,23 @@ export function answeredFixture(): Answer {
     caveats: [],
     recommendedFollowups: [{ question: 'Break down Summer Sale by day?' }],
     meta: { version: 1, createdAt: '2026-06-17T00:00:00.000Z', isLatest: true },
+  };
+}
+
+/** A minimal bar chart citing the given Evidence id (defaults to E1). */
+export function chartFixture(ref = 'C1', evidenceId = 'E1'): Chart {
+  return {
+    ref,
+    kind: 'bar',
+    evidenceIds: [evidenceId],
+    spec: {
+      title: 'Spend by campaign',
+      yLabel: 'Spend',
+      points: [
+        { label: 'Summer Sale', value: 13300 },
+        { label: 'Always-On', value: 34900 },
+      ],
+    },
   };
 }
 

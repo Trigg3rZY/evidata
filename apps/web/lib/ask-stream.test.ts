@@ -24,6 +24,9 @@ describe('ask-stream helpers', () => {
     expect(pickScenario('Please update that spend row')).toBe('mutation-attempt');
     expect(pickScenario("usage and billing don't reconcile")).toBe('cross-area-reconcile');
     expect(pickScenario('How is spend trending?')).toBe('needs-timerange');
+    // a trend WITH a time grain answers with a chart, not a clarification
+    expect(pickScenario('Show ACME spend by month')).toBe('spend-trend');
+    expect(pickScenario('What is the monthly spend trend?')).toBe('spend-trend');
     expect(pickScenario('Who are the top customers by spend?')).toBe('top-customers');
     expect(pickScenario('List the active accounts and their contact emails')).toBe(
       'sensitive-redaction',
@@ -100,6 +103,21 @@ describe('askStream (integration over the real Sample)', () => {
     const answer = JSON.parse(answerFrame!.slice(answerFrame!.indexOf('data: ') + 6));
     expect(answer.status).toBe('Answered');
     expect(answer.evidence).toHaveLength(3);
+  });
+
+  it('streams an Answered result carrying an inline chart for a monthly spend trend', async () => {
+    const text = await collect('Show ACME spend by month');
+    const answerFrame = text.split('\n\n').find((f) => f.startsWith('event: answer'));
+    const answer = JSON.parse(answerFrame!.slice(answerFrame!.indexOf('data: ') + 6));
+    expect(answer.status).toBe('Answered');
+    expect(answer.charts).toHaveLength(1);
+    expect(answer.charts[0]).toMatchObject({ ref: 'C1', kind: 'line' });
+    expect(answer.charts[0].spec.points).toEqual([
+      { label: 'May', value: 34900 },
+      { label: 'Jun', value: 48200 },
+    ]);
+    // the chart cites the Evidence the query produced
+    expect(answer.charts[0].evidenceIds).toEqual(['E1']);
   });
 
   it('emits a product-level error frame instead of throwing on an unknown data source', async () => {

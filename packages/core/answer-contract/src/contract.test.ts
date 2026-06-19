@@ -7,7 +7,7 @@ import {
 } from './answer-contract';
 import { answerSchema, validateAnswerSchema } from './validate-schema';
 import { appendAnswerVersion } from './versioning';
-import { answerForStatus, answeredFixture } from './test-fixtures';
+import { answerForStatus, answeredFixture, chartFixture } from './test-fixtures';
 
 const STATUSES: AnswerStatus[] = [
   'Answered',
@@ -101,6 +101,34 @@ describe('C4 answered-findings', () => {
     a.keyFindings = [];
     const violations = validateAnswer(a);
     expect(violations.map((v) => v.code)).toContain('answered_without_findings');
+    expect(validateAnswerSchema(a).valid).toBe(false);
+  });
+});
+
+/**
+ * C6 — charts are optional and backward-compatible: an Answer with no `charts`
+ * stays valid, a well-formed `charts` array validates, and a malformed chart spec
+ * (missing the required `points` series) is rejected by the schema.
+ */
+describe('C6 charts (optional, schema-validated)', () => {
+  it('an Answered answer without charts is still schema-valid', () => {
+    const a = answeredFixture();
+    expect(a.charts).toBeUndefined();
+    expect(validateAnswerSchema(a).valid).toBe(true);
+  });
+
+  it('a well-formed chart spec validates', () => {
+    const a = answeredFixture();
+    a.charts = [chartFixture('C1', 'E1')];
+    expect(validateAnswerSchema(a).valid).toBe(true);
+  });
+
+  it('a chart whose spec has no points fails the schema', () => {
+    const a = answeredFixture();
+    const bad = chartFixture('C1', 'E1');
+    // Simulate a malformed producer payload: empty series violates minItems.
+    (bad.spec as { points: unknown[] }).points = [];
+    a.charts = [bad];
     expect(validateAnswerSchema(a).valid).toBe(false);
   });
 });
