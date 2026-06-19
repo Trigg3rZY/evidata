@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 import type { Answer, Evidence } from '@evidata/answer-contract';
 import type { AnswerLabels } from '@/lib/i18n';
+import { AnswerChart } from './answer-chart';
 import { ConfidenceMeter } from './confidence-meter';
 import { EvidenceSection } from './evidence-section';
 import { QuickActions } from './quick-actions';
@@ -87,6 +88,14 @@ export function AnswerView({
             </li>
           ))}
         </ul>
+      )}
+
+      {answer.charts && answer.charts.length > 0 && (
+        <section className="flex flex-col gap-3">
+          {answer.charts.map((chart) => (
+            <AnswerChart key={chart.ref} chart={chart} />
+          ))}
+        </section>
       )}
 
       {answer.evidence.length > 0 && (

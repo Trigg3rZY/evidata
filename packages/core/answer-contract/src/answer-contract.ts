@@ -99,12 +99,36 @@ export interface KeyFinding {
 
 export type ChartKind = 'table' | 'bar' | 'line' | 'comparison';
 
+/** One categorical data point: a label (x) and a numeric value (y). */
+export interface ChartPoint {
+  /** x-axis category, e.g. a month "Jun" or a customer "ACME Corp". */
+  label: LocalizedText;
+  /** y-axis magnitude. Finite; renderers ignore NaN/Infinity points. */
+  value: number;
+}
+
+/**
+ * Bounded, declarative chart spec — a single series of categorical points.
+ * Rendered, never editable in V1 (PRD). Deliberately minimal: enough for a bar
+ * or a line of an aggregate derived from Evidence, no axis transforms or
+ * multi-series. The producer pre-aggregates; the renderer only draws.
+ */
+export interface ChartSpec {
+  title?: LocalizedText;
+  xLabel?: LocalizedText;
+  yLabel?: LocalizedText;
+  /** Non-empty series. Order is meaningful (x is categorical, drawn left→right). */
+  points: [ChartPoint, ...ChartPoint[]];
+}
+
 export interface Chart {
   ref: string;
   kind: ChartKind;
   /** Charts must reference Evidence (PRD Answer Contract). */
   evidenceIds: [string, ...string[]];
-  spec: unknown; // bounded, declarative; rendered, never editable in V1
+  /** Bounded, declarative; rendered, never editable in V1. `table`/`comparison`
+   *  share the same single-series points shape (a table renders points as rows). */
+  spec: ChartSpec;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +261,9 @@ export interface ContractViolation {
     | 'dangling_evidence_ref'
     | 'missing_confidence_reason'
     | 'missing_unblock_on_non_answer'
-    | 'answered_without_findings';
+    | 'answered_without_findings'
+    | 'dangling_chart_evidence_ref'
+    | 'dangling_finding_chart_ref';
   message: string;
 }
 
@@ -253,6 +279,7 @@ export function validateAnswer(a: Answer): ContractViolation[] {
     v.push({ code: 'missing_confidence_reason', message: 'confidenceReason is required' });
   }
   const evidenceIds = new Set(a.evidence.map((e) => e.id));
+  const chartRefs = new Set((a.charts ?? []).map((c) => c.ref));
   for (const f of a.keyFindings) {
     if (!f.evidenceIds?.length) {
       v.push({ code: 'finding_without_evidence', message: `finding has no evidence: "${f.text}"` });
@@ -260,6 +287,25 @@ export function validateAnswer(a: Answer): ContractViolation[] {
     for (const id of f.evidenceIds ?? []) {
       if (!evidenceIds.has(id)) {
         v.push({ code: 'dangling_evidence_ref', message: `finding cites unknown evidence ${id}` });
+      }
+    }
+    // A finding may anchor to a chart; if it does, the chart must exist.
+    if (f.chartRef !== undefined && !chartRefs.has(f.chartRef)) {
+      v.push({
+        code: 'dangling_finding_chart_ref',
+        message: `finding cites unknown chart ${f.chartRef}`,
+      });
+    }
+  }
+  // Charts must reference Evidence (PRD Answer Contract) — no chart may cite a
+  // non-existent Evidence id (a chart with no provenance is not trustworthy).
+  for (const c of a.charts ?? []) {
+    for (const id of c.evidenceIds ?? []) {
+      if (!evidenceIds.has(id)) {
+        v.push({
+          code: 'dangling_chart_evidence_ref',
+          message: `chart ${c.ref} cites unknown evidence ${id}`,
+        });
       }
     }
   }

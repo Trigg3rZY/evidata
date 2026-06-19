@@ -313,7 +313,40 @@
             "type": "string"
           }
         },
-        "spec": {}
+        "spec": {
+          "$ref": "#/$defs/chartSpec"
+        }
+      }
+    },
+    "chartSpec": {
+      "type": "object",
+      "required": ["points"],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "xLabel": {
+          "type": "string"
+        },
+        "yLabel": {
+          "type": "string"
+        },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["label", "value"],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            }
+          }
+        }
       }
     },
     "missingInfo": {

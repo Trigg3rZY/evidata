@@ -33,6 +33,13 @@ const SCENARIO_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
     'mutation-attempt',
   ],
   [/reconcile|usage.*billing|billing.*usage/i, 'cross-area-reconcile'],
+  // A spend trend WITH a time grain ("by month", "monthly", "over time") carries an
+  // implicit window, so it answers with an inline chart — it must be matched before
+  // the bare `trend` rule (which, lacking a window, routes to a clarification).
+  [
+    /\b(spend|revenue)\b.*\b(by month|monthly|month over month|over time|each month|per month)\b|\b(monthly|month over month)\b.*\b(spend|revenue|trend)\b/i,
+    'spend-trend',
+  ],
   [/trend|trending/i, 'needs-timerange'],
   // Require the contact/email AND an account/customer subject, so "email me the
   // report" doesn't route into the contact_email fixture.

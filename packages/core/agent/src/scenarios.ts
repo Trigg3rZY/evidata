@@ -4,13 +4,22 @@
  * equivalent outcomes. SQL targets the real seeded Sample so the loop executes
  * for real (the numbers come from the seed in @evidata/connector-sample).
  */
-import type { KeyFinding } from './deps';
+import type { Chart, KeyFinding } from './deps';
 import { FixtureProvider } from './fixture-provider';
 import type { AgentDecision } from './types';
 
 /** Build a KeyFinding with a guaranteed-non-empty evidence citation. */
 function kf(text: string, ...evidenceIds: [string, ...string[]]): KeyFinding {
   return { text, evidenceIds };
+}
+
+/** Build a KeyFinding that additionally anchors to a chart. */
+function kfChart(
+  text: string,
+  chartRef: string,
+  ...evidenceIds: [string, ...string[]]
+): KeyFinding {
+  return { text, evidenceIds, chartRef };
 }
 
 /** 4.1 happy path: multi-query, Answered/Medium with a cross-area caveat. */
@@ -143,6 +152,56 @@ export const TOP_CUSTOMERS: AgentDecision[] = [
   },
 ];
 
+/**
+ * Chart path (issue #67): a monthly spend-trend question yields an Answered result
+ * carrying an inline `charts` entry. The SQL runs for real against the seeded
+ * Sample (May 34,900 → June 48,200), and the chart spec restates those figures as
+ * a line so the center area renders a visual, not just text. A key finding anchors
+ * to the chart via `chartRef`. Proves the end-to-end render path without the model.
+ */
+const SPEND_TREND_CHART: Chart = {
+  ref: 'C1',
+  kind: 'line',
+  evidenceIds: ['E1'],
+  spec: {
+    title: 'ACME posted spend by month',
+    xLabel: 'Month',
+    yLabel: 'Posted spend',
+    points: [
+      { label: 'May', value: 34900 },
+      { label: 'Jun', value: 48200 },
+    ],
+  },
+};
+
+export const SPEND_TREND: AgentDecision[] = [
+  { kind: 'reasoning', label: 'Totaling ACME posted spend by month' },
+  {
+    kind: 'query',
+    proposal: {
+      purpose: 'ACME posted spend per month (trend)',
+      sql: "select date_trunc('month', day) as month, sum(amount) as total from campaign_spend where account_id = 1 and status = 'posted' group by date_trunc('month', day) order by month",
+    },
+  },
+  {
+    kind: 'final',
+    draft: {
+      status: 'Answered',
+      confidence: 'High',
+      directAnswer:
+        "ACME's monthly posted spend rose from 34,900 in May to 48,200 in June — a clear upward trend.",
+      confidenceReason:
+        'A single aggregate over all posted spend by month — no ambiguous definitions or unverified joins.',
+      keyFindings: [
+        kfChart('Posted spend climbed from 34,900 (May) to 48,200 (June).', 'C1', 'E1'),
+        kf('June is the highest month in the window (+38.1% MoM).', 'E1'),
+      ],
+      charts: [SPEND_TREND_CHART],
+      recommendedFollowups: [{ question: 'Break the June increase down by campaign.' }],
+    },
+  },
+];
+
 /** Redaction path: the query selects a sensitive column, so the Redactor masks it
  *  (•••) and the Answer carries a redaction caveat — the column is never shown. */
 export const SENSITIVE_REDACTION: AgentDecision[] = [
@@ -178,6 +237,7 @@ export const SAMPLE_SCENARIOS: Readonly<Record<string, AgentDecision[]>> = {
   'needs-timerange': NEEDS_TIMERANGE,
   'top-customers': TOP_CUSTOMERS,
   'sensitive-redaction': SENSITIVE_REDACTION,
+  'spend-trend': SPEND_TREND,
 };
 
 export function fixtureFor(scenarioId: string): FixtureProvider {

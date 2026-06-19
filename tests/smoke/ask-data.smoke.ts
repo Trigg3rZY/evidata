@@ -35,6 +35,24 @@ test('acme-bill-up: an evidence-backed Answered result with collapsible SQL', as
   await expect(page.getByText(/Read-only · row limit/i).first()).toBeVisible();
 });
 
+test('spend-trend: an Answered result renders an inline, accessible chart', async ({ page }) => {
+  await page.goto('/');
+  await ask(page, 'Show ACME spend by month');
+
+  await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
+
+  // The chart is an accessible SVG: role="img" with a data-bearing aria-label.
+  const chart = page.getByRole('img', { name: /Line chart.*ACME posted spend by month/i });
+  await expect(chart).toBeVisible();
+  // The visually-hidden table fallback carries the exact figures for assistive tech.
+  await expect(page.getByRole('cell', { name: '34,900' })).toBeAttached();
+  await expect(page.getByRole('cell', { name: '48,200' })).toBeAttached();
+
+  // No new WCAG-AA violations from the chart in the rendered answer.
+  const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).include('main').analyze();
+  expect(results.violations.map((v) => v.id)).toEqual([]);
+});
+
 test('mutation-attempt: the read-only guardrail blocks a write', async ({ page }) => {
   await page.goto('/');
   await ask(page, 'Void the duplicate spend row for ACME');

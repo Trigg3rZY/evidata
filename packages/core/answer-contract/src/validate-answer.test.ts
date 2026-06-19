@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type Answer, type KeyFinding, validateAnswer } from './answer-contract';
-import { answeredFixture } from './test-fixtures';
+import { answeredFixture, chartFixture } from './test-fixtures';
 
 function codes(a: Answer): string[] {
   return validateAnswer(a).map((v) => v.code);
@@ -49,5 +49,31 @@ describe('validateAnswer', () => {
     const a = answeredFixture();
     a.keyFindings = [];
     expect(codes(a)).toContain('answered_without_findings');
+  });
+
+  it('accepts a well-formed chart citing existing Evidence', () => {
+    const a = answeredFixture();
+    a.charts = [chartFixture('C1', 'E1')];
+    expect(validateAnswer(a)).toEqual([]);
+  });
+
+  it('flags a chart citing unknown Evidence', () => {
+    const a = answeredFixture();
+    a.charts = [chartFixture('C1', 'E9')];
+    expect(codes(a)).toContain('dangling_chart_evidence_ref');
+  });
+
+  it('flags a Key Finding citing an unknown chart', () => {
+    const a = answeredFixture();
+    a.charts = [chartFixture('C1', 'E1')];
+    a.keyFindings = [{ text: 'anchors to a ghost chart', evidenceIds: ['E1'], chartRef: 'C9' }];
+    expect(codes(a)).toContain('dangling_finding_chart_ref');
+  });
+
+  it('accepts a Key Finding anchoring to an existing chart', () => {
+    const a = answeredFixture();
+    a.charts = [chartFixture('C1', 'E1')];
+    a.keyFindings = [{ text: 'anchors to C1', evidenceIds: ['E1'], chartRef: 'C1' }];
+    expect(validateAnswer(a)).toEqual([]);
   });
 });
