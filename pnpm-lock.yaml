@@ -208,6 +208,12 @@ importers:
         specifier: ^12.0.1
         version: 12.0.2
 
+  packages/core/secrets:
+    dependencies:
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+
   packages/db:
     dependencies:
       '@electric-sql/pglite':
