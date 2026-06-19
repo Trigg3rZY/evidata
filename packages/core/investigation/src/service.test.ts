@@ -16,7 +16,7 @@ import {
   type AgentInput,
   type AgentProvider,
 } from '@evidata/agent';
-import { InvestigationService, type DataSourceRuntime } from './service';
+import { InvestigationService, type DataSourceResolver, type DataSourceRuntime } from './service';
 
 let db: MetadataDbHandle;
 let sample: SampleConnectorHandle;
@@ -323,5 +323,64 @@ describe('InvestigationService', () => {
         { provider: fixtureFor('acme-bill-up') },
       ),
     ).rejects.toThrow(/Unknown investigation/);
+  });
+});
+
+describe('InvestigationService — resolver fallback (M2-S2, spec 09 §2)', () => {
+  it('resolves a non-static source on demand, runs the loop, and lists it (deduped)', async () => {
+    const store = new DrizzleMetadataStore(db.db);
+    // The published source exists as a row (the resolver only resolves real rows);
+    // the Investigation FK references it.
+    await store.createDataSource({
+      id: 'pub',
+      name: 'Published Real',
+      kind: 'postgres',
+      connectionId: null,
+    });
+    const staticRt: DataSourceRuntime = {
+      id: 'sample',
+      name: 'Sample — Advertising Platform',
+      connector: sample.connector,
+      safetyContext: sampleSafetyContext(),
+      schema: SAMPLE_SCHEMA_SNAPSHOT,
+      context: { overview: '', glossary: [], mappings: [] },
+    };
+    // A published source served ONLY by the resolver (backed by the Sample connector
+    // so the unchanged loop actually runs against it).
+    const resolved: DataSourceRuntime = { ...staticRt, id: 'pub', name: 'Published Real' };
+    const resolver: DataSourceResolver = {
+      list: () => Promise.resolve([{ id: 'pub', name: 'Published Real' }]),
+      resolve: (id) => Promise.resolve(id === 'pub' ? resolved : null),
+    };
+    const svc = new InvestigationService({
+      dataSources: [staticRt],
+      resolver,
+      gate: createSafetyGate(),
+      redactor: createRedactor(),
+      store,
+    });
+
+    // Picker shows static + resolver sources, deduped.
+    expect((await svc.listDataSources()).map((d) => d.id).sort()).toEqual(['pub', 'sample']);
+    // Overview is served via the resolver.
+    expect((await svc.getDataSourceOverview('pub'))?.name).toBe('Published Real');
+
+    // Ask runs the UNCHANGED loop against the resolved source + binds the Investigation to it.
+    const result = await svc.ask(
+      { dataSourceId: 'pub', question: "Why is ACME's ad bill higher this month?", language: 'en' },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    expect(result.kind).toBe('answer');
+    if (result.kind === 'answer') {
+      expect((await svc.getThread(result.investigationId))?.dataSourceId).toBe('pub');
+    }
+
+    // A source neither static nor resolvable still errors.
+    await expect(
+      svc.ask(
+        { dataSourceId: 'ghost', question: 'x', language: 'en' },
+        { provider: fixtureFor('acme-bill-up') },
+      ),
+    ).rejects.toThrow(/Unknown data source/);
   });
 });

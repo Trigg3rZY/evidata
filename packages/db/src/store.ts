@@ -23,6 +23,13 @@ import type {
   ConnectionRecord,
   ConnectionRole,
   ConnectionSummary,
+  DataSourceConnectionRecord,
+  DataSourceContextRecord,
+  DataSourceRecord,
+  EntityMappingRecord,
+  FieldRules,
+  GlossaryStatus,
+  GlossaryTermRecord,
   InvestigationListItem,
   ListOpts,
   MetadataStore,
@@ -32,6 +39,7 @@ import type {
   NewSchemaSnapshotRecord,
   NewSession,
   NewUser,
+  PolicyRecord,
   SaveAnswerInput,
   SchemaSnapshot,
   UserRecord,
@@ -478,6 +486,132 @@ export class DrizzleMetadataStore implements MetadataStore {
       .select({ id: dataSources.id, name: dataSources.name })
       .from(dataSources)
       .where(eq(dataSources.connectionId, connectionId));
+  }
+
+  // --- M2 authoring reads (spec 09 §2/§5): resolve a published DataSource → runtime. ---
+
+  async getDataSource(id: string): Promise<DataSourceRecord | null> {
+    const [row] = await this.db.select().from(dataSources).where(eq(dataSources.id, id)).limit(1);
+    if (!row) return null;
+    return {
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      connectionId: row.connectionId ?? null,
+      description: row.description ?? null,
+      lifecycle: row.lifecycle as DataSourceRecord['lifecycle'],
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async listPublishedDataSources(): Promise<Array<{ id: string; name: string; kind: string }>> {
+    return this.db
+      .select({ id: dataSources.id, name: dataSources.name, kind: dataSources.kind })
+      .from(dataSources)
+      .where(eq(dataSources.lifecycle, 'published'))
+      .orderBy(dataSources.name);
+  }
+
+  async getDataSourceConnection(dataSourceId: string): Promise<DataSourceConnectionRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(dataSourceConnections)
+      .where(eq(dataSourceConnections.dataSourceId, dataSourceId))
+      .limit(1);
+    if (!row) return null;
+    return {
+      id: row.id,
+      dataSourceId: row.dataSourceId,
+      connectionId: row.connectionId,
+      alias: row.alias ?? null,
+      includedTables: (row.includedTables as string[]) ?? [],
+      fieldRules: (row.fieldRules as FieldRules) ?? {},
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async getDataSourceContext(dataSourceId: string): Promise<DataSourceContextRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(dataSourceContexts)
+      .where(eq(dataSourceContexts.dataSourceId, dataSourceId))
+      .limit(1);
+    if (!row) return null;
+    return {
+      dataSourceId: row.dataSourceId,
+      overview: row.overview,
+      payload: row.payload,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async getPolicy(dataSourceId: string): Promise<PolicyRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(policies)
+      .where(eq(policies.dataSourceId, dataSourceId))
+      .limit(1);
+    if (!row) return null;
+    return {
+      dataSourceId: row.dataSourceId,
+      rowLimit: row.rowLimit,
+      timeoutMs: row.timeoutMs,
+      statementTimeoutMs: row.statementTimeoutMs ?? null,
+      confirmOnBroadScan: row.confirmOnBroadScan,
+      confirmOnSensitiveAccess: row.confirmOnSensitiveAccess,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async getGlossaryTerms(
+    dataSourceId: string,
+    status?: GlossaryStatus,
+  ): Promise<GlossaryTermRecord[]> {
+    const where = status
+      ? and(
+          eq(businessGlossaryTerms.dataSourceId, dataSourceId),
+          eq(businessGlossaryTerms.status, status),
+        )
+      : eq(businessGlossaryTerms.dataSourceId, dataSourceId);
+    const rows = await this.db
+      .select({
+        term: businessGlossaryTerms.term,
+        definition: businessGlossaryTerms.definition,
+        status: businessGlossaryTerms.status,
+        provenance: businessGlossaryTerms.provenance,
+      })
+      .from(businessGlossaryTerms)
+      .where(where);
+    return rows.map((r) => ({
+      term: r.term,
+      definition: r.definition,
+      status: r.status as GlossaryTermRecord['status'],
+      provenance: r.provenance as GlossaryTermRecord['provenance'],
+    }));
+  }
+
+  async getEntityMappings(
+    dataSourceId: string,
+    status?: GlossaryStatus,
+  ): Promise<EntityMappingRecord[]> {
+    const where = status
+      ? and(eq(entityMappings.dataSourceId, dataSourceId), eq(entityMappings.status, status))
+      : eq(entityMappings.dataSourceId, dataSourceId);
+    const rows = await this.db
+      .select({
+        fromRef: entityMappings.fromRef,
+        toRef: entityMappings.toRef,
+        status: entityMappings.status,
+        provenance: entityMappings.provenance,
+      })
+      .from(entityMappings)
+      .where(where);
+    return rows.map((r) => ({
+      fromRef: r.fromRef,
+      toRef: r.toRef,
+      status: r.status as EntityMappingRecord['status'],
+      provenance: r.provenance as EntityMappingRecord['provenance'],
+    }));
   }
 }
 

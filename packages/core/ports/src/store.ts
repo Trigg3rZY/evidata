@@ -93,6 +93,22 @@ export interface MetadataStore {
   createDataSource(ds: NewDataSourceRecord): Promise<void>;
   /** Data Sources backed by a connection — shown before an edit/disable (08 §6). */
   listDataSourcesByConnection(connectionId: string): Promise<Array<{ id: string; name: string }>>;
+
+  // --- M2 authoring reads (spec 09 §2/§5): resolve a published DataSource → runtime. ---
+  /** A DataSource by id (incl. lifecycle), or null. */
+  getDataSource(id: string): Promise<DataSourceRecord | null>;
+  /** Published, runnable DataSources for the picker (id/name/kind), excluding drafts/archived. */
+  listPublishedDataSources(): Promise<Array<{ id: string; name: string; kind: string }>>;
+  /** The connection binding for a DataSource (table scope + field rules), or null. */
+  getDataSourceConnection(dataSourceId: string): Promise<DataSourceConnectionRecord | null>;
+  /** The authored context (overview + payload) for a DataSource, or null. */
+  getDataSourceContext(dataSourceId: string): Promise<DataSourceContextRecord | null>;
+  /** The safety Policy for a DataSource, or null. */
+  getPolicy(dataSourceId: string): Promise<PolicyRecord | null>;
+  /** Glossary terms for a DataSource (optionally filtered by status). */
+  getGlossaryTerms(dataSourceId: string, status?: GlossaryStatus): Promise<GlossaryTermRecord[]>;
+  /** Entity mappings for a DataSource (optionally filtered by status). */
+  getEntityMappings(dataSourceId: string, status?: GlossaryStatus): Promise<EntityMappingRecord[]>;
 }
 
 export type ConnectionHealth =
@@ -160,6 +176,70 @@ export interface NewDataSourceRecord {
   name: string;
   kind: string;
   connectionId: string | null;
+}
+
+// --- M2 authoring reads (spec 09 §2/§5): resolve a published DataSource → runtime. ---
+
+export type DataSourceLifecycle = 'draft' | 'published' | 'archived';
+export type GlossaryStatus = 'suggested' | 'verified';
+export type Provenance = 'ai_draft' | 'querier_correction' | 'admin';
+
+/** Per-connection field governance (spec 09 §5); extensible. */
+export interface FieldRules {
+  /** "table.column" entries the Gate flags + the Redactor masks. */
+  sensitiveColumns?: string[];
+}
+
+export interface DataSourceRecord {
+  id: string;
+  name: string;
+  kind: string;
+  connectionId: string | null;
+  description: string | null;
+  lifecycle: DataSourceLifecycle;
+  createdAt: string;
+}
+
+/** A DataSource's connection binding: the AI-visible table scope + field rules. */
+export interface DataSourceConnectionRecord {
+  id: string;
+  dataSourceId: string;
+  connectionId: string;
+  alias: string | null;
+  includedTables: string[];
+  fieldRules: FieldRules;
+  createdAt: string;
+}
+
+export interface DataSourceContextRecord {
+  dataSourceId: string;
+  overview: string;
+  payload: unknown;
+  updatedAt: string;
+}
+
+export interface PolicyRecord {
+  dataSourceId: string;
+  rowLimit: number;
+  timeoutMs: number;
+  statementTimeoutMs: number | null;
+  confirmOnBroadScan: boolean;
+  confirmOnSensitiveAccess: boolean;
+  updatedAt: string;
+}
+
+export interface GlossaryTermRecord {
+  term: string;
+  definition: string;
+  status: GlossaryStatus;
+  provenance: Provenance;
+}
+
+export interface EntityMappingRecord {
+  fromRef: string;
+  toRef: string;
+  status: GlossaryStatus;
+  provenance: Provenance;
 }
 
 /** A local account (never carries the plaintext password). */
