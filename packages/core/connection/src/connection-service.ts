@@ -230,7 +230,7 @@ async function probe(params: PostgresConnectionParams): Promise<ConnectionHealth
     user: params.user,
     password: params.password,
     ssl: params.ssl,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
     application_name: 'evidata-test',
   });
   try {

@@ -13,7 +13,7 @@ export function AppShell({
   onNewChat,
   children,
 }: {
-  active: 'ask' | 'data-sources';
+  active: 'ask' | 'data-sources' | 'admin';
   /** Workbench-only: start a fresh conversation (drives the mobile new-chat button). */
   onNewChat?: () => void;
   children: ReactNode;
