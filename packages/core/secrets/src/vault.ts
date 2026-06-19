@@ -16,6 +16,7 @@ import type { CredentialVault, EncryptedSecret } from '@evidata/ports';
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12; // 96-bit IV, the GCM standard
 const KEY_BYTES = 32; // AES-256
+const AUTH_TAG_BYTES = 16; // 128-bit GCM tag — full strength; shorter tags are rejected
 const SCHEME_VERSION = 1;
 
 export interface VaultKey {
@@ -76,9 +77,19 @@ export class EnvKeyCredentialVault implements CredentialVault {
     if (!key) {
       throw new Error(`Unknown credential key id: ${secret.keyId}`);
     }
-    const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(secret.iv, 'base64'));
+    const iv = Buffer.from(secret.iv, 'base64');
+    const authTag = Buffer.from(secret.authTag, 'base64');
+    // Node otherwise accepts a shortened GCM tag, which would silently downgrade the
+    // 128-bit integrity guarantee — reject anything that isn't full length up front.
+    if (authTag.length !== AUTH_TAG_BYTES) {
+      throw new Error('Invalid credential auth tag length.');
+    }
+    if (iv.length !== IV_BYTES) {
+      throw new Error('Invalid credential IV length.');
+    }
+    const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_BYTES });
     decipher.setAAD(Buffer.from(aad, 'utf8'));
-    decipher.setAuthTag(Buffer.from(secret.authTag, 'base64'));
+    decipher.setAuthTag(authTag);
     // `final()` throws if the auth tag or AAD does not verify — tamper detection.
     const plaintext = Buffer.concat([
       decipher.update(Buffer.from(secret.ciphertext, 'base64')),
