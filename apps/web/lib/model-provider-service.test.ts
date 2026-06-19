@@ -80,4 +80,31 @@ describe('ModelProviderService (epic #106)', () => {
     const noVault = new ModelProviderService({ store, vault: null });
     await expect(noVault.create('owner', input())).rejects.toBeInstanceOf(VaultUnavailableError);
   });
+
+  it('resolveConfig returns a runnable config (decrypted) for the owner only', async () => {
+    const p = await svc.create(
+      'owner',
+      input({ name: 'Runnable', baseUrl: null, kind: 'deepseek' }),
+    );
+    const cfg = await svc.resolveConfig('owner', p.id);
+    expect(cfg).toMatchObject({
+      apiKey: 'sk-secret-123', // decrypted
+      baseURL: 'https://api.deepseek.com', // default for the kind (baseUrl was null)
+      model: 'deepseek-chat',
+    });
+    // Non-owner / unknown → null (no cross-user key use).
+    expect(await svc.resolveConfig('stranger', p.id)).toBeNull();
+    expect(await svc.resolveConfig('owner', 'nope')).toBeNull();
+    await svc.remove('owner', p.id);
+  });
+
+  it('resolveConfig is null when no OpenAI-compatible base can be determined', async () => {
+    // openai-compatible kind with no baseUrl → not runnable yet.
+    const p = await svc.create(
+      'owner',
+      input({ name: 'NoBase', kind: 'openai-compatible', baseUrl: null }),
+    );
+    expect(await svc.resolveConfig('owner', p.id)).toBeNull();
+    await svc.remove('owner', p.id);
+  });
 });

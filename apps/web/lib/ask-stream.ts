@@ -21,6 +21,9 @@ export interface AskBody {
   /** Authenticated user id — server-injected from the session, NEVER parsed from
    *  the client body. Authorizes access to a real published source. */
   userId?: string;
+  /** Selected registered model provider (epic #106); resolved against the user's
+   *  own providers. Omit to use the env/fixture provider. Client-supplied. */
+  modelProviderId?: string;
 }
 
 /** Encode one Server-Sent Event frame. */
@@ -82,7 +85,17 @@ export function parseAskBody(raw: unknown): AskBody | { error: string } {
   const dataSourceId =
     typeof body.dataSourceId === 'string' && body.dataSourceId ? body.dataSourceId : 'sample';
   const language: Lang = body.language === 'zh-CN' ? 'zh-CN' : 'en';
-  return { dataSourceId, question, language, ...(body.rerun === true ? { rerun: true } : {}) };
+  const modelProviderId =
+    typeof body.modelProviderId === 'string' && body.modelProviderId
+      ? body.modelProviderId
+      : undefined;
+  return {
+    dataSourceId,
+    question,
+    language,
+    ...(body.rerun === true ? { rerun: true } : {}),
+    ...(modelProviderId ? { modelProviderId } : {}),
+  };
 }
 
 export interface AskStreamDeps {

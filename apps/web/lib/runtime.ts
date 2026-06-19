@@ -18,7 +18,11 @@ import { AuthService } from '@evidata/auth';
 import { ConnectionService } from '@evidata/connection';
 import { credentialVaultFromEnv } from '@evidata/secrets';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
-import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
+import {
+  OpenAIAgentProvider,
+  openAIConfigFromEnv,
+  type OpenAIProviderConfig,
+} from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
 import { PublishedDataSourceResolver } from './data-source-resolver';
 import { DataSourceAuthoringService } from './authoring-service';
@@ -34,6 +38,11 @@ export function makeProvider(question: string): AgentProvider {
   return providerConfig
     ? new OpenAIAgentProvider(providerConfig)
     : fixtureFor(pickScenario(question));
+}
+
+/** Build a stateful provider for a resolved registered model config (epic #106). */
+export function providerFromConfig(config: OpenAIProviderConfig): AgentProvider {
+  return new OpenAIAgentProvider(config);
 }
 
 export interface Runtime {

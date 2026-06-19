@@ -6,6 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { VaultUnavailableError } from '@evidata/connection';
+import type { OpenAIProviderConfig } from '@evidata/provider-openai';
 import type {
   CredentialVault,
   MetadataStore,
@@ -14,6 +15,21 @@ import type {
   ModelProviderRecord,
   ModelProviderSummary,
 } from '@evidata/ports';
+
+/** Default OpenAI-compatible base URL for a provider kind (null = needs an explicit
+ *  baseUrl, e.g. self-hosted; native non-OpenAI vendors like Anthropic come later). */
+function defaultBaseFor(kind: string): string | null {
+  switch (kind) {
+    case 'openai':
+      return 'https://api.openai.com/v1';
+    case 'deepseek':
+      return 'https://api.deepseek.com';
+    case 'google':
+      return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    default:
+      return null;
+  }
+}
 
 export { VaultUnavailableError };
 
@@ -100,6 +116,24 @@ export class ModelProviderService {
       apiKey: string;
     };
     return apiKey;
+  }
+
+  /** Resolve one of the caller's own providers into a runnable provider config
+   *  (decrypted key + base URL + model). Null if not owned, unknown, or not yet
+   *  runnable (an OpenAI-compatible base can't be determined). Owner-gated so a
+   *  caller can only run with their own key. */
+  async resolveConfig(userId: string, id: string): Promise<OpenAIProviderConfig | null> {
+    const vault = this.requireVault();
+    const record = await this.deps.store.getModelProvider(id);
+    if (!record || record.createdBy !== userId) return null;
+    const baseURL = record.baseUrl ?? defaultBaseFor(record.kind);
+    if (!baseURL) return null; // e.g. self-hosted with no baseUrl, or native Anthropic (later)
+    const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
+      apiKey: string;
+    };
+    const config: OpenAIProviderConfig = { apiKey, baseURL, model: record.model };
+    if (typeof record.params.maxTokens === 'number') config.maxTokens = record.params.maxTokens;
+    return config;
   }
 
   private requireVault(): CredentialVault {
