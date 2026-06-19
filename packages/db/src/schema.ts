@@ -215,16 +215,115 @@ export const schemaSnapshots = meta.table(
   (t) => [index('snapshots_connection_idx').on(t.connectionId, t.capturedAt)],
 );
 
-// Minimal Data Source so Investigation.dataSourceId is a real FK (M2 extends this).
+// Data Source — the governed, AI-facing surface. M1 shipped the minimal row; M2
+// adds description + lifecycle and the authoring tables below (spec 09 §5).
 export const dataSources = meta.table('data_sources', {
   id: text('id').primaryKey(), // 'sample' for the built-in Sample
   name: text('name').notNull(),
   kind: text('kind').notNull(), // 'sample' | 'postgres'
-  connectionId: text('connection_id').references(() => connections.id), // null for the Sample
+  connectionId: text('connection_id').references(() => connections.id), // M1 legacy; M2 uses the join
+  description: text('description'),
+  lifecycle: text('lifecycle').notNull().default('draft'), // 'draft' | 'published' | 'archived'
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 });
 
-/** The full metadata schema (M0 + M1), for the migrator and typed queries. */
+// --- M2 authoring tables (spec 09 §5) ---
+
+export const dataSourceConnections = meta.table(
+  'data_source_connections',
+  {
+    id: text('id').primaryKey(),
+    dataSourceId: text('data_source_id')
+      .notNull()
+      .references(() => dataSources.id),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => connections.id),
+    alias: text('alias'),
+    includedTables: jsonb('included_tables').notNull(), // string[] — the AI-visible scope
+    fieldRules: jsonb('field_rules').notNull(), // { sensitiveColumns: string[]; … }
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('ds_conn_uq').on(t.dataSourceId, t.connectionId)],
+);
+
+export const dataSourceContexts = meta.table('data_source_contexts', {
+  id: text('id').primaryKey(),
+  dataSourceId: text('data_source_id')
+    .notNull()
+    .references(() => dataSources.id)
+    .unique(),
+  overview: text('overview').notNull().default(''),
+  payload: jsonb('payload').notNull(), // entities/relationships/examples (AI draft + verified)
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+});
+
+export const businessGlossaryTerms = meta.table(
+  'business_glossary_terms',
+  {
+    id: text('id').primaryKey(),
+    dataSourceId: text('data_source_id')
+      .notNull()
+      .references(() => dataSources.id),
+    term: text('term').notNull(),
+    definition: text('definition').notNull(),
+    status: text('status', { enum: ['suggested', 'verified'] }).notNull(),
+    provenance: text('provenance', {
+      enum: ['ai_draft', 'querier_correction', 'admin'],
+    }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('glossary_ds_idx').on(t.dataSourceId)],
+);
+
+export const entityMappings = meta.table(
+  'entity_mappings',
+  {
+    id: text('id').primaryKey(),
+    dataSourceId: text('data_source_id')
+      .notNull()
+      .references(() => dataSources.id),
+    fromRef: text('from_ref').notNull(),
+    toRef: text('to_ref').notNull(),
+    status: text('status', { enum: ['suggested', 'verified'] }).notNull(),
+    provenance: text('provenance', {
+      enum: ['ai_draft', 'querier_correction', 'admin'],
+    }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('mappings_ds_idx').on(t.dataSourceId)],
+);
+
+export const policies = meta.table('policies', {
+  id: text('id').primaryKey(),
+  dataSourceId: text('data_source_id')
+    .notNull()
+    .references(() => dataSources.id)
+    .unique(),
+  rowLimit: integer('row_limit').notNull(),
+  timeoutMs: integer('timeout_ms').notNull(),
+  statementTimeoutMs: integer('statement_timeout_ms'),
+  confirmOnBroadScan: boolean('confirm_on_broad_scan').notNull(),
+  confirmOnSensitiveAccess: boolean('confirm_on_sensitive_access').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+});
+
+export const dataSourceMemberships = meta.table(
+  'data_source_memberships',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    dataSourceId: text('data_source_id')
+      .notNull()
+      .references(() => dataSources.id),
+    role: text('role', { enum: ['owner', 'admin', 'querier'] }).notNull(),
+  },
+  (t) => [uniqueIndex('ds_member_uq').on(t.userId, t.dataSourceId)],
+);
+
+/** The full metadata schema (M0 + M1 + M2), for the migrator and typed queries. */
 export const schema = {
   investigations,
   turns,
@@ -238,4 +337,10 @@ export const schema = {
   connectionMemberships,
   schemaSnapshots,
   dataSources,
+  dataSourceConnections,
+  dataSourceContexts,
+  businessGlossaryTerms,
+  entityMappings,
+  policies,
+  dataSourceMemberships,
 };

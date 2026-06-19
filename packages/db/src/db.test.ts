@@ -7,11 +7,17 @@ import { createMetadataDb, type MetadataDbHandle } from './client';
 import { DrizzleMetadataStore } from './store';
 import {
   answers,
+  businessGlossaryTerms,
   connectionMemberships,
   connections,
+  dataSourceConnections,
+  dataSourceContexts,
+  dataSourceMemberships,
   dataSources,
+  entityMappings,
   evidence,
   investigations,
+  policies,
   queryRuns,
   schemaSnapshots,
   sessions,
@@ -31,18 +37,24 @@ afterAll(async () => {
 const at = (iso: string): Date => new Date(iso);
 
 describe('M0 metadata schema (spec 10)', () => {
-  it('migrates the M0 + M1 tables into the evidata_meta schema', async () => {
+  it('migrates the M0 + M1 + M2 tables into the evidata_meta schema', async () => {
     const res = await handle.client.query<{ table_name: string }>(
       `select table_name from information_schema.tables
        where table_schema = 'evidata_meta' order by table_name`,
     );
     expect(res.rows.map((r) => r.table_name)).toEqual([
       'answers',
+      'business_glossary_terms',
       'connection_memberships',
       'connections',
+      'data_source_connections',
+      'data_source_contexts',
+      'data_source_memberships',
       'data_sources',
+      'entity_mappings',
       'evidence',
       'investigations',
+      'policies',
       'query_runs',
       'schema_snapshots',
       'sessions',
@@ -350,6 +362,131 @@ describe('M1 metadata schema (spec 12)', () => {
         createdBy: 'ghost',
         createdAt: at('2026-06-02T00:00:06Z'),
         updatedAt: at('2026-06-02T00:00:06Z'),
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('M2 metadata schema (spec 09)', () => {
+  // Reuses u1 + c1 + ds-wh created by the M1 block above.
+  it('seeds the Sample as Published; a new Data Source defaults to Draft', async () => {
+    const [sample] = await handle.db.select().from(dataSources).where(eq(dataSources.id, 'sample'));
+    expect(sample?.lifecycle).toBe('published');
+    const [wh] = await handle.db.select().from(dataSources).where(eq(dataSources.id, 'ds-wh'));
+    expect(wh?.lifecycle).toBe('draft'); // new rows default to draft
+    expect(wh?.description).toBeNull();
+  });
+
+  it('attaches a connection with scope; one row per (data source, connection)', async () => {
+    const { db } = handle;
+    await db.insert(dataSourceConnections).values({
+      id: 'dsc1',
+      dataSourceId: 'ds-wh',
+      connectionId: 'c1',
+      alias: null,
+      includedTables: ['public.orders', 'public.customers'],
+      fieldRules: { sensitiveColumns: ['public.customers.email'] },
+      createdAt: at('2026-06-03T00:00:00Z'),
+    });
+    const [row] = await db
+      .select()
+      .from(dataSourceConnections)
+      .where(eq(dataSourceConnections.dataSourceId, 'ds-wh'));
+    expect(row?.includedTables).toEqual(['public.orders', 'public.customers']);
+    // Unique (data source, connection).
+    await expect(
+      db.insert(dataSourceConnections).values({
+        id: 'dsc-dup',
+        dataSourceId: 'ds-wh',
+        connectionId: 'c1',
+        alias: null,
+        includedTables: [],
+        fieldRules: {},
+        createdAt: at('2026-06-03T00:00:01Z'),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('keeps one context and one policy per Data Source (unique)', async () => {
+    const { db } = handle;
+    await db.insert(dataSourceContexts).values({
+      id: 'ctx1',
+      dataSourceId: 'ds-wh',
+      overview: 'Orders + customers.',
+      payload: { entities: [] },
+      updatedAt: at('2026-06-03T00:00:02Z'),
+    });
+    await expect(
+      db.insert(dataSourceContexts).values({
+        id: 'ctx-dup',
+        dataSourceId: 'ds-wh',
+        overview: 'dup',
+        payload: {},
+        updatedAt: at('2026-06-03T00:00:03Z'),
+      }),
+    ).rejects.toThrow();
+
+    await db.insert(policies).values({
+      id: 'pol1',
+      dataSourceId: 'ds-wh',
+      rowLimit: 1000,
+      timeoutMs: 5000,
+      statementTimeoutMs: 5000,
+      confirmOnBroadScan: true,
+      confirmOnSensitiveAccess: true,
+      updatedAt: at('2026-06-03T00:00:04Z'),
+    });
+    await expect(
+      db.insert(policies).values({
+        id: 'pol-dup',
+        dataSourceId: 'ds-wh',
+        rowLimit: 10,
+        timeoutMs: 1000,
+        statementTimeoutMs: null,
+        confirmOnBroadScan: false,
+        confirmOnSensitiveAccess: false,
+        updatedAt: at('2026-06-03T00:00:05Z'),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('records glossary/mapping with status+provenance; unique data-source membership', async () => {
+    const { db } = handle;
+    await db.insert(businessGlossaryTerms).values({
+      id: 'g1',
+      dataSourceId: 'ds-wh',
+      term: 'active customer',
+      definition: "status = 'active'",
+      status: 'suggested',
+      provenance: 'ai_draft',
+      createdAt: at('2026-06-03T00:00:06Z'),
+    });
+    await db.insert(entityMappings).values({
+      id: 'em1',
+      dataSourceId: 'ds-wh',
+      fromRef: 'Customer',
+      toRef: 'public.customers.id',
+      status: 'verified',
+      provenance: 'admin',
+      createdAt: at('2026-06-03T00:00:07Z'),
+    });
+    expect(
+      (await db.select().from(businessGlossaryTerms).where(eq(businessGlossaryTerms.id, 'g1')))[0]
+        ?.status,
+    ).toBe('suggested');
+
+    await db.insert(dataSourceMemberships).values({
+      id: 'dsm1',
+      userId: 'u1',
+      dataSourceId: 'ds-wh',
+      role: 'owner',
+    });
+    await expect(
+      db.insert(dataSourceMemberships).values({
+        id: 'dsm-dup',
+        userId: 'u1',
+        dataSourceId: 'ds-wh',
+        role: 'admin',
       }),
     ).rejects.toThrow();
   });
