@@ -21,7 +21,12 @@ export function readSessionToken(req: Request): string | null {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
     if (part.slice(0, eq).trim() === COOKIE) {
-      return decodeURIComponent(part.slice(eq + 1).trim());
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      } catch {
+        // Client-controlled, malformed percent-encoding → treat as no session.
+        return null;
+      }
     }
   }
   return null;

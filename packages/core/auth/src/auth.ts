@@ -42,7 +42,7 @@ const DUMMY_HASH = `scrypt$${N}$${R}$${P}$${'a'.repeat(24)}$${'b'.repeat(44)}`;
 export type AuthStore = Pick<
   MetadataStore,
   | 'countUsers'
-  | 'createUser'
+  | 'createFirstUser'
   | 'getUserByEmail'
   | 'createSession'
   | 'getSessionUser'
@@ -105,17 +105,20 @@ export class AuthService {
     return this.deps.store.countUsers().then((n) => n > 0);
   }
 
-  /** First-run only: create the initial Owner + a session. Throws once a user exists. */
+  /** First-run only: atomically create the initial Owner + a session. Throws if a
+   *  user already exists (incl. losing a concurrent first-run race). */
   async setup(
     input: Credentials & { displayName: string },
   ): Promise<{ user: AuthedUser; token: string }> {
-    if (await this.isSetupComplete()) throw new Error('Setup is already complete.');
-    const user = await this.deps.store.createUser({
+    // Hash before the atomic insert; createFirstUser is the single source of truth
+    // for the zero-user invariant (a pre-check would still race).
+    const user = await this.deps.store.createFirstUser({
       id: this.newId('usr'),
       email: input.email,
       displayName: input.displayName,
       passwordHash: await this.hashPassword(input.password),
     });
+    if (!user) throw new Error('Setup is already complete.');
     const token = await this.startSession(user.id);
     return { user: publicUser(user.id, user.email, user.displayName), token };
   }
