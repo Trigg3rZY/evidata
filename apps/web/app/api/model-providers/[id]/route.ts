@@ -9,5 +9,5 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
-  return withModelProviders(req, (_user, providers) => providers.remove(id));
+  return withModelProviders(req, (user, providers) => providers.remove(user.id, id));
 }

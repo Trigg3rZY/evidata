@@ -17,9 +17,9 @@ interface CreateBody {
   capabilities?: unknown;
 }
 
-/** List configured model providers (summaries — never the API key). */
+/** List the caller's model providers (summaries — never the API key). */
 export function GET(req: Request): Promise<Response> {
-  return withModelProviders(req, (_user, providers) => providers.list());
+  return withModelProviders(req, (user, providers) => providers.list(user.id));
 }
 
 /** Register a model provider — the API key is encrypted at rest (epic #106). */

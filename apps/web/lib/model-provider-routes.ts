@@ -5,7 +5,11 @@
 import type { AuthedUser } from '@evidata/auth';
 import { currentUser } from '@/lib/auth';
 import { getRuntime } from '@/lib/runtime';
-import { ModelProviderService, VaultUnavailableError } from '@/lib/model-provider-service';
+import {
+  ModelProviderAccessError,
+  ModelProviderService,
+  VaultUnavailableError,
+} from '@/lib/model-provider-service';
 
 /** Thrown by a handler for invalid request bodies → 400. */
 export class BadRequestError extends Error {}
@@ -21,6 +25,8 @@ export async function withModelProviders(
   try {
     return Response.json(await fn(user, modelProviders), { status: successStatus });
   } catch (e) {
+    if (e instanceof ModelProviderAccessError)
+      return Response.json({ error: 'Not found.' }, { status: 404 });
     if (e instanceof BadRequestError) return Response.json({ error: e.message }, { status: 400 });
     if (e instanceof VaultUnavailableError)
       return Response.json({ error: e.message }, { status: 503 });
