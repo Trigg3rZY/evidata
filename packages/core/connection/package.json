@@ -1,0 +1,23 @@
+{
+  "name": "@evidata/connection",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ConnectionService — CRUD/test/introspect for real database Connections (spec 08 §6).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@evidata/connector-postgres": "workspace:*",
+    "@evidata/introspection": "workspace:*",
+    "@evidata/ports": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@evidata/db": "workspace:*",
+    "@evidata/secrets": "workspace:*",
+    "@types/pg": "^8.11.10"
+  }
+}

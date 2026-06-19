@@ -53,6 +53,9 @@ importers:
       '@evidata/auth':
         specifier: workspace:*
         version: link:../../packages/core/auth
+      '@evidata/connection':
+        specifier: workspace:*
+        version: link:../../packages/core/connection
       '@evidata/connector-sample':
         specifier: workspace:*
         version: link:../../packages/connectors/sample
@@ -74,6 +77,9 @@ importers:
       '@evidata/safety':
         specifier: workspace:*
         version: link:../../packages/core/safety
+      '@evidata/secrets':
+        specifier: workspace:*
+        version: link:../../packages/core/secrets
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -130,6 +136,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
+      '@types/pg-cursor':
+        specifier: ^2.7.2
+        version: 2.7.2
 
   packages/connectors/sample:
     dependencies:
@@ -177,6 +186,31 @@ importers:
       '@evidata/ports':
         specifier: workspace:*
         version: link:../ports
+
+  packages/core/connection:
+    dependencies:
+      '@evidata/connector-postgres':
+        specifier: workspace:*
+        version: link:../../connectors/postgres
+      '@evidata/introspection':
+        specifier: workspace:*
+        version: link:../introspection
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+    devDependencies:
+      '@evidata/db':
+        specifier: workspace:*
+        version: link:../../db
+      '@evidata/secrets':
+        specifier: workspace:*
+        version: link:../secrets
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
 
   packages/core/introspection:
     dependencies:
@@ -1271,6 +1305,9 @@ packages:
 
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
+
+  '@types/pg-cursor@2.7.2':
+    resolution: {integrity: sha512-m3xT8bVFCvx98LuzbvXyuCdT/Hjdd/v8ml4jL4K1QF70Y8clOfCFdgoaEB1FWdcSwcpoFYZTJQaMD9/GQ27efQ==}
 
   '@types/pg@8.20.0':
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
@@ -3118,6 +3155,11 @@ snapshots:
   '@types/node@22.19.21':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/pg-cursor@2.7.2':
+    dependencies:
+      '@types/node': 22.19.21
+      '@types/pg': 8.20.0
 
   '@types/pg@8.20.0':
     dependencies:

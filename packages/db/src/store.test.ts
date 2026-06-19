@@ -194,3 +194,72 @@ describe('DrizzleMetadataStore — identity (spec 08 §5)', () => {
     expect(await store.getSessionUser('live-hash')).toBeNull(); // revoked
   });
 });
+
+describe('DrizzleMetadataStore — connections (spec 08 §6)', () => {
+  const blob = { v: 1, keyId: 'k1', iv: 'aaa', ciphertext: 'bbb', authTag: 'ccc' };
+
+  it('creates a connection + membership; summary omits the blob, record keeps it', async () => {
+    const rec = await store.createConnection({
+      id: 'c-1',
+      kind: 'postgres',
+      name: 'Warehouse',
+      host: 'db.internal',
+      port: 5432,
+      database: 'analytics',
+      sslMode: 'require',
+      credentialBlob: blob,
+      health: 'Untested',
+      createdBy: 'u-1',
+    });
+    expect(rec.credentialBlob).toEqual(blob);
+
+    await store.createConnectionMembership({
+      id: 'm-1',
+      userId: 'u-1',
+      connectionId: 'c-1',
+      role: 'owner',
+    });
+    expect(await store.getConnectionRole('u-1', 'c-1')).toBe('owner');
+    expect(await store.getConnectionRole('ghost', 'c-1')).toBeNull();
+
+    const summary = (await store.listConnections()).find((c) => c.id === 'c-1');
+    expect(summary?.name).toBe('Warehouse');
+    expect((summary as Record<string, unknown> | undefined)?.credentialBlob).toBeUndefined();
+    expect((await store.getConnection('c-1'))?.credentialBlob).toEqual(blob);
+  });
+
+  it('stores snapshots + data sources, updates health, and cleans up on delete', async () => {
+    await store.createDataSource({
+      id: 'ds-c1',
+      name: 'Warehouse',
+      kind: 'postgres',
+      connectionId: 'c-1',
+    });
+    expect(await store.listDataSourcesByConnection('c-1')).toEqual([
+      { id: 'ds-c1', name: 'Warehouse' },
+    ]);
+
+    await store.saveSchemaSnapshot({
+      id: 'snap-1',
+      connectionId: 'c-1',
+      status: 'complete',
+      partial: false,
+      payload: {
+        dataSourceId: 'c-1',
+        capturedAt: '2026-06-19T00:00:00.000Z',
+        partial: false,
+        tables: [{ name: 't', columns: [] }],
+      },
+      capturedAt: new Date(),
+    });
+    expect((await store.getLatestSnapshot('c-1'))?.tables[0]?.name).toBe('t');
+
+    await store.setConnectionHealth('c-1', 'Healthy');
+    expect((await store.getConnection('c-1'))?.health).toBe('Healthy');
+
+    await store.deleteConnection('c-1');
+    expect(await store.getConnection('c-1')).toBeNull();
+    expect(await store.getLatestSnapshot('c-1')).toBeNull();
+    expect(await store.listDataSourcesByConnection('c-1')).toEqual([]);
+  });
+});
