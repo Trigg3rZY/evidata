@@ -4,3 +4,4 @@ export * from './safety';
 export * from './connector';
 export * from './redaction';
 export * from './store';
+export * from './secrets';
