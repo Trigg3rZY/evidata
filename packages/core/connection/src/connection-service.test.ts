@@ -77,12 +77,23 @@ run('ConnectionService (real Postgres + store + vault)', () => {
     await expect(svc.get('stranger', summary.id)).rejects.toBeInstanceOf(ConnectionAccessError);
   });
 
-  it('test() reports Healthy for a read-only role and AuthFailed for bad credentials', async () => {
+  it('test() reports Healthy (read-only role), AuthFailed (bad creds), PermissionInsufficient (write-capable)', async () => {
     const healthy = await make();
     expect((await svc.test(ownerId, healthy.id)).health).toBe('Healthy');
 
     const bad = await make({ password: 'wrong-password' });
     expect((await svc.test(ownerId, bad.id)).health).toBe('AuthFailed');
+
+    // The admin (superuser) role can write → flagged, not blocked.
+    const url = new URL(ADMIN_URL as string);
+    const writable = await make({ user: url.username, password: url.password });
+    expect((await svc.test(ownerId, writable.id)).health).toBe('PermissionInsufficient');
+  });
+
+  it('list() returns only the caller’s connections', async () => {
+    await make();
+    expect((await svc.list(ownerId)).length).toBeGreaterThan(0);
+    expect(await svc.list('stranger')).toEqual([]);
   });
 
   it('introspect() captures + stores a schema snapshot', async () => {

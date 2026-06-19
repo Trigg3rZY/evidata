@@ -222,10 +222,12 @@ describe('DrizzleMetadataStore — connections (spec 08 §6)', () => {
     expect(await store.getConnectionRole('u-1', 'c-1')).toBe('owner');
     expect(await store.getConnectionRole('ghost', 'c-1')).toBeNull();
 
-    const summary = (await store.listConnections()).find((c) => c.id === 'c-1');
+    const summary = (await store.listConnections('u-1')).find((c) => c.id === 'c-1');
     expect(summary?.name).toBe('Warehouse');
     expect((summary as Record<string, unknown> | undefined)?.credentialBlob).toBeUndefined();
     expect((await store.getConnection('c-1'))?.credentialBlob).toEqual(blob);
+    // A non-member sees nothing (existence-hiding).
+    expect(await store.listConnections('ghost')).toEqual([]);
   });
 
   it('stores snapshots + data sources, updates health, and cleans up on delete', async () => {

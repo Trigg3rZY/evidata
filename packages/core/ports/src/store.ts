@@ -79,8 +79,8 @@ export interface MetadataStore {
 
   // --- M1 connections (spec 08 §6 / 12 §2). Credentials stay encrypted at rest. ---
   createConnection(c: NewConnection): Promise<ConnectionRecord>;
-  /** Public summaries (never the credential blob). */
-  listConnections(): Promise<ConnectionSummary[]>;
+  /** Public summaries of the connections this user is a member of (never the blob). */
+  listConnections(userId: string): Promise<ConnectionSummary[]>;
   /** Full record incl. the encrypted blob — internal use (test/introspect); never returned by the API. */
   getConnection(id: string): Promise<ConnectionRecord | null>;
   setConnectionHealth(id: string, health: ConnectionHealth): Promise<void>;
