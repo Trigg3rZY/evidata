@@ -1,0 +1,29 @@
+name: Task
+description: A unit of work for the board (see AGENTS.md → Collaboration & workflow)
+title: "<short imperative summary>"
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What & why
+      description: The change and the reason; link related issues/PRs.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Also apply the matching `priority:*` label after creating.
+      options:
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance / done-when
+      description: How we'll know it's done (tests, behavior, verification).
+    validations:
+      required: false
