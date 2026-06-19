@@ -254,4 +254,22 @@ CREATE UNIQUE INDEX "ds_conn_uq" ON "evidata_meta"."data_source_connections" USI
 CREATE UNIQUE INDEX "ds_member_uq" ON "evidata_meta"."data_source_memberships" USING btree ("user_id","data_source_id");--> statement-breakpoint
 CREATE INDEX "mappings_ds_idx" ON "evidata_meta"."entity_mappings" USING btree ("data_source_id");`,
   },
+  {
+    name: '0004_aware_silver_centurion',
+    sql: `CREATE TABLE "evidata_meta"."model_providers" (
+	"id" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"kind" text NOT NULL,
+	"base_url" text,
+	"model" text NOT NULL,
+	"params" jsonb NOT NULL,
+	"capabilities" jsonb NOT NULL,
+	"credential_blob" jsonb NOT NULL,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "evidata_meta"."model_providers" ADD CONSTRAINT "model_providers_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "evidata_meta"."users"("id") ON DELETE no action ON UPDATE no action;`,
+  },
 ];

@@ -218,6 +218,25 @@ export const schemaSnapshots = meta.table(
   (t) => [index('snapshots_connection_idx').on(t.connectionId, t.capturedAt)],
 );
 
+// BYO-key model providers (epic #106): a user-configured LLM endpoint + encrypted
+// API key. The agent's AgentProvider resolves the chosen one; safety is
+// model-independent (the app validates/executes regardless of which model proposed).
+export const modelProviders = meta.table('model_providers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(), // display name, e.g. "Team DeepSeek"
+  kind: text('kind').notNull(), // 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | …
+  baseUrl: text('base_url'), // nullable; for openai-compatible / self-hosted endpoints
+  model: text('model').notNull(), // e.g. 'deepseek-chat'
+  params: jsonb('params').notNull(), // { temperature?, effort?, maxTokens? }
+  capabilities: jsonb('capabilities').notNull(), // { toolChoice?, structuredOutput? }
+  credentialBlob: jsonb('credential_blob').notNull(), // EncryptedSecret (the API key) — never returned
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+});
+
 // Data Source — the governed, AI-facing surface. M1 shipped the minimal row; M2
 // adds description + lifecycle and the authoring tables below (spec 09 §5).
 export const dataSources = meta.table('data_sources', {
@@ -339,6 +358,7 @@ export const schema = {
   connections,
   connectionMemberships,
   schemaSnapshots,
+  modelProviders,
   dataSources,
   dataSourceConnections,
   dataSourceContexts,

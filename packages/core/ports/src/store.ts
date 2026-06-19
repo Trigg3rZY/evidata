@@ -90,6 +90,14 @@ export interface MetadataStore {
   getConnectionRole(userId: string, connectionId: string): Promise<ConnectionRole | null>;
   saveSchemaSnapshot(s: NewSchemaSnapshotRecord): Promise<void>;
   getLatestSnapshot(connectionId: string): Promise<SchemaSnapshot | null>;
+
+  // --- BYO-key model providers (epic #106). Keys stay encrypted at rest. ---
+  createModelProvider(p: NewModelProvider): Promise<ModelProviderRecord>;
+  /** Public summaries (never the blob). */
+  listModelProviders(): Promise<ModelProviderSummary[]>;
+  /** Full record incl. the encrypted blob — internal use (resolve at run time); never returned by the API. */
+  getModelProvider(id: string): Promise<ModelProviderRecord | null>;
+  deleteModelProvider(id: string): Promise<void>;
   createDataSource(ds: NewDataSourceRecord): Promise<void>;
   /** Data Sources backed by a connection — shown before an edit/disable (08 §6). */
   listDataSourcesByConnection(connectionId: string): Promise<Array<{ id: string; name: string }>>;
@@ -170,6 +178,55 @@ export interface ConnectionMembershipInput {
   userId: string;
   connectionId: string;
   role: ConnectionRole;
+}
+
+// --- BYO-key model providers (epic #106). The API key is stored encrypted. ---
+
+export interface ModelParams {
+  temperature?: number;
+  /** Abstract reasoning effort; the provider adapter maps it per-vendor (epic #106). */
+  effort?: string;
+  maxTokens?: number;
+}
+
+export interface ModelCapabilities {
+  /** Drives the agent loop's tool-calling vs structured-output strategy. */
+  toolChoice?: 'required' | 'auto' | 'none';
+  structuredOutput?: boolean;
+}
+
+export interface NewModelProvider {
+  id: string;
+  name: string;
+  /** Provider family for the adapter: 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | … */
+  kind: string;
+  /** For openai-compatible / self-hosted endpoints; null for a vendor default. */
+  baseUrl: string | null;
+  model: string;
+  params: ModelParams;
+  capabilities: ModelCapabilities;
+  credentialBlob: EncryptedSecret;
+  createdBy: string;
+}
+
+/** Full stored provider, incl. the encrypted API-key blob (internal use only). */
+export interface ModelProviderRecord extends NewModelProvider {
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Public provider shape — what the API returns (no credential blob). */
+export interface ModelProviderSummary {
+  id: string;
+  name: string;
+  kind: string;
+  baseUrl: string | null;
+  model: string;
+  params: ModelParams;
+  capabilities: ModelCapabilities;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface NewSchemaSnapshotRecord {
