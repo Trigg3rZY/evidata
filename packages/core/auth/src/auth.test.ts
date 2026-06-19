@@ -5,7 +5,7 @@ import { AuthService, type AuthStore } from './auth';
 /** In-memory AuthStore so the auth tests stay hermetic (no DB). */
 class FakeStore implements AuthStore {
   private byId = new Map<string, UserRecord>();
-  private byEmail = new Map<string, string>();
+  private byUsername = new Map<string, string>();
   private sessions = new Map<string, { userId: string; expiresAt: Date }>();
 
   countUsers(): Promise<number> {
@@ -15,11 +15,11 @@ class FakeStore implements AuthStore {
     if (this.byId.size > 0) return Promise.resolve(null); // atomic zero-user guard
     const rec: UserRecord = { ...u, createdAt: '2026-06-19T00:00:00.000Z' };
     this.byId.set(u.id, rec);
-    this.byEmail.set(u.email, u.id);
+    this.byUsername.set(u.username, u.id);
     return Promise.resolve(rec);
   }
-  getUserByEmail(email: string): Promise<UserRecord | null> {
-    const id = this.byEmail.get(email);
+  getUserByUsername(username: string): Promise<UserRecord | null> {
+    const id = this.byUsername.get(username);
     return Promise.resolve(id ? (this.byId.get(id) ?? null) : null);
   }
   createSession(s: NewSession): Promise<void> {
@@ -38,7 +38,7 @@ class FakeStore implements AuthStore {
 }
 
 const owner = {
-  email: 'owner@example.com',
+  username: 'owner@example.com',
   password: 'correct horse battery',
   displayName: 'Owner',
 };
@@ -71,24 +71,28 @@ describe('AuthService — first-run, login, sessions', () => {
     expect(await auth.isSetupComplete()).toBe(false);
 
     const { user, token } = await auth.setup(owner);
-    expect(user).toEqual({ id: user.id, email: owner.email, displayName: owner.displayName });
+    expect(user).toEqual({ id: user.id, username: owner.username, displayName: owner.displayName });
     expect((user as { passwordHash?: string }).passwordHash).toBeUndefined();
     expect(await auth.isSetupComplete()).toBe(true);
-    expect(await auth.resolve(token)).toMatchObject({ email: owner.email });
+    expect(await auth.resolve(token)).toMatchObject({ username: owner.username });
 
-    await expect(auth.setup({ ...owner, email: 'other@example.com' })).rejects.toThrow(/already/i);
+    await expect(auth.setup({ ...owner, username: 'other@example.com' })).rejects.toThrow(
+      /already/i,
+    );
   });
 
   it('login succeeds with the right password and fails generically otherwise', async () => {
     const auth = new AuthService({ store: new FakeStore() });
     await auth.setup(owner);
 
-    const ok = await auth.login({ email: owner.email, password: owner.password });
-    expect(ok?.user.email).toBe(owner.email);
+    const ok = await auth.login({ username: owner.username, password: owner.password });
+    expect(ok?.user.username).toBe(owner.username);
     expect(ok?.token).toBeTruthy();
 
-    expect(await auth.login({ email: owner.email, password: 'nope' })).toBeNull();
-    expect(await auth.login({ email: 'ghost@example.com', password: owner.password })).toBeNull();
+    expect(await auth.login({ username: owner.username, password: 'nope' })).toBeNull();
+    expect(
+      await auth.login({ username: 'ghost@example.com', password: owner.password }),
+    ).toBeNull();
   });
 
   it('logout revokes the session; a resolved token then returns null', async () => {

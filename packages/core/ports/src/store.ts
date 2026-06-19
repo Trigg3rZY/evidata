@@ -71,7 +71,7 @@ export interface MetadataStore {
    * concurrent first-run requests can't both bootstrap an account (spec 08 §5).
    */
   createFirstUser(user: NewUser): Promise<UserRecord | null>;
-  getUserByEmail(email: string): Promise<UserRecord | null>;
+  getUserByUsername(username: string): Promise<UserRecord | null>;
   createSession(session: NewSession): Promise<void>;
   /** The user for a non-expired session token hash, or null (expiry checked in the store). */
   getSessionUser(tokenHash: string): Promise<UserRecord | null>;
@@ -283,7 +283,8 @@ export interface PolicyInput {
 /** A local account (never carries the plaintext password). */
 export interface UserRecord {
   id: string;
-  email: string;
+  /** Login identifier (username-style; not RFC-email-enforced). */
+  username: string;
   displayName: string;
   /** Encoded password hash (scrypt) — for verification only; never returned by the API. */
   passwordHash: string;
@@ -292,7 +293,7 @@ export interface UserRecord {
 
 export interface NewUser {
   id: string;
-  email: string;
+  username: string;
   displayName: string;
   passwordHash: string;
 }

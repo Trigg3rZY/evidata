@@ -143,12 +143,15 @@ export const users = meta.table(
   'users',
   {
     id: text('id').primaryKey(),
-    email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(), // Argon2id (08 §5)
+    // The login identifier (username-style; not RFC-email-enforced). The physical
+    // column stays "email" for legacy reasons — no migration needed; an optional
+    // notification email can be added as a separate column later (spec 08 §5).
+    username: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(), // scrypt (08 §5)
     displayName: text('display_name').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
-  (t) => [uniqueIndex('users_email_uq').on(t.email)],
+  (t) => [uniqueIndex('users_email_uq').on(t.username)],
 );
 
 export const sessions = meta.table(

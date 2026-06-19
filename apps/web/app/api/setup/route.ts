@@ -11,7 +11,7 @@ export async function GET(): Promise<Response> {
 }
 
 interface SetupBody {
-  email?: unknown;
+  username?: unknown;
   password?: unknown;
   displayName?: unknown;
 }
@@ -23,15 +23,15 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: 'Setup is already complete.' }, { status: 410 });
   }
   const body = (await req.json().catch(() => null)) as SetupBody | null;
-  const email = typeof body?.email === 'string' ? body.email.trim() : '';
+  const username = typeof body?.username === 'string' ? body.username.trim() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
   const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
-  if (!email.includes('@') || password.length < 8 || !displayName) {
+  if (!username || password.length < 8 || !displayName) {
     return Response.json(
-      { error: 'A valid email, a display name, and an 8+ character password are required.' },
+      { error: 'A username, a display name, and an 8+ character password are required.' },
       { status: 400 },
     );
   }
-  const { user, token } = await auth.setup({ email, password, displayName });
+  const { user, token } = await auth.setup({ username, password, displayName });
   return Response.json({ user }, { headers: { 'set-cookie': sessionCookie(token) } });
 }

@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 interface LoginBody {
-  email?: unknown;
+  username?: unknown;
   password?: unknown;
 }
 
@@ -13,12 +13,12 @@ interface LoginBody {
 export async function POST(req: Request): Promise<Response> {
   const { auth } = await getRuntime();
   const body = (await req.json().catch(() => null)) as LoginBody | null;
-  const email = typeof body?.email === 'string' ? body.email.trim() : '';
+  const username = typeof body?.username === 'string' ? body.username.trim() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
 
-  const result = email && password ? await auth.login({ email, password }) : null;
+  const result = username && password ? await auth.login({ username, password }) : null;
   if (!result) {
-    return Response.json({ error: 'Invalid email or password.' }, { status: 401 });
+    return Response.json({ error: 'Invalid username or password.' }, { status: 401 });
   }
   return Response.json(
     { user: result.user },

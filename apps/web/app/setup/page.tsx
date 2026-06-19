@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 export default function SetupPage() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,7 +30,7 @@ export default function SetupPage() {
     const res = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ displayName, email, password }),
+      body: JSON.stringify({ displayName, username, password }),
     });
     setBusy(false);
     if (res.ok) {
@@ -59,10 +59,10 @@ export default function SetupPage() {
             autoComplete="name"
           />
           <Field
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
+            label="Username"
+            type="text"
+            value={username}
+            onChange={setUsername}
             required
             autoComplete="username"
           />
