@@ -255,7 +255,7 @@ CREATE UNIQUE INDEX "ds_member_uq" ON "evidata_meta"."data_source_memberships" U
 CREATE INDEX "mappings_ds_idx" ON "evidata_meta"."entity_mappings" USING btree ("data_source_id");`,
   },
   {
-    name: '0004_aware_silver_centurion',
+    name: '0004_classy_firelord',
     sql: `CREATE TABLE "evidata_meta"."model_providers" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
