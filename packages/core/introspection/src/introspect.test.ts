@@ -36,6 +36,16 @@ run('IntrospectionService (real Postgres)', () => {
        )`,
     );
     await admin.query('CREATE INDEX orders_customer_idx ON intro_test.orders(customer_id)');
+    // Composite (2-column) FK to verify every column pair is captured.
+    await admin.query(
+      'CREATE TABLE intro_test.tenants (region text, tid integer, PRIMARY KEY (region, tid))',
+    );
+    await admin.query(
+      `CREATE TABLE intro_test.usage_rows (
+         id integer PRIMARY KEY, region text, tid integer,
+         FOREIGN KEY (region, tid) REFERENCES intro_test.tenants(region, tid)
+       )`,
+    );
     await admin.query('ANALYZE intro_test.customers, intro_test.orders');
 
     params = {
@@ -82,6 +92,15 @@ run('IntrospectionService (real Postgres)', () => {
     expect(customerId?.references).toEqual({ table: 'intro_test.customers', column: 'id' });
     expect(typeof orders.rowEstimate).toBe('number');
     expect(orders.indexes).toContain('orders_customer_idx');
+  });
+
+  it('records every column of a composite foreign key', async () => {
+    const snap = await svc.capture(params, 'ds-test');
+    const usage = find(snap.tables, 'intro_test.usage_rows');
+    const region = usage.columns.find((c) => c.name === 'region');
+    const tid = usage.columns.find((c) => c.name === 'tid');
+    expect(region?.references).toEqual({ table: 'intro_test.tenants', column: 'region' });
+    expect(tid?.references).toEqual({ table: 'intro_test.tenants', column: 'tid' });
   });
 
   it('excludes system schemas and flags large captures as partial', async () => {
