@@ -1,6 +1,6 @@
 name: Task
 description: A unit of work for the board (see AGENTS.md → Collaboration & workflow)
-title: "<short imperative summary>"
+title: '<short imperative summary>'
 body:
   - type: textarea
     id: what
