@@ -17,6 +17,14 @@ import type {
 
 export { VaultUnavailableError };
 
+/** The caller doesn't own the target provider (route → 404; no existence leak). */
+export class ModelProviderAccessError extends Error {
+  constructor() {
+    super('Model provider not found.');
+    this.name = 'ModelProviderAccessError';
+  }
+}
+
 export interface CreateModelProviderInput {
   name: string;
   /** 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | … */
@@ -67,12 +75,17 @@ export class ModelProviderService {
     return toSummary(record);
   }
 
-  /** Public summaries for the picker / admin UI (never the key). */
-  list(): Promise<ModelProviderSummary[]> {
-    return this.deps.store.listModelProviders();
+  /** The caller's own providers (summaries — never the key). Providers are
+   *  per-user (BYO-key): a caller never sees or manages another user's. */
+  async list(userId: string): Promise<ModelProviderSummary[]> {
+    const all = await this.deps.store.listModelProviders();
+    return all.filter((p) => p.createdBy === userId);
   }
 
-  async remove(id: string): Promise<{ ok: true }> {
+  /** Delete one of the caller's own providers; 404 for a non-owner (no leak). */
+  async remove(userId: string, id: string): Promise<{ ok: true }> {
+    const record = await this.deps.store.getModelProvider(id);
+    if (!record || record.createdBy !== userId) throw new ModelProviderAccessError();
     await this.deps.store.deleteModelProvider(id);
     return { ok: true };
   }

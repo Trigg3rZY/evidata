@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from '@evidata/db';
 import { credentialVaultFromEnv } from '@evidata/secrets';
 import {
+  ModelProviderAccessError,
   ModelProviderService,
   VaultUnavailableError,
   type CreateModelProviderInput,
@@ -58,11 +59,21 @@ describe('ModelProviderService (epic #106)', () => {
     expect(await svc.apiKeyFor(summary.id)).toBe('sk-secret-123');
     expect(await svc.apiKeyFor('nope')).toBeNull();
 
-    // Listed as a summary (no blob).
-    expect((await svc.list()).some((p) => p.id === summary.id)).toBe(true);
+    // Listed as a summary (no blob) for the owner.
+    expect((await svc.list('owner')).some((p) => p.id === summary.id)).toBe(true);
 
-    await svc.remove(summary.id);
+    await svc.remove('owner', summary.id);
     expect(await store.getModelProvider(summary.id)).toBeNull();
+  });
+
+  it('scopes providers per user: a non-owner can neither see nor delete them', async () => {
+    const mine = await svc.create('owner', input({ name: 'Mine' }));
+    // A different user doesn't see it and can't delete it.
+    expect((await svc.list('stranger')).some((p) => p.id === mine.id)).toBe(false);
+    await expect(svc.remove('stranger', mine.id)).rejects.toBeInstanceOf(ModelProviderAccessError);
+    // The owner still can.
+    expect((await svc.list('owner')).some((p) => p.id === mine.id)).toBe(true);
+    await svc.remove('owner', mine.id);
   });
 
   it('errors clearly when no credential vault is configured', async () => {
