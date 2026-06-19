@@ -109,6 +109,16 @@ export interface MetadataStore {
   getGlossaryTerms(dataSourceId: string, status?: GlossaryStatus): Promise<GlossaryTermRecord[]>;
   /** Entity mappings for a DataSource (optionally filtered by status). */
   getEntityMappings(dataSourceId: string, status?: GlossaryStatus): Promise<EntityMappingRecord[]>;
+
+  // --- M2 authoring writes (spec 09 §5/§7). Upserts keyed by the source's unique. ---
+  /** Set the connection binding (table scope + field rules) for a DataSource. */
+  upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void>;
+  /** Set the authored context (overview + payload) for a DataSource. */
+  upsertDataSourceContext(input: DataSourceContextInput): Promise<void>;
+  /** Set the safety Policy for a DataSource. */
+  upsertPolicy(input: PolicyInput): Promise<void>;
+  /** Transition a DataSource's lifecycle (draft → published → archived). */
+  setDataSourceLifecycle(dataSourceId: string, lifecycle: DataSourceLifecycle): Promise<void>;
 }
 
 export type ConnectionHealth =
@@ -240,6 +250,34 @@ export interface EntityMappingRecord {
   toRef: string;
   status: GlossaryStatus;
   provenance: Provenance;
+}
+
+// --- M2 authoring writes (spec 09 §5/§7) ---
+
+export interface DataSourceConnectionInput {
+  id: string;
+  dataSourceId: string;
+  connectionId: string;
+  alias: string | null;
+  includedTables: string[];
+  fieldRules: FieldRules;
+}
+
+export interface DataSourceContextInput {
+  id: string;
+  dataSourceId: string;
+  overview: string;
+  payload: unknown;
+}
+
+export interface PolicyInput {
+  id: string;
+  dataSourceId: string;
+  rowLimit: number;
+  timeoutMs: number;
+  statementTimeoutMs: number | null;
+  confirmOnBroadScan: boolean;
+  confirmOnSensitiveAccess: boolean;
 }
 
 /** A local account (never carries the plaintext password). */

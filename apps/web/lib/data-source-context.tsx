@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 
 export interface DataSourceItem {
@@ -13,6 +21,8 @@ interface DataSourcesValue {
   /** The source a NEW conversation runs against; chosen in the Data Sources view. */
   activeId: string;
   setActiveId: (id: string) => void;
+  /** Re-fetch the list (e.g. after a source is published/unpublished). */
+  refresh: () => void;
 }
 
 const Ctx = createContext<DataSourcesValue | null>(null);
@@ -27,24 +37,24 @@ export function DataSourceProvider({ children }: { children: ReactNode }) {
   const [dataSources, setDataSources] = useState<ReadonlyArray<DataSourceItem>>([]);
   const [activeId, setActiveId] = useState<string>(SAMPLE_DATA_SOURCE_ID);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/data-sources')
+  const refresh = useCallback(() => {
+    void fetch('/api/data-sources')
       .then((r) => (r.ok ? (r.json() as Promise<DataSourceItem[]>) : []))
       .then((d) => {
-        if (cancelled || !Array.isArray(d) || d.length === 0) return;
+        if (!Array.isArray(d) || d.length === 0) return;
         setDataSources(d);
         setActiveId((cur) => (d.some((x) => x.id === cur) ? cur : (d[0]?.id ?? cur)));
       })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   const value = useMemo<DataSourcesValue>(
-    () => ({ dataSources, activeId, setActiveId }),
-    [dataSources, activeId],
+    () => ({ dataSources, activeId, setActiveId, refresh }),
+    [dataSources, activeId, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

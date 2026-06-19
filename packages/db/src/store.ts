@@ -23,13 +23,17 @@ import type {
   ConnectionRecord,
   ConnectionRole,
   ConnectionSummary,
+  DataSourceConnectionInput,
   DataSourceConnectionRecord,
+  DataSourceContextInput,
   DataSourceContextRecord,
+  DataSourceLifecycle,
   DataSourceRecord,
   EntityMappingRecord,
   FieldRules,
   GlossaryStatus,
   GlossaryTermRecord,
+  PolicyInput,
   InvestigationListItem,
   ListOpts,
   MetadataStore,
@@ -602,6 +606,79 @@ export class DrizzleMetadataStore implements MetadataStore {
       })
       .from(entityMappings)
       .where(where);
+  }
+
+  // --- M2 authoring writes (spec 09 §5/§7). Upserts keyed by the source's unique. ---
+
+  async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
+    await this.db
+      .insert(dataSourceConnections)
+      .values({
+        id: input.id,
+        dataSourceId: input.dataSourceId,
+        connectionId: input.connectionId,
+        alias: input.alias,
+        includedTables: input.includedTables,
+        fieldRules: input.fieldRules,
+        createdAt: this.now(),
+      })
+      .onConflictDoUpdate({
+        target: [dataSourceConnections.dataSourceId, dataSourceConnections.connectionId],
+        set: {
+          alias: input.alias,
+          includedTables: input.includedTables,
+          fieldRules: input.fieldRules,
+        },
+      });
+  }
+
+  async upsertDataSourceContext(input: DataSourceContextInput): Promise<void> {
+    await this.db
+      .insert(dataSourceContexts)
+      .values({
+        id: input.id,
+        dataSourceId: input.dataSourceId,
+        overview: input.overview,
+        payload: input.payload,
+        updatedAt: this.now(),
+      })
+      .onConflictDoUpdate({
+        target: dataSourceContexts.dataSourceId,
+        set: { overview: input.overview, payload: input.payload, updatedAt: this.now() },
+      });
+  }
+
+  async upsertPolicy(input: PolicyInput): Promise<void> {
+    await this.db
+      .insert(policies)
+      .values({
+        id: input.id,
+        dataSourceId: input.dataSourceId,
+        rowLimit: input.rowLimit,
+        timeoutMs: input.timeoutMs,
+        statementTimeoutMs: input.statementTimeoutMs,
+        confirmOnBroadScan: input.confirmOnBroadScan,
+        confirmOnSensitiveAccess: input.confirmOnSensitiveAccess,
+        updatedAt: this.now(),
+      })
+      .onConflictDoUpdate({
+        target: policies.dataSourceId,
+        set: {
+          rowLimit: input.rowLimit,
+          timeoutMs: input.timeoutMs,
+          statementTimeoutMs: input.statementTimeoutMs,
+          confirmOnBroadScan: input.confirmOnBroadScan,
+          confirmOnSensitiveAccess: input.confirmOnSensitiveAccess,
+          updatedAt: this.now(),
+        },
+      });
+  }
+
+  async setDataSourceLifecycle(
+    dataSourceId: string,
+    lifecycle: DataSourceLifecycle,
+  ): Promise<void> {
+    await this.db.update(dataSources).set({ lifecycle }).where(eq(dataSources.id, dataSourceId));
   }
 }
 

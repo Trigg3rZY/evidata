@@ -21,6 +21,7 @@ import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
 import { PublishedDataSourceResolver } from './data-source-resolver';
+import { DataSourceAuthoringService } from './authoring-service';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
 // set (DeepSeek by default); otherwise we fall back to the deterministic
@@ -38,6 +39,7 @@ export interface Runtime {
   service: InvestigationService;
   auth: AuthService;
   connections: ConnectionService;
+  authoring: DataSourceAuthoringService;
 }
 
 // Stash on globalThis so `next dev` hot-reloads reuse one in-memory DB instead
@@ -82,8 +84,9 @@ async function build(): Promise<Runtime> {
     store,
   });
   const auth = new AuthService({ store });
+  const authoring = new DataSourceAuthoringService(store);
 
-  return { service, auth, connections };
+  return { service, auth, connections, authoring };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
