@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
+    <html lang="en" className="h-full overflow-hidden overscroll-none" suppressHydrationWarning>
+      <body className="h-full overflow-hidden overscroll-none">
         <ThemeProvider
           attribute="data-theme"
           defaultTheme="system"
