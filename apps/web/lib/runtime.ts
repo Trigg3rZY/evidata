@@ -46,7 +46,11 @@ const globalForRuntime = globalThis as typeof globalThis & {
 };
 
 async function build(): Promise<Runtime> {
-  const db = await createMetadataDb();
+  // Metadata persists when METADATA_DATA_DIR is set (file-backed pglite — the
+  // self-hosted default); otherwise it's in-memory (dev/demo/smoke, resets on boot).
+  const db = await createMetadataDb(
+    process.env.METADATA_DATA_DIR ? { dataDir: process.env.METADATA_DATA_DIR } : {},
+  );
   const sample = await createSampleConnector();
 
   const sampleRuntime: DataSourceRuntime = {

@@ -1,6 +1,10 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { createMetadataDb, type MetadataDbHandle } from './client';
+import { DrizzleMetadataStore } from './store';
 import {
   answers,
   connectionMemberships,
@@ -208,6 +212,29 @@ describe('M0 metadata schema (spec 10)', () => {
         createdAt: at('2026-06-01T00:00:05Z'),
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe('file-backed metadata persistence (spec 08 §9)', () => {
+  it('reuses a persisted dataDir across restarts (idempotent schema apply)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'evidata-meta-'));
+    try {
+      const h1 = await createMetadataDb({ dataDir: dir });
+      await new DrizzleMetadataStore(h1.db).createFirstUser({
+        id: 'p1',
+        email: 'persist@example.com',
+        displayName: 'P',
+        passwordHash: 'x',
+      });
+      await h1.close();
+
+      // Reopen the same dir — the schema must NOT be re-applied, and data persists.
+      const h2 = await createMetadataDb({ dataDir: dir });
+      expect(await new DrizzleMetadataStore(h2.db).countUsers()).toBe(1);
+      await h2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
