@@ -65,6 +65,8 @@ export default function SetupPage() {
             onChange={setUsername}
             required
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
           />
           <Field
             label="Password (8+ characters)"

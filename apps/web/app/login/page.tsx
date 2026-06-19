@@ -48,6 +48,8 @@ export default function LoginPage() {
             onChange={setUsername}
             required
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
           />
           <Field
             label="Password"
