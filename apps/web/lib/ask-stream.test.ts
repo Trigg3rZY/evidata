@@ -24,9 +24,11 @@ describe('ask-stream helpers', () => {
     expect(pickScenario('Please update that spend row')).toBe('mutation-attempt');
     expect(pickScenario("usage and billing don't reconcile")).toBe('cross-area-reconcile');
     expect(pickScenario('How is spend trending?')).toBe('needs-timerange');
-    // a trend WITH a time grain answers with a chart, not a clarification
+    // a SPEND trend WITH a time grain answers with a chart, not a clarification
     expect(pickScenario('Show ACME spend by month')).toBe('spend-trend');
     expect(pickScenario('What is the monthly spend trend?')).toBe('spend-trend');
+    // a REVENUE question must NOT hit the spend fixture (Codex P2)
+    expect(pickScenario('Show ACME revenue by month')).not.toBe('spend-trend');
     expect(pickScenario('Who are the top customers by spend?')).toBe('top-customers');
     expect(pickScenario('List the active accounts and their contact emails')).toBe(
       'sensitive-redaction',
