@@ -19,6 +19,7 @@ import type {
 import type { Confidence, KeyFinding, MissingInfo, MissingKind } from '@evidata/answer-contract';
 import { AGENT_TOOLS, buildSystemPrompt } from './tools';
 import { sdkComplete } from './sdk-transport';
+import { lenientJson } from './json-repair';
 import type { ChatMessage, Complete, OpenAIProviderConfig, ProviderUsage } from './types';
 
 const MISSING_KINDS: ReadonlySet<string> = new Set<MissingKind>([
@@ -41,73 +42,6 @@ const asString = (u: unknown): string => (typeof u === 'string' ? u : '');
 const asArray = (u: unknown): unknown[] => (Array.isArray(u) ? (u as unknown[]) : []);
 const asRecord = (u: unknown): Record<string, unknown> =>
   typeof u === 'object' && u !== null ? (u as Record<string, unknown>) : {};
-
-const STRUCTURAL: ReadonlySet<string> = new Set([':', ',', '}', ']']);
-
-/**
- * Repair the two malformations DeepSeek emits in tool-call arguments — both invalid
- * JSON the strict parser rejects, losing an otherwise-good answer:
- *   1. Unescaped ASCII double-quotes inside string values (e.g. `新增了 "Summer Sale" 活动`).
- *   2. Raw control characters (literal newlines/tabs) inside string values.
- *
- * We walk the text tracking string state. A `"` inside a string is treated as the
- * closing quote only when the next non-space char is structural (`:,}]`) or the
- * input ends; otherwise it's content and gets escaped. Control chars inside strings
- * are escaped (\n/\t/\r) or dropped (other C0). This is best-effort, tried only
- * after strict parse fails.
- *
- * KNOWN GAP: a content quote sitting *immediately* before a structural char (e.g.
- * `他说"对",然后`) is misread as the terminator, so that input is NOT repaired. It
- * then fails to parse → empty draft → contract re-prompt / honest non-answer; it
- * never yields a different, silently-wrong answer. The DeepSeek cases seen in
- * practice are quote-then-text (`"Summer Sale" 活动`), which this handles.
- */
-function lenientJson(s: string): string {
-  let out = '';
-  let inStr = false;
-  let esc = false;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i] as string;
-    if (esc) {
-      out += ch;
-      esc = false;
-      continue;
-    }
-    if (ch === '\\') {
-      out += ch;
-      esc = true;
-      continue;
-    }
-    if (!inStr) {
-      if (ch === '"') inStr = true;
-      out += ch;
-      continue;
-    }
-    if (ch === '"') {
-      let j = i + 1;
-      for (;;) {
-        const cj = s[j];
-        if (cj === undefined || cj.trim() !== '') break;
-        j++;
-      }
-      const next = s[j];
-      if (next === undefined || STRUCTURAL.has(next)) {
-        inStr = false;
-        out += ch;
-      } else {
-        out += '\\"'; // content quote → escape
-      }
-      continue;
-    }
-    const code = ch.charCodeAt(0);
-    if (code < 0x20) {
-      out += code === 0x0a ? '\\n' : code === 0x09 ? '\\t' : code === 0x0d ? '\\r' : '';
-      continue;
-    }
-    out += ch;
-  }
-  return out;
-}
 
 function safeParse(json: string): unknown {
   try {

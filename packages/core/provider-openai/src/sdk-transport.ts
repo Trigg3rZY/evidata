@@ -6,8 +6,16 @@
  * the transport changes — while gaining provider normalization, tool/argument
  * parsing, and transient retry from the SDK.
  */
-import { generateText, jsonSchema, tool, type ModelMessage, type ToolSet } from 'ai';
+import {
+  generateText,
+  jsonSchema,
+  tool,
+  InvalidToolInputError,
+  type ModelMessage,
+  type ToolSet,
+} from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { lenientJson } from './json-repair';
 import type {
   AssistantMessage,
   ChatMessage,
@@ -34,6 +42,15 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
         toolChoice: toSdkToolChoice(req.tool_choice),
         temperature: req.temperature,
         maxOutputTokens: req.max_tokens,
+        // Preserve the DeepSeek tool-arg JSON repair (unescaped quotes / control
+        // chars): the SDK parses+validates tool input itself and rejects these, so
+        // re-run our lenient repair on the raw input before it fails the turn.
+        experimental_repairToolCall: ({ toolCall, error }) => {
+          if (!InvalidToolInputError.isInstance(error)) return Promise.resolve(null);
+          const repaired = lenientJson(toolCall.input);
+          // Unrepairable → null lets it fail closed through the answer contract.
+          return Promise.resolve(isParseable(repaired) ? { ...toolCall, input: repaired } : null);
+        },
         ...(opts.signal ? { abortSignal: opts.signal } : {}),
       });
       return {
@@ -135,5 +152,14 @@ function safeParse(s: string): unknown {
     return JSON.parse(s);
   } catch {
     return {};
+  }
+}
+
+function isParseable(s: string): boolean {
+  try {
+    JSON.parse(s);
+    return true;
+  } catch {
+    return false;
   }
 }
