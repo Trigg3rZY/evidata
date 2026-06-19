@@ -18,14 +18,8 @@ import type {
 } from '@evidata/agent';
 import type { Confidence, KeyFinding, MissingInfo, MissingKind } from '@evidata/answer-contract';
 import { AGENT_TOOLS, buildSystemPrompt } from './tools';
-import type {
-  AssistantMessage,
-  ChatMessage,
-  Complete,
-  CompletionRequest,
-  OpenAIProviderConfig,
-  ProviderUsage,
-} from './types';
+import { sdkComplete } from './sdk-transport';
+import type { ChatMessage, Complete, OpenAIProviderConfig, ProviderUsage } from './types';
 
 const MISSING_KINDS: ReadonlySet<string> = new Set<MissingKind>([
   'business_object',
@@ -191,75 +185,6 @@ function resultForModel(tr: ToolResult): Record<string, unknown> {
   };
 }
 
-interface ChatResponse {
-  choices?: Array<{
-    message?: { content?: string | null; tool_calls?: AssistantMessage['tool_calls'] };
-  }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-}
-
-/** Transient HTTP statuses worth retrying (rate limit + upstream/gateway hiccups). */
-const RETRYABLE_STATUS: ReadonlySet<number> = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
-
-/**
- * Default transport: a plain typed POST to an OpenAI-compatible `/chat/completions`,
- * with a bounded retry-with-backoff for transient failures (network errors and
- * 429/5xx). A single hiccup otherwise aborts the whole turn — DeepSeek occasionally
- * 503s mid-investigation. Aborts (client disconnect) are never retried; 4xx other
- * than the rate-limit family fail fast.
- */
-export function fetchComplete(cfg: OpenAIProviderConfig, maxRetries = 2): Complete {
-  const base = cfg.baseURL.replace(/\/+$/, '');
-  const backoffMs = cfg.retryBackoffMs ?? 300;
-  return async (req: CompletionRequest, opts) => {
-    for (let attempt = 0; ; attempt++) {
-      if (opts.signal?.aborted) {
-        // name 'AbortError' so callers (askStream) classify this as a cancellation,
-        // not a generic failure — matching fetch's own abort DOMException.
-        const err = new Error('AI provider request aborted');
-        err.name = 'AbortError';
-        throw err;
-      }
-      let res: Response;
-      try {
-        res = await fetch(`${base}/chat/completions`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-          body: JSON.stringify(req),
-          ...(opts.signal ? { signal: opts.signal } : {}),
-        });
-      } catch (err) {
-        // Network/transport error: retry unless aborted or out of attempts.
-        if (opts.signal?.aborted || attempt >= maxRetries) throw err;
-        await new Promise((r) => setTimeout(r, backoffMs * 2 ** attempt));
-        continue;
-      }
-      if (res.ok) {
-        const data = (await res.json()) as ChatResponse;
-        const msg = data.choices?.[0]?.message;
-        const u = data.usage;
-        return {
-          content: msg?.content ?? null,
-          ...(msg?.tool_calls ? { tool_calls: msg.tool_calls } : {}),
-          ...(u
-            ? {
-                usage: {
-                  promptTokens: u.prompt_tokens ?? 0,
-                  completionTokens: u.completion_tokens ?? 0,
-                  totalTokens: u.total_tokens ?? 0,
-                },
-              }
-            : {}),
-        };
-      }
-      if (!RETRYABLE_STATUS.has(res.status) || attempt >= maxRetries) {
-        throw new Error(`AI provider returned HTTP ${res.status}`);
-      }
-      await new Promise((r) => setTimeout(r, backoffMs * 2 ** attempt));
-    }
-  };
-}
-
 export class OpenAIAgentProvider implements AgentProvider {
   private readonly complete: Complete;
   private readonly model: string;
@@ -282,7 +207,7 @@ export class OpenAIAgentProvider implements AgentProvider {
   }
 
   constructor(cfg: OpenAIProviderConfig, complete?: Complete) {
-    this.complete = complete ?? fetchComplete(cfg);
+    this.complete = complete ?? sdkComplete(cfg);
     this.model = cfg.model;
     // A detailed, evidence-backed final_answer (esp. in CJK, where one char ≈ 1+
     // token) can exceed 1k tokens. If the tool-call arguments are truncated, the

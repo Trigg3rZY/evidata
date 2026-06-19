@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { AgentHistory, AgentInput, ToolResult } from '@evidata/agent';
-import { fetchComplete, OpenAIAgentProvider, openAIConfigFromEnv } from './index';
+import { OpenAIAgentProvider, openAIConfigFromEnv } from './index';
 import type { AssistantMessage, Complete, CompletionRequest, ToolCall } from './types';
 
 const input: AgentInput = {
@@ -435,102 +435,5 @@ describe('openAIConfigFromEnv', () => {
         AGENT_MAX_TOKENS: '2048',
       }),
     ).toMatchObject({ maxTokens: 2048 });
-  });
-});
-
-describe('fetchComplete transient retry', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  const cfg = { apiKey: 'k', baseURL: 'http://x', model: 'm', retryBackoffMs: 0 };
-  const okResponse = () =>
-    ({
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({ choices: [{ message: { content: 'hi', tool_calls: undefined } }] }),
-    }) as unknown as Response;
-  const errResponse = (status: number) =>
-    ({ ok: false, status, json: () => Promise.resolve({}) }) as unknown as Response;
-  const req = {
-    model: 'm',
-    messages: [],
-    tools: [],
-    tool_choice: 'required',
-    temperature: 0,
-    max_tokens: 1,
-  } as CompletionRequest;
-
-  it('retries a 503 then succeeds', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(errResponse(503))
-      .mockResolvedValueOnce(okResponse());
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await fetchComplete(cfg)(req, {});
-    expect(res.content).toBe('hi');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('retries a network error then succeeds', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockRejectedValueOnce(new Error('ECONNRESET'))
-      .mockResolvedValueOnce(okResponse());
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await fetchComplete(cfg)(req, {});
-    expect(res.content).toBe('hi');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not retry a 400 and fails fast', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(400));
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(fetchComplete(cfg)(req, {})).rejects.toThrow('HTTP 400');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('gives up after maxRetries on persistent 503', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(503));
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(fetchComplete(cfg, 2)(req, {})).rejects.toThrow('HTTP 503');
-    expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
-  });
-
-  it('does not retry once the signal is aborted', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(errResponse(503));
-    vi.stubGlobal('fetch', fetchMock);
-    const controller = new AbortController();
-    controller.abort();
-    await expect(fetchComplete(cfg)(req, { signal: controller.signal })).rejects.toThrow(
-      /aborted/i,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('maps the response usage field to camelCase token counts', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: 'hi' } }],
-          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        }),
-    } as unknown as Response);
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await fetchComplete(cfg)(req, {});
-    expect(res.usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
-  });
-
-  it('does not retry a 200 with a malformed body (not transient) — fails the turn', async () => {
-    const badBody = {
-      ok: true,
-      status: 200,
-      json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
-    } as unknown as Response;
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(badBody);
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(fetchComplete(cfg)(req, {})).rejects.toThrow(/JSON/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
