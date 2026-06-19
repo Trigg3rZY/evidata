@@ -42,6 +42,13 @@ describe('EnvKeyCredentialVault', () => {
     expect(() => vault.decrypt({ ...blob, authTag: flip(blob.authTag) }, CONN)).toThrow();
   });
 
+  it('rejects a truncated auth tag (no integrity downgrade)', () => {
+    const vault = new EnvKeyCredentialVault({ keys: [{ id: 'k1', key: k(1) }], activeKeyId: 'k1' });
+    const blob = vault.encrypt(SECRET, CONN);
+    const shortTag = Buffer.from(blob.authTag, 'base64').subarray(0, 8).toString('base64');
+    expect(() => vault.decrypt({ ...blob, authTag: shortTag }, CONN)).toThrow(/auth tag length/);
+  });
+
   it('rejects an unknown key id and an unsupported scheme version', () => {
     const vault = new EnvKeyCredentialVault({ keys: [{ id: 'k1', key: k(1) }], activeKeyId: 'k1' });
     const blob = vault.encrypt(SECRET, CONN);
