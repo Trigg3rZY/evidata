@@ -114,15 +114,11 @@
 }
 
 /* The app shell owns the viewport (each pane scrolls itself); the document never
-   scrolls. Locking html/body + disabling overscroll stops scroll-chaining — i.e.
-   overscrolling a pane past its end can't drag the whole shell (issue #90). */
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
+   scrolls. The lock — height + overflow-hidden + overscroll-none — lives as
+   utility classes on <html>/<body> in layout.tsx, NOT as a bare `html,body{}`
+   rule here: under Turbopack + Tailwind v4 that unlayered selector never reached
+   the cascade (computed `overflow: visible`), so #90's fix was inert and the
+   document still scroll-chained. Utilities applied to the elements do apply. */
 body {
   background-color: var(--background);
   color: var(--foreground);
