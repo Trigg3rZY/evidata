@@ -15,9 +15,9 @@ interface CreateBody {
   password?: unknown;
 }
 
-/** List Connections (summaries — never credentials). */
+/** List the caller's Connections (summaries — never credentials). */
 export function GET(req: Request): Promise<Response> {
-  return withConnections(req, (_user, connections) => connections.list());
+  return withConnections(req, (user, connections) => connections.list(user.id));
 }
 
 /** Create a Connection — credentials are encrypted at rest (spec 08 §3/§6). */

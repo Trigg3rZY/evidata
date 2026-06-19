@@ -121,8 +121,8 @@ export class ConnectionService {
     return toSummary(record);
   }
 
-  list(): Promise<ConnectionSummary[]> {
-    return this.deps.store.listConnections();
+  list(userId: string): Promise<ConnectionSummary[]> {
+    return this.deps.store.listConnections(userId);
   }
 
   async get(userId: string, id: string): Promise<ConnectionSummary> {
@@ -240,12 +240,27 @@ async function probe(params: PostgresConnectionParams): Promise<ConnectionHealth
   }
   try {
     await client.query('SELECT 1');
-    // A least-privilege read-only role should NOT be able to create objects; if it
-    // can, surface the warning (without blocking) — spec 08 §7/§8.
-    const r = await client.query<{ can_create: boolean }>(
-      `SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS can_create`,
+    // A least-privilege read-only role shouldn't be able to write: neither create
+    // objects (DB CREATE) nor INSERT/UPDATE/DELETE on any existing user table. If it
+    // can, surface PermissionInsufficient (a warning, not a block) — spec 08 §7/§8.
+    const r = await client.query<{ can_write: boolean }>(
+      `SELECT (
+         has_database_privilege(current_database(), 'CREATE')
+         OR COALESCE((
+           SELECT bool_or(
+             has_table_privilege(c.oid, 'INSERT')
+             OR has_table_privilege(c.oid, 'UPDATE')
+             OR has_table_privilege(c.oid, 'DELETE')
+           )
+           FROM pg_class c
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE c.relkind IN ('r', 'p')
+             AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+             AND left(n.nspname, 3) <> 'pg_'
+         ), false)
+       ) AS can_write`,
     );
-    return r.rows[0]?.can_create ? 'PermissionInsufficient' : 'Healthy';
+    return r.rows[0]?.can_write ? 'PermissionInsufficient' : 'Healthy';
   } catch {
     return 'Unreachable';
   } finally {

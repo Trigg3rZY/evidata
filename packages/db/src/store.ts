@@ -352,9 +352,15 @@ export class DrizzleMetadataStore implements MetadataStore {
     return { ...c, createdAt: at.toISOString(), updatedAt: at.toISOString() };
   }
 
-  async listConnections(): Promise<ConnectionSummary[]> {
-    const rows = await this.db.select().from(connections).orderBy(desc(connections.createdAt));
-    return rows.map(toSummary);
+  async listConnections(userId: string): Promise<ConnectionSummary[]> {
+    // Only connections the caller is a member of — non-members can't enumerate others'.
+    const rows = await this.db
+      .select()
+      .from(connections)
+      .innerJoin(connectionMemberships, eq(connectionMemberships.connectionId, connections.id))
+      .where(eq(connectionMemberships.userId, userId))
+      .orderBy(desc(connections.createdAt));
+    return rows.map((r) => toSummary(r.connections));
   }
 
   async getConnection(id: string): Promise<ConnectionRecord | null> {
