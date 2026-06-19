@@ -46,7 +46,11 @@ export async function createMetadataDb(
      ) AS exists`,
   );
   if (!present.rows[0]?.exists) {
-    await client.exec(SCHEMA_SQL);
+    // Apply the DDL atomically (PG DDL is transactional). An interrupted first boot
+    // rolls back entirely, so a persisted dir is never left half-initialized — the
+    // existence check above stays a reliable "fully applied" marker (Codex P2).
+    // (Cross-version, in-place schema upgrades need a real migrator — tracked in #88.)
+    await client.exec(`BEGIN;\n${SCHEMA_SQL}\nCOMMIT;`);
   }
   return {
     db,
