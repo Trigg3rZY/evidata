@@ -50,6 +50,9 @@ importers:
       '@evidata/answer-contract':
         specifier: workspace:*
         version: link:../../packages/core/answer-contract
+      '@evidata/auth':
+        specifier: workspace:*
+        version: link:../../packages/core/auth
       '@evidata/connector-sample':
         specifier: workspace:*
         version: link:../../packages/connectors/sample
@@ -168,6 +171,12 @@ importers:
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
+
+  packages/core/auth:
+    dependencies:
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
 
   packages/core/introspection:
     dependencies:

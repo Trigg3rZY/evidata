@@ -145,3 +145,41 @@ describe('DrizzleMetadataStore (spec 10)', () => {
     expect(await store.getInvestigation('does-not-exist')).toBeNull();
   });
 });
+
+describe('DrizzleMetadataStore — identity (spec 08 §5)', () => {
+  it('creates + looks up users; counts them', async () => {
+    expect(await store.countUsers()).toBe(0);
+    const user = await store.createUser({
+      id: 'u-1',
+      email: 'owner@example.com',
+      displayName: 'Owner',
+      passwordHash: 'scrypt$...',
+    });
+    expect(user.createdAt).toBeTruthy();
+    expect(await store.countUsers()).toBe(1);
+    expect((await store.getUserByEmail('owner@example.com'))?.id).toBe('u-1');
+    expect(await store.getUserByEmail('nobody@example.com')).toBeNull();
+  });
+
+  it('resolves a live session to its user, and not an expired or deleted one', async () => {
+    await store.createSession({
+      id: 's-live',
+      userId: 'u-1',
+      tokenHash: 'live-hash',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await store.createSession({
+      id: 's-exp',
+      userId: 'u-1',
+      tokenHash: 'expired-hash',
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    expect((await store.getSessionUser('live-hash'))?.email).toBe('owner@example.com');
+    expect(await store.getSessionUser('expired-hash')).toBeNull(); // past expiry
+    expect(await store.getSessionUser('no-such-hash')).toBeNull();
+
+    await store.deleteSession('live-hash');
+    expect(await store.getSessionUser('live-hash')).toBeNull(); // revoked
+  });
+});

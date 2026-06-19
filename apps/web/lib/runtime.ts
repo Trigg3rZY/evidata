@@ -14,6 +14,7 @@ import {
 import { createSafetyGate } from '@evidata/safety';
 import { createRedactor } from '@evidata/redaction';
 import { InvestigationService, type DataSourceRuntime } from '@evidata/investigation';
+import { AuthService } from '@evidata/auth';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
@@ -32,6 +33,7 @@ export function makeProvider(question: string): AgentProvider {
 
 export interface Runtime {
   service: InvestigationService;
+  auth: AuthService;
 }
 
 // Stash on globalThis so `next dev` hot-reloads reuse one in-memory DB instead
@@ -53,14 +55,16 @@ async function build(): Promise<Runtime> {
     context: sampleVerifiedContext(),
   };
 
+  const store = new DrizzleMetadataStore(db.db);
   const service = new InvestigationService({
     dataSources: [sampleRuntime],
     gate: createSafetyGate(),
     redactor: createRedactor(),
-    store: new DrizzleMetadataStore(db.db),
+    store,
   });
+  const auth = new AuthService({ store });
 
-  return { service };
+  return { service, auth };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
