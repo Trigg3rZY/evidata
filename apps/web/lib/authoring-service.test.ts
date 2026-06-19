@@ -124,4 +124,14 @@ describe('DataSourceAuthoringService (M2-S3, spec 09 §5/§7)', () => {
     await svc.unpublish('owner', DS);
     expect((await store.getDataSource(DS))?.lifecycle).toBe('draft');
   });
+
+  it('auto-demotes a published source whose edit makes it not-ready (Codex P2)', async () => {
+    await svc.save('owner', DS, draft());
+    await svc.publish('owner', DS);
+    expect((await store.getDataSource(DS))?.lifecycle).toBe('published');
+
+    // Removing the last included table breaks readiness → must fall back to draft.
+    await svc.save('owner', DS, { ...draft(), includedTables: [], sensitiveColumns: [] });
+    expect((await store.getDataSource(DS))?.lifecycle).toBe('draft');
+  });
 });

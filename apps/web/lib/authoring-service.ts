@@ -152,9 +152,12 @@ export class DataSourceAuthoringService {
   }
 
   /** Save the draft (binding + context + policy). Validates the scope against the
-   *  captured schema so a source can't be scoped to tables that don't exist. */
+   *  captured schema so a source can't be scoped to tables that don't exist. If the
+   *  source is already published and this edit makes it not-ready (e.g. the last
+   *  included table is removed), it's pulled back to draft so it's never offered
+   *  while unqueryable (Codex P2). */
   async save(userId: string, dataSourceId: string, draft: AuthoringDraft): Promise<void> {
-    const { connectionId } = await this.authorize(userId, dataSourceId);
+    const { ds, connectionId } = await this.authorize(userId, dataSourceId);
     const schema = await this.store.getLatestSnapshot(connectionId);
     const known = new Set((schema?.tables ?? []).map((t) => t.name));
     const included = [...new Set(draft.includedTables)];
@@ -188,6 +191,12 @@ export class DataSourceAuthoringService {
       confirmOnBroadScan: draft.policy.confirmOnBroadScan,
       confirmOnSensitiveAccess: draft.policy.confirmOnSensitiveAccess,
     });
+
+    // Invariant: a published source is always ready/queryable. If this edit broke
+    // that, demote to draft so the picker + resolver stop offering it.
+    if (ds.lifecycle === 'published' && !(await this.checkReadiness(dataSourceId)).ready) {
+      await this.store.setDataSourceLifecycle(dataSourceId, 'draft');
+    }
   }
 
   /** Publish a draft once it passes the readiness checklist (spec 09 §7). */
