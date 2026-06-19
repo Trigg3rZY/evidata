@@ -26,6 +26,9 @@ export interface ExecOptions {
   rowLimit: number; // hard cap, enforced by the executor
   timeoutMs: number; // application-enforced per-statement timeout
   statementTimeoutMs?: number; // optional DB-level timeout (defense in depth)
+  /** Cancels an in-flight statement (Stop / client disconnect). M1's PostgresExecutor
+   *  cancels the backend; M0's in-memory pglite executor ignores it (spec 08 §2.1). */
+  signal?: AbortSignal;
 }
 
 export interface QueryExecutor {

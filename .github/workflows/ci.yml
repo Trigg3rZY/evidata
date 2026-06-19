@@ -14,6 +14,21 @@ jobs:
   check:
     name: typecheck-and-test
     runs-on: ubuntu-latest
+    services:
+      # Real Postgres for the M1 connector/introspection integration tests
+      # (gated on TEST_DATABASE_URL; the rest of the suite stays hermetic).
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: evidata_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +58,8 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/evidata_test
 
   e2e:
     name: smoke (M0 acceptance gate)

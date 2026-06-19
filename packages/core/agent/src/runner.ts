@@ -229,6 +229,7 @@ export class AgentRunner {
         ...(policy.statementTimeoutMs !== undefined
           ? { statementTimeoutMs: policy.statementTimeoutMs }
           : {}),
+        ...(signal ? { signal } : {}),
       };
 
       // A real model occasionally proposes SQL the gate allows but the engine
@@ -238,6 +239,11 @@ export class AgentRunner {
       try {
         raw = await executor.run(sql, execOptions);
       } catch (err) {
+        // A cancelled statement (Stop / disconnect) is not a recoverable query
+        // failure — propagate it so the turn aborts (spec 08 §2.1).
+        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          throw new RunAbortedError();
+        }
         const message = err instanceof Error ? err.message : 'The query could not be executed.';
         recordFailure(purpose, sql, message);
         continue;
