@@ -1,0 +1,20 @@
+{
+  "name": "@evidata/introspection",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "IntrospectionService — app-side capture of a Connection's structure into a SchemaSnapshot (spec 08 §4). The AI never connects.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@evidata/connector-postgres": "workspace:*",
+    "@evidata/ports": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  }
+}

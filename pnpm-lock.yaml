@@ -169,6 +169,22 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
 
+  packages/core/introspection:
+    dependencies:
+      '@evidata/connector-postgres':
+        specifier: workspace:*
+        version: link:../../connectors/postgres
+      '@evidata/ports':
+        specifier: workspace:*
+        version: link:../ports
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
+
   packages/core/investigation:
     dependencies:
       '@evidata/agent':

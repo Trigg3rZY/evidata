@@ -56,6 +56,10 @@ export interface SchemaTable {
   name: string;
   comment?: string;
   columns: SchemaColumn[];
+  /** Planner row estimate (pg_class.reltuples), M1 introspection (08 §4). */
+  rowEstimate?: number;
+  /** Index names on the table, M1 introspection (08 §4). */
+  indexes?: string[];
 }
 
 export interface SchemaSnapshot {
