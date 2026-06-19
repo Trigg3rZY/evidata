@@ -3,15 +3,16 @@
  *
  * The metadata store runs in embedded pglite — in-memory by default (dev/demo/
  * smoke), or **file-backed** (`dataDir`) for a persistent self-hosted deploy (the
- * agreed M1 default; no separate database to provision). Schema application is
- * idempotent: the inlined DDL is exec'd only when `evidata_meta` is absent, so a
- * persisted `dataDir` is reused across restarts. A real Postgres metadata host is
- * the opt-in alternative (`METADATA_DATABASE_URL` + the deploy-time `db:migrate`).
+ * agreed M1 default; no separate database to provision). On boot it brings the schema
+ * up to date via a migration **journal** (`_evidata_migrations`): a fresh DB gets all
+ * migrations, a persisted one only the new ones — so upgrades add new tables/columns
+ * instead of being skipped. A real Postgres metadata host is the opt-in alternative
+ * (`METADATA_DATABASE_URL` + the deploy-time `db:migrate`).
  */
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { schema } from './schema';
-import { SCHEMA_SQL } from './schema-sql';
+import { MIGRATIONS } from './schema-sql';
 
 export type MetadataDb = PgliteDatabase<typeof schema>;
 
@@ -27,34 +28,84 @@ export interface CreateMetadataDbOptions {
   dataDir?: string;
 }
 
+const JOURNAL = '"public"."_evidata_migrations"';
+
 /**
- * Create the metadata DB and apply the schema **if not already present**.
- *
- * The DDL itself isn't idempotent (no `IF NOT EXISTS` per object), so we gate it on
- * whether `evidata_meta` exists: a fresh instance (in-memory, or an empty `dataDir`)
- * gets the schema; a persisted `dataDir` is reused untouched. (M2 schema changes will
- * need a migration step — the real-Postgres path already has `db:migrate`.)
+ * Create the metadata DB and bring its schema up to date by applying any migrations
+ * not yet recorded in a journal table. A fresh instance gets all of them; a persisted
+ * `dataDir` from an earlier version gets only the new ones — so file-backed upgrades
+ * add new tables/columns instead of silently skipping them (issue #90/P1). Each
+ * migration runs in its own transaction (atomic; an interrupted boot rolls back).
  */
 export async function createMetadataDb(
   opts: CreateMetadataDbOptions = {},
 ): Promise<MetadataDbHandle> {
   const client = opts.dataDir ? new PGlite(opts.dataDir) : new PGlite();
   const db = drizzle(client, { schema });
-  const present = await client.query<{ exists: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.schemata WHERE schema_name = 'evidata_meta'
-     ) AS exists`,
-  );
-  if (!present.rows[0]?.exists) {
-    // Apply the DDL atomically (PG DDL is transactional). An interrupted first boot
-    // rolls back entirely, so a persisted dir is never left half-initialized — the
-    // existence check above stays a reliable "fully applied" marker (Codex P2).
-    // (Cross-version, in-place schema upgrades need a real migrator — tracked in #88.)
-    await client.exec(`BEGIN;\n${SCHEMA_SQL}\nCOMMIT;`);
-  }
+  await runMigrations(client);
   return {
     db,
     client,
     close: () => client.close(),
   };
+}
+
+async function runMigrations(client: PGlite): Promise<void> {
+  await client.exec(
+    `CREATE TABLE IF NOT EXISTS ${JOURNAL} (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`,
+  );
+  const journalled = new Set(
+    (await client.query<{ name: string }>(`SELECT name FROM ${JOURNAL}`)).rows.map((r) => r.name),
+  );
+
+  // Adopt a pre-journal database (created before the journal existed): infer which
+  // migrations are already applied from the schema and RECORD them in the journal, so
+  // we don't re-create existing objects on the first upgrade (and stay recorded after).
+  let applied = journalled;
+  if (applied.size === 0) {
+    applied = await adoptBaseline(client);
+    for (const name of applied) {
+      await client.query(`INSERT INTO ${JOURNAL} (name) VALUES ($1) ON CONFLICT DO NOTHING`, [
+        name,
+      ]);
+    }
+  }
+
+  for (const m of MIGRATIONS) {
+    if (applied.has(m.name)) continue;
+    await client.exec(`BEGIN;\n${m.sql}\nCOMMIT;`);
+    await client.query(`INSERT INTO ${JOURNAL} (name) VALUES ($1)`, [m.name]);
+  }
+}
+
+/** One-time journal adoption for databases created before the journal: detect how far
+ *  the schema already evolved (by object presence) and record those migrations. */
+async function adoptBaseline(client: PGlite): Promise<Set<string>> {
+  const exists = async (sql: string): Promise<boolean> => (await client.query(sql)).rows.length > 0;
+  const baseline = new Set<string>();
+  // No `evidata_meta` → genuinely fresh; nothing to adopt (all migrations run).
+  if (
+    !(await exists(`SELECT 1 FROM information_schema.schemata WHERE schema_name = 'evidata_meta'`))
+  )
+    return baseline;
+  // Schema present → the M0/M1 migrations (everything up to and including the one that
+  // created `data_sources`) ran; mark them through the data_sources migration.
+  for (const m of MIGRATIONS) {
+    baseline.add(m.name);
+    if (m.sql.includes('CREATE TABLE "evidata_meta"."data_sources"')) break;
+  }
+  // The M2 migration (adds data_sources.lifecycle) only if that column is present.
+  if (
+    !(await exists(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'evidata_meta' AND table_name = 'data_sources' AND column_name = 'lifecycle'`,
+    ))
+  ) {
+    return baseline;
+  }
+  for (const m of MIGRATIONS) {
+    baseline.add(m.name);
+    if (m.sql.includes('ADD COLUMN "lifecycle"')) break;
+  }
+  return baseline;
 }

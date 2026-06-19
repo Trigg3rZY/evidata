@@ -2,8 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
 import { and, eq } from 'drizzle-orm';
 import { createMetadataDb, type MetadataDbHandle } from './client';
+import { MIGRATIONS } from './schema-sql';
 import { DrizzleMetadataStore } from './store';
 import {
   answers,
@@ -244,6 +246,35 @@ describe('file-backed metadata persistence (spec 08 §9)', () => {
       const h2 = await createMetadataDb({ dataDir: dir });
       expect(await new DrizzleMetadataStore(h2.db).countUsers()).toBe(1);
       await h2.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('upgrades a pre-journal dataDir: applies only the newer migration (#90/P1)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'evidata-upgrade-'));
+    try {
+      // Simulate a database created before the migration journal: apply the
+      // migrations up to and including the one that creates `data_sources`, with NO
+      // journal table (how the client behaved before this fix).
+      const old = new PGlite(dir);
+      for (const m of MIGRATIONS) {
+        await old.exec(`BEGIN;\n${m.sql}\nCOMMIT;`);
+        if (m.sql.includes('CREATE TABLE "evidata_meta"."data_sources"')) break;
+      }
+      const lifecycleQ = `SELECT 1 FROM information_schema.columns
+        WHERE table_schema='evidata_meta' AND table_name='data_sources' AND column_name='lifecycle'`;
+      expect((await old.query(lifecycleQ)).rows).toHaveLength(0); // pre-M2: no lifecycle
+      await old.close();
+
+      // Reopen via createMetadataDb → adopts the baseline and applies the M2 migration.
+      const h = await createMetadataDb({ dataDir: dir });
+      expect((await h.client.query(lifecycleQ)).rows).toHaveLength(1); // M2 column added
+      const journal = await h.client.query<{ name: string }>(
+        `SELECT name FROM public._evidata_migrations`,
+      );
+      expect(journal.rows).toHaveLength(MIGRATIONS.length); // every migration now recorded
+      await h.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
