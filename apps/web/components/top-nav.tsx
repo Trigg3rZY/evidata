@@ -18,7 +18,7 @@ export function TopNav({
   active,
   onNewChat,
 }: {
-  active: 'ask' | 'data-sources';
+  active: 'ask' | 'data-sources' | 'admin';
   onNewChat?: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
@@ -27,7 +27,7 @@ export function TopNav({
   // The sample keeps its localized name; any real source shows its own name.
   const srcName = src && src.id !== SAMPLE_DATA_SOURCE_ID ? src.name : t('sample');
 
-  const tab = (key: 'ask' | 'data-sources', href: string, label: string) => (
+  const tab = (key: 'ask' | 'data-sources' | 'admin', href: string, label: string) => (
     <Link
       href={href}
       aria-current={active === key ? 'page' : undefined}
@@ -57,6 +57,7 @@ export function TopNav({
         <nav className="flex items-center gap-0.5" aria-label={t('sections')}>
           {tab('ask', '/', t('title'))}
           {tab('data-sources', '/data-sources', t('dataSources'))}
+          {tab('admin', '/admin/connections', t('admin'))}
         </nav>
       </div>
 
