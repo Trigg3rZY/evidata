@@ -37,30 +37,32 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 px-6">
-      <h1 className="text-xl font-medium">Sign in</h1>
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
-        <Field
-          label="Email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-          required
-          autoComplete="username"
-        />
-        <Field
-          label="Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          required
-          autoComplete="current-password"
-        />
-        {error && <p className="text-sm text-status-blocked">{error}</p>}
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </Button>
-      </form>
+    <main className="h-dvh overflow-y-auto">
+      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-6 py-10">
+        <h1 className="text-xl font-medium">Sign in</h1>
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            required
+            autoComplete="username"
+          />
+          <Field
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            required
+            autoComplete="current-password"
+          />
+          {error && <p className="text-sm text-status-blocked">{error}</p>}
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
+      </div>
     </main>
   );
 }

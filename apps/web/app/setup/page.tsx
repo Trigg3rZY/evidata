@@ -42,42 +42,44 @@ export default function SetupPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 px-6">
-      <div>
-        <h1 className="text-xl font-medium">Welcome to evidata</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Create the first account — the Owner of this self-hosted instance.
-        </p>
+    <main className="h-dvh overflow-y-auto">
+      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center gap-6 px-6 py-10">
+        <div>
+          <h1 className="text-xl font-medium">Welcome to evidata</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create the first account — the Owner of this self-hosted instance.
+          </p>
+        </div>
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <Field
+            label="Your name"
+            value={displayName}
+            onChange={setDisplayName}
+            required
+            autoComplete="name"
+          />
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            required
+            autoComplete="username"
+          />
+          <Field
+            label="Password (8+ characters)"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            required
+            autoComplete="new-password"
+          />
+          {error && <p className="text-sm text-status-blocked">{error}</p>}
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Creating…' : 'Create Owner account'}
+          </Button>
+        </form>
       </div>
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
-        <Field
-          label="Your name"
-          value={displayName}
-          onChange={setDisplayName}
-          required
-          autoComplete="name"
-        />
-        <Field
-          label="Email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-          required
-          autoComplete="username"
-        />
-        <Field
-          label="Password (8+ characters)"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          required
-          autoComplete="new-password"
-        />
-        {error && <p className="text-sm text-status-blocked">{error}</p>}
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Creating…' : 'Create Owner account'}
-        </Button>
-      </form>
     </main>
   );
 }
