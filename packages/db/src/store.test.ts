@@ -147,16 +147,27 @@ describe('DrizzleMetadataStore (spec 10)', () => {
 });
 
 describe('DrizzleMetadataStore — identity (spec 08 §5)', () => {
-  it('creates + looks up users; counts them', async () => {
+  it('createFirstUser inserts the Owner once, then returns null (atomic first-run)', async () => {
     expect(await store.countUsers()).toBe(0);
-    const user = await store.createUser({
+    const first = await store.createFirstUser({
       id: 'u-1',
       email: 'owner@example.com',
       displayName: 'Owner',
       passwordHash: 'scrypt$...',
     });
-    expect(user.createdAt).toBeTruthy();
+    expect(first?.id).toBe('u-1');
     expect(await store.countUsers()).toBe(1);
+
+    // A second first-run attempt is rejected — no second account is created.
+    const second = await store.createFirstUser({
+      id: 'u-2',
+      email: 'other@example.com',
+      displayName: 'Other',
+      passwordHash: 'x',
+    });
+    expect(second).toBeNull();
+    expect(await store.countUsers()).toBe(1);
+
     expect((await store.getUserByEmail('owner@example.com'))?.id).toBe('u-1');
     expect(await store.getUserByEmail('nobody@example.com')).toBeNull();
   });

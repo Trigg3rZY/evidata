@@ -61,9 +61,14 @@ export interface MetadataStore {
   listInvestigations(opts?: ListOpts): Promise<InvestigationListItem[]>;
 
   // --- M1 identity (spec 08 §5 / 12 §2). Credentials never stored in plaintext. ---
-  /** Number of accounts — gates first-run setup (`POST /api/setup` is allowed only at 0). */
+  /** Number of accounts — drives the first-run status (`GET /api/setup`). */
   countUsers(): Promise<number>;
-  createUser(user: NewUser): Promise<UserRecord>;
+  /**
+   * Atomically create the FIRST user (the Owner): inserts only if no user exists,
+   * else returns null. The zero-user check + insert happen under one lock so two
+   * concurrent first-run requests can't both bootstrap an account (spec 08 §5).
+   */
+  createFirstUser(user: NewUser): Promise<UserRecord | null>;
   getUserByEmail(email: string): Promise<UserRecord | null>;
   createSession(session: NewSession): Promise<void>;
   /** The user for a non-expired session token hash, or null (expiry checked in the store). */

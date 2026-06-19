@@ -257,16 +257,23 @@ export class DrizzleMetadataStore implements MetadataStore {
     return row?.n ?? 0;
   }
 
-  async createUser(user: NewUser): Promise<UserRecord> {
-    const createdAt = this.now();
-    await this.db.insert(users).values({
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      passwordHash: user.passwordHash,
-      createdAt,
+  async createFirstUser(user: NewUser): Promise<UserRecord | null> {
+    return this.db.transaction(async (tx) => {
+      // Serialize concurrent first-run setups: the check + insert are one critical
+      // section, so a racing requester can't also see zero users (spec 08 §5).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(491001)`);
+      const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(users);
+      if ((row?.n ?? 0) > 0) return null;
+      const createdAt = this.now();
+      await tx.insert(users).values({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        passwordHash: user.passwordHash,
+        createdAt,
+      });
+      return { ...user, createdAt: createdAt.toISOString() };
     });
-    return { ...user, createdAt: createdAt.toISOString() };
   }
 
   async getUserByEmail(email: string): Promise<UserRecord | null> {

@@ -11,7 +11,8 @@ class FakeStore implements AuthStore {
   countUsers(): Promise<number> {
     return Promise.resolve(this.byId.size);
   }
-  createUser(u: NewUser): Promise<UserRecord> {
+  createFirstUser(u: NewUser): Promise<UserRecord | null> {
+    if (this.byId.size > 0) return Promise.resolve(null); // atomic zero-user guard
     const rec: UserRecord = { ...u, createdAt: '2026-06-19T00:00:00.000Z' };
     this.byId.set(u.id, rec);
     this.byEmail.set(u.email, u.id);
