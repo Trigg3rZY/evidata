@@ -11,6 +11,21 @@ trust boundaries as first-class requirements.
 - Do not weaken the core boundary: AI proposes; application code validates, executes, redacts, records, and persists.
 - For behavior changes, run the narrowest relevant tests first, then broader verification when the change touches shared contracts or user-facing flows.
 
+## Collaboration & workflow
+
+How work is run in this repo — project conventions that apply to any agent or
+contributor, not one session's memory:
+
+- **Backlog is issue-driven.** Capture every actionable request as a GitHub issue with a priority label (`priority:high` / `priority:medium` / `priority:low`; `epic` for umbrellas); pull work from the board rather than working ad hoc.
+- **Branch + PR cadence.** Never commit to `main` (protected by the `protect-main` ruleset). Branch off `main`, open a PR, land via **rebase merge**, and keep the branch rebased on `main` so required checks run on the merged state.
+- **Required checks must pass before merge.** CI gates: `typecheck-and-test` and `smoke (M0 acceptance gate)`. Don't merge red. Postgres-integration tests are gated on `TEST_DATABASE_URL` (hermetic otherwise).
+- **PR review = Codex.** Codex auto-reviews PRs and leaves inline comments graded P0/P1/P2. Read them; fix P1/P2 (P0 always); acknowledge with a 👍 reaction; re-push. Codex does not auto re-review on push, so merge once checks are green and comments are addressed rather than waiting for a second pass.
+- **Decision gating.** Proceed autonomously on small, well-scoped tasks; stop and ask the maintainer (with explicit options) on milestone, product, or architecture decisions — anything that changes scope, public surface, or a hard-to-reverse choice.
+- **Spec-first + lockstep.** Weigh `docs/tech-spec/` before building; apply industry best practices; update spec and code together so they never drift.
+- **Verification discipline.** Don't claim done without verification; verify UI changes in a real browser (not just a successful build); diagnose before fixing (observe → hypothesize → verify); state any verification you could not run.
+- **Attribution.** End AI-assisted commit messages with `Co-Authored-By: Claude <noreply@anthropic.com>`; end PR descriptions with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- **Local dev for DB-backed work.** The gated Postgres integration tests need a local Postgres (e.g. colima + a `postgres:16` container) and `TEST_DATABASE_URL`; without it those tests skip.
+
 ## Codex Review Guidance
 
 When reviewing pull requests, prioritize high-signal findings. Flag issues as P0/P1 when they can break trust, safety, data integrity, or core workflows.
