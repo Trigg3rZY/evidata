@@ -22,6 +22,7 @@ import { OpenAIAgentProvider, openAIConfigFromEnv } from '@evidata/provider-open
 import { pickScenario } from './ask-stream';
 import { PublishedDataSourceResolver } from './data-source-resolver';
 import { DataSourceAuthoringService } from './authoring-service';
+import { ModelProviderService } from './model-provider-service';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
 // set (DeepSeek by default); otherwise we fall back to the deterministic
@@ -40,6 +41,7 @@ export interface Runtime {
   auth: AuthService;
   connections: ConnectionService;
   authoring: DataSourceAuthoringService;
+  modelProviders: ModelProviderService;
 }
 
 // Stash on globalThis so `next dev` hot-reloads reuse one in-memory DB instead
@@ -66,9 +68,11 @@ async function build(): Promise<Runtime> {
   };
 
   const store = new DrizzleMetadataStore(db.db);
-  // Credential vault from env (null without APP_ENCRYPTION_KEY → connection
-  // create/test/introspect surface a clear "not configured" error).
-  const connections = new ConnectionService({ store, vault: credentialVaultFromEnv(process.env) });
+  // Credential vault from env (null without APP_ENCRYPTION_KEY → connection +
+  // model-provider create surface a clear "not configured" error).
+  const vault = credentialVaultFromEnv(process.env);
+  const connections = new ConnectionService({ store, vault });
+  const modelProviders = new ModelProviderService({ store, vault });
   // Published real Data Sources are resolved on demand into the same runtime shape
   // as the Sample (M2-S2); the Sample stays static so it never needs a connection.
   const resolver = new PublishedDataSourceResolver(
@@ -86,7 +90,7 @@ async function build(): Promise<Runtime> {
   const auth = new AuthService({ store });
   const authoring = new DataSourceAuthoringService(store);
 
-  return { service, auth, connections, authoring };
+  return { service, auth, connections, authoring, modelProviders };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
