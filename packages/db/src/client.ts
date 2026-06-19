@@ -1,10 +1,12 @@
 /**
- * pglite-backed Drizzle client for the M0 MetadataStore (spec 10 §7).
+ * pglite-backed Drizzle client for the MetadataStore (spec 10 §7 / 08 §9).
  *
- * In M0 the metadata store runs in embedded pglite (default: in-memory). On
- * boot we apply the schema by exec-ing the inlined DDL (see `schema-sql.ts` for
- * why it is inlined rather than read from disk). The same Drizzle schema
- * graduates to real Postgres in M1, where the file-based migrator can run.
+ * The metadata store runs in embedded pglite — in-memory by default (dev/demo/
+ * smoke), or **file-backed** (`dataDir`) for a persistent self-hosted deploy (the
+ * agreed M1 default; no separate database to provision). Schema application is
+ * idempotent: the inlined DDL is exec'd only when `evidata_meta` is absent, so a
+ * persisted `dataDir` is reused across restarts. A real Postgres metadata host is
+ * the opt-in alternative (`METADATA_DATABASE_URL` + the deploy-time `db:migrate`).
  */
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
@@ -21,25 +23,31 @@ export interface MetadataDbHandle {
 }
 
 export interface CreateMetadataDbOptions {
-  /** Filesystem path for persistence. Omit for an in-memory instance (tests, M0 default). */
+  /** Filesystem path for persistence. Omit for an in-memory instance (tests/demo). */
   dataDir?: string;
 }
 
 /**
- * Creates the metadata DB and applies the schema by exec-ing `SCHEMA_SQL`.
+ * Create the metadata DB and apply the schema **if not already present**.
  *
- * M0 default is a fresh in-memory instance (always empty → always safe).
- * WARNING: the DDL is not idempotent (no `IF NOT EXISTS`, no migration journal),
- * so calling this against a non-empty `dataDir` throws ("… already exists").
- * Reusing a persisted `dataDir` is unsupported until the file-based migrator
- * returns for the M1 real-Postgres path.
+ * The DDL itself isn't idempotent (no `IF NOT EXISTS` per object), so we gate it on
+ * whether `evidata_meta` exists: a fresh instance (in-memory, or an empty `dataDir`)
+ * gets the schema; a persisted `dataDir` is reused untouched. (M2 schema changes will
+ * need a migration step — the real-Postgres path already has `db:migrate`.)
  */
 export async function createMetadataDb(
   opts: CreateMetadataDbOptions = {},
 ): Promise<MetadataDbHandle> {
   const client = opts.dataDir ? new PGlite(opts.dataDir) : new PGlite();
   const db = drizzle(client, { schema });
-  await client.exec(SCHEMA_SQL);
+  const present = await client.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.schemata WHERE schema_name = 'evidata_meta'
+     ) AS exists`,
+  );
+  if (!present.rows[0]?.exists) {
+    await client.exec(SCHEMA_SQL);
+  }
   return {
     db,
     client,

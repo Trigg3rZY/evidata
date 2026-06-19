@@ -90,7 +90,7 @@ The result extends the M0 `SchemaSnapshot` (`01 §2.1`) with optional `indexes`,
 
 Self-hosted, single-tenant; simple and revocable beats clever.
 
-- **Passwords**: hashed with **Argon2id** (memory-hard); a `node:crypto scrypt` fallback is acceptable to avoid a native dependency. Never stored or logged in plaintext.
+- **Passwords**: hashed with a memory-hard KDF. **As built (M1.8): `node:crypto` scrypt** is the default — zero native dependency, OWASP-acceptable, fine for this self-hosted, low-login-volume tool; Argon2id (e.g. `@node-rs/argon2`) stays a drop-in roadmap upgrade (the encoded hash is self-describing, so migration is transparent). Never stored or logged in plaintext.
 - **Sessions**: opaque 256-bit random token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; only its SHA-256 hash is stored (`Session` table) so a DB read can't impersonate; sliding expiry + rotation on privilege change; logout deletes the row. (Server-side sessions, not JWTs — trivially revocable, fits self-hosting.)
 - **First-run**: `POST /api/setup` is accepted **only while no `User` exists**; it creates the first **Owner** + the default Team, then is permanently disabled. Subsequent users join by invitation (minimal in M1; the full `Roles and Capability Matrix` is M2, `09`).
 - **AuthService** resolves the session cookie → current `User`; route handlers gate on it. M1 enforces **Connection roles** (owner/admin) on Connection endpoints; the full matrix is M2.
@@ -108,7 +108,7 @@ All JSON; all (except setup/login) require an authenticated session and the rele
 | `POST /api/connections/:id/test` | Connectivity + health probe. | Drives the Connection state machine (§7). |
 | `POST /api/connections/:id/introspect` | Produce/refresh a `SchemaSnapshot`. | Async-ish; drives the snapshot state machine. |
 
-The M0 investigation routes (`04 §1`) are unchanged in shape but now require auth and resolve a real Connection-backed Data Source (the minimal implicit one until M2, `12`).
+The M0 investigation routes (`04 §1`) are unchanged in shape. **As built (M1.8), per a product decision: the Sample Ask flow stays open (no login wall) — it's a non-sensitive try-it surface — and only connection-management routes (`/api/connections*`) require a session.** Querying a *real* Connection through Ask requires its governed context/policy and lands in M2 (DataSource authoring); M1 creates the minimal `data_sources` row as the substrate.
 
 ## 7. Application states (extends `03` / PRD `Application States`)
 
@@ -129,7 +129,7 @@ The boundary's position is unchanged — AI proposes; the app validates/executes
 
 The M0 store graduates with the **same Drizzle schema and ports** (`10`, `12`):
 
-- **Driver**: the `DrizzleMetadataStore` adapter (`10 §5`) is reused; only the client changes (pglite → `node-postgres`/`postgres-js` against `METADATA_DATABASE_URL`).
+- **Driver**: the `DrizzleMetadataStore` adapter (`10 §5`) is reused; only the client changes. **As built (M1.8): the default self-hosted host is file-backed pglite** (`METADATA_DATA_DIR` — persists across restarts, no separate database to provision), with schema application made idempotent (apply only when `evidata_meta` is absent). A real Postgres host (`METADATA_DATABASE_URL` + a node-postgres client + deploy-time `db:migrate`) is the designed opt-in — **tracked as a follow-up** so the careful multi-driver typing of the shared store (its `transaction()` path) isn't rushed. Both satisfy metadata isolation (the pglite file / the separate DB is never a business Connection).
 - **Migrations run at deploy time, not in the request path.** M0's embedded client exec'd an inlined `SCHEMA_SQL` because the migrator's `new URL('../drizzle', import.meta.url)` is not bundleable (`10 §7`). M1 sidesteps this entirely: a `db:migrate` script (plain Node, unbundled) applies the committed `drizzle/*.sql` via the file-based migrator against the real database before the app serves traffic. The runtime app only connects.
 - The pglite Sample path is retained for demo/QA/smoke (it still uses the inlined DDL).
 
@@ -152,6 +152,20 @@ The M0 store graduates with the **same Drizzle schema and ports** (`10`, `12`):
 - A slow query is **cancelled** on client disconnect (the backend statement actually stops).
 - First-run bootstrap creates the initial Owner; `/api/setup` is disabled afterward; Connection endpoints enforce Connection roles.
 - Metadata lives in a separate database from any business Connection.
+
+**As-built coverage (M1.8).** Each criterion maps to a CI-gated test (the real-Postgres ones run against the CI service container / local docker-compose):
+
+| Criterion | Covered by |
+|---|---|
+| Real Connection created → tested → introspected | `connection-service.test.ts` (create → test `Healthy`/`AuthFailed`/`PermissionInsufficient` → introspect → remove) |
+| Read-only execution on real data; no writes | `executor.test.ts` (write blocked by the `READ ONLY` tx even when the role holds INSERT; cursor-bounded) |
+| No credential/PII leak on the error path | `executor.test.ts` (connect-auth failure mapped, asserts no host/role in the message) |
+| Credentials encrypted at rest; never returned | `vault.test.ts` (AES-256-GCM round-trip/tamper/rotation) + summaries omit the blob (`store.test.ts`) |
+| Slow query cancelled on disconnect | `executor.test.ts` (`pg_cancel_backend` on abort returns fast with `AbortError`) |
+| First-run bootstrap + setup disabled after; role-gated endpoints | `auth.test.ts`, `auth-flow.test.ts` (setup→login→session→logout; re-setup 410), `connections-auth.test.ts` (401), `connection-service.test.ts` (non-member → not-found) |
+| Metadata isolated; persists across restarts | `db.test.ts` (file-backed pglite reuse; separate `evidata_meta` schema) |
+
+Querying a real Connection *through the Ask loop* end-to-end is deferred to M2 (it needs the DataSource's governed context/policy for the SafetyGate); the executor-level read-only guarantee is proven here.
 
 ## 12. Detailed data model
 
