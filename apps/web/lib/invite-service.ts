@@ -22,8 +22,18 @@ export type InviteErrorCode =
   | 'redeemed' // already used (or lost the claim race)
   | 'username_taken'
   | 'signup_required' // anonymous redeem without signup fields
+  | 'invalid_signup' // empty username/display name or password < 8 chars
   | 'forbidden_owner_grant' // admin tried to mint/remove an owner
   | 'last_owner'; // can't remove the only owner
+
+/** Mirror the first-run setup rules so invite signup can't create weaker accounts
+ *  (e.g. an empty/whitespace username → an unreachable account). */
+function validateSignup(s: SignupInput): SignupInput {
+  const username = s.username.trim();
+  const displayName = s.displayName.trim();
+  if (!username || !displayName || s.password.length < 8) throw new InviteError('invalid_signup');
+  return { username, displayName, password: s.password };
+}
 
 export class InviteError extends Error {
   constructor(readonly code: InviteErrorCode) {
@@ -120,7 +130,7 @@ export class InviteService {
     let sessionToken: string | undefined;
     if (!userId) {
       if (!opts.signup) throw new InviteError('signup_required');
-      const created = await this.deps.auth.register(opts.signup);
+      const created = await this.deps.auth.register(validateSignup(opts.signup));
       if (!created) throw new InviteError('username_taken');
       userId = created.user.id;
       sessionToken = created.token;

@@ -133,6 +133,22 @@ describe('InviteService (M2-B1b, #121)', () => {
     await expect(svc().redeem(b.token, {})).rejects.toMatchObject({ code: 'signup_required' });
   });
 
+  it('rejects weak signup input (empty username/name or short password — parity with setup)', async () => {
+    const mk = () => svc().create('owner', 'ds', 'querier');
+    // Empty (whitespace) username → would otherwise create an unreachable account.
+    await expect(
+      svc().redeem((await mk()).token, {
+        signup: { username: '   ', displayName: 'X', password: 'pw-12345' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_signup' });
+    // Password < 8 chars.
+    await expect(
+      svc().redeem((await mk()).token, {
+        signup: { username: 'weakpw', displayName: 'X', password: 'short' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_signup' });
+  });
+
   it('lists + revokes pending invites', async () => {
     const before = (await svc().listPending('owner', 'ds')).length;
     const { token } = await svc().create('owner', 'ds', 'querier');

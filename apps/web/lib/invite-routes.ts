@@ -14,6 +14,7 @@ const INVITE_ERROR_STATUS: Record<string, number> = {
   redeemed: 409,
   username_taken: 409,
   signup_required: 400,
+  invalid_signup: 400,
   forbidden_owner_grant: 403,
   last_owner: 409,
 };
