@@ -1,15 +1,22 @@
-<!-- Conventions: see AGENTS.md → "Collaboration & workflow". -->
+<!-- Conventions: see AGENTS.md → "Collaboration & workflow".
+     Keep this concise + implementation-focused: a reviewer should be able to judge
+     the implementation from this PR alone. Don't paste the design here — link the
+     issue or docs/tech-spec/ for rationale, alternatives, and decisions. -->
 
-## What & why
+## Intent
 
-<!-- Summary. Link the issue this closes, e.g. "Closes #123". -->
+<!-- One or two lines: what this change is for. -->
 
-## Checklist
+## What changed
 
-- [ ] Branched off `main`; landing via **rebase merge** (never push to `main`)
-- [ ] Required checks green: `typecheck-and-test` + `smoke (M0 acceptance gate)`
-- [ ] Codex review comments addressed (P0/P1/P2) and acknowledged
-- [ ] Spec kept in lockstep (`docs/tech-spec/`) if behavior/contract changed
-- [ ] Verified — tests run; **real-browser check for UI**; noted anything not run
-- [ ] Trust boundary intact: AI proposes; the app validates / executes (read-only) / redacts / records
-- [ ] Attribution footers added for AI-assisted changes (see AGENTS.md)
+<!-- The implementation, briefly — key files/decisions a reviewer needs. -->
+
+## Verification
+
+<!-- How it was checked: tests run, real-browser check for UI, anything not run. -->
+
+## Acceptance
+
+<!-- The settled goal this is measured against (what "done" requires). -->
+
+Closes #
