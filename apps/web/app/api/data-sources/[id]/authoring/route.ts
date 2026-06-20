@@ -3,7 +3,7 @@ import { parseAuthoringDraft, withAuthoring } from '@/lib/authoring-routes';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Editable authoring state for the Data Sources detail page (owner-only). */
+/** Editable authoring state for the Data Sources detail page (author-capable: owner/admin). */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

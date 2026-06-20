@@ -8,7 +8,7 @@
  * are not globally unique).
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import {
   type Answer,
   type Investigation,
@@ -27,10 +27,13 @@ import type {
   DataSourceConnectionRecord,
   DataSourceContextInput,
   DataSourceContextRecord,
+  DataSourceInviteRecord,
   DataSourceLifecycle,
+  DataSourceMemberView,
   DataSourceMembershipInput,
   DataSourceRecord,
   DataSourceRole,
+  NewDataSourceInvite,
   EntityMappingRecord,
   FieldRules,
   GlossaryStatus,
@@ -63,6 +66,7 @@ import {
   connections,
   dataSourceConnections,
   dataSourceContexts,
+  dataSourceInvites,
   dataSourceMemberships,
   dataSources,
   entityMappings,
@@ -784,6 +788,113 @@ export class DrizzleMetadataStore implements MetadataStore {
       dataSourceId: input.dataSourceId,
       role: input.role,
     });
+  }
+
+  async listDataSourceMembers(dataSourceId: string): Promise<DataSourceMemberView[]> {
+    return this.db
+      .select({
+        userId: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        role: dataSourceMemberships.role,
+      })
+      .from(dataSourceMemberships)
+      .innerJoin(users, eq(users.id, dataSourceMemberships.userId))
+      .where(eq(dataSourceMemberships.dataSourceId, dataSourceId));
+  }
+
+  async removeDataSourceMembership(dataSourceId: string, userId: string): Promise<void> {
+    await this.db
+      .delete(dataSourceMemberships)
+      .where(
+        and(
+          eq(dataSourceMemberships.dataSourceId, dataSourceId),
+          eq(dataSourceMemberships.userId, userId),
+        ),
+      );
+  }
+
+  async createUser(user: NewUser): Promise<UserRecord | null> {
+    // Pre-check keeps the common "username taken" path clean; the unique index is the
+    // real guard (a racing duplicate would throw, surfacing as a server error).
+    if (await this.getUserByUsername(user.username)) return null;
+    const now = this.now();
+    await this.db.insert(users).values({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      passwordHash: user.passwordHash,
+      createdAt: now,
+    });
+    return { ...user, createdAt: now.toISOString() };
+  }
+
+  async createDataSourceInvite(input: NewDataSourceInvite): Promise<void> {
+    await this.db.insert(dataSourceInvites).values({
+      id: input.id,
+      dataSourceId: input.dataSourceId,
+      role: input.role,
+      tokenHash: input.tokenHash,
+      createdBy: input.createdBy,
+      expiresAt: input.expiresAt,
+      createdAt: this.now(),
+    });
+  }
+
+  async getDataSourceInviteByHash(tokenHash: string): Promise<DataSourceInviteRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(dataSourceInvites)
+      .where(eq(dataSourceInvites.tokenHash, tokenHash));
+    if (!row) return null;
+    return {
+      id: row.id,
+      dataSourceId: row.dataSourceId,
+      role: row.role,
+      createdBy: row.createdBy,
+      expiresAt: row.expiresAt.toISOString(),
+      redeemedBy: row.redeemedBy ?? null,
+      redeemedAt: row.redeemedAt ? row.redeemedAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async redeemDataSourceInvite(id: string, userId: string, at: Date): Promise<boolean> {
+    // Atomic single-use claim: only succeeds while still unredeemed.
+    const claimed = await this.db
+      .update(dataSourceInvites)
+      .set({ redeemedBy: userId, redeemedAt: at })
+      .where(and(eq(dataSourceInvites.id, id), isNull(dataSourceInvites.redeemedAt)))
+      .returning({ id: dataSourceInvites.id });
+    return claimed.length === 1;
+  }
+
+  async listPendingDataSourceInvites(
+    dataSourceId: string,
+  ): Promise<Array<{ id: string; role: DataSourceRole; expiresAt: string; createdAt: string }>> {
+    const rows = await this.db
+      .select({
+        id: dataSourceInvites.id,
+        role: dataSourceInvites.role,
+        expiresAt: dataSourceInvites.expiresAt,
+        createdAt: dataSourceInvites.createdAt,
+      })
+      .from(dataSourceInvites)
+      .where(
+        and(eq(dataSourceInvites.dataSourceId, dataSourceId), isNull(dataSourceInvites.redeemedAt)),
+      );
+    return rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      expiresAt: r.expiresAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async deleteDataSourceInvite(dataSourceId: string, id: string): Promise<void> {
+    await this.db
+      .delete(dataSourceInvites)
+      .where(and(eq(dataSourceInvites.id, id), eq(dataSourceInvites.dataSourceId, dataSourceId)));
   }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
