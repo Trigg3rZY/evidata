@@ -105,6 +105,13 @@ run('PublishedDataSourceResolver → real Postgres (M2-S2)', () => {
       lifecycle: 'published',
       createdAt: now,
     });
+    // B1a: the query gate is Data Source membership — make the owner an owner.
+    await store.createDataSourceMembership({
+      id: 'dsm-int',
+      userId: ownerId,
+      dataSourceId: DS_ID,
+      role: 'owner',
+    });
     await handle.db.insert(dataSourceConnections).values({
       id: 'dsc-int',
       dataSourceId: DS_ID,

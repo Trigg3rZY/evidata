@@ -115,6 +115,13 @@ beforeAll(async () => {
     ['ds-empty', 'c-empty'],
   ] as const) {
     await store.createDataSource({ id, name: id, kind: 'postgres', connectionId: conn });
+    // B1a: authz is by Data Source membership — the owner needs an owner role.
+    await store.createDataSourceMembership({
+      id: `dm-${id}`,
+      userId: 'owner',
+      dataSourceId: id,
+      role: 'owner',
+    });
   }
 });
 

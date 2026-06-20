@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { MIGRATIONS } from './schema-sql';
 import type { Answer } from '@evidata/answer-contract';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from './index';
 import {
@@ -537,5 +538,47 @@ describe('DrizzleMetadataStore — model providers (epic #106)', () => {
     await store.deleteModelProvider('mp-1');
     expect(await store.getModelProvider('mp-1')).toBeNull();
     expect((await store.listModelProviders()).some((p) => p.id === 'mp-1')).toBe(false);
+  });
+});
+
+describe('0006 backfill — Data Source owner memberships (M2-B1a)', () => {
+  const blob = { v: 1, keyId: 'k1', iv: 'aaa', ciphertext: 'bbb', authTag: 'ccc' };
+  const BACKFILL = MIGRATIONS.find((m) => m.name.includes('backfill_ds_owner'))!.sql;
+
+  it('grants connection owners a DS owner role for pre-B1a sources, idempotently', async () => {
+    const h = await createMetadataDb();
+    const s = new DrizzleMetadataStore(h.db);
+    const owner = await s.createFirstUser({
+      id: 'o',
+      username: 'o',
+      displayName: 'O',
+      passwordHash: 'x',
+    });
+    await s.createConnection({
+      id: 'c',
+      kind: 'postgres',
+      name: 'n',
+      host: 'h',
+      port: 5432,
+      database: 'd',
+      sslMode: 'disable',
+      credentialBlob: blob,
+      health: 'Healthy',
+      createdBy: owner!.id,
+    });
+    await s.createConnectionMembership({ id: 'm', userId: 'o', connectionId: 'c', role: 'owner' });
+    // A source created the M1 way (no membership row) — the pre-B1a state.
+    await s.createDataSource({ id: 'ds', name: 'ds', kind: 'postgres', connectionId: 'c' });
+    expect(await s.getDataSourceRole('o', 'ds')).toBeNull();
+
+    await h.db.execute(sql.raw(BACKFILL));
+    expect(await s.getDataSourceRole('o', 'ds')).toBe('owner');
+
+    // Re-running is a no-op (deterministic id + NOT EXISTS) — no dup, no error.
+    await h.db.execute(sql.raw(BACKFILL));
+    expect(
+      (await s.listDataSourceMemberships('o')).filter((x) => x.dataSourceId === 'ds'),
+    ).toHaveLength(1);
+    await h.close();
   });
 });

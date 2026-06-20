@@ -20,7 +20,7 @@ import type {
   NewGlossaryTerm,
   SchemaSnapshot,
 } from '@evidata/ports';
-import { authorizeDataSourceAccess } from './authoring-service';
+import { requireDataSourceCapability } from './authoring-service';
 
 /** Calibration couldn't run (e.g. no captured schema) — route → 409. */
 export class CalibrationError extends Error {
@@ -48,7 +48,7 @@ export interface CalibrationResult {
 type CalibrationStore = Pick<
   MetadataStore,
   | 'getDataSource'
-  | 'getConnectionRole'
+  | 'getDataSourceRole'
   | 'getLatestSnapshot'
   | 'getGlossaryTerms'
   | 'getEntityMappings'
@@ -76,7 +76,12 @@ export class CalibrationService {
 
   /** Draft + persist Suggested calibration for an owned Data Source. */
   async calibrate(userId: string, dataSourceId: string): Promise<CalibrationResult> {
-    const { connectionId } = await authorizeDataSourceAccess(this.deps.store, userId, dataSourceId);
+    const { connectionId } = await requireDataSourceCapability(
+      this.deps.store,
+      userId,
+      dataSourceId,
+      'author',
+    );
     const schema = await this.deps.store.getLatestSnapshot(connectionId);
     if (!schema || schema.tables.length === 0) {
       throw new CalibrationError(

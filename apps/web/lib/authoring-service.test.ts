@@ -61,6 +61,13 @@ beforeAll(async () => {
   });
   // The draft Data Source that authoring edits (created with the connection in M1).
   await store.createDataSource({ id: DS, name: 'PG', kind: 'postgres', connectionId: 'c-auth' });
+  // B1a: authz is by Data Source membership — the owner needs an owner role.
+  await store.createDataSourceMembership({
+    id: 'dm-auth',
+    userId: 'owner',
+    dataSourceId: DS,
+    role: 'owner',
+  });
 });
 
 afterAll(async () => {

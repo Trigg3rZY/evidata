@@ -38,6 +38,19 @@ beforeAll(async () => {
   });
   await store.createDataSource({ id: 'ds-a', name: 'A', kind: 'postgres', connectionId: 'c1' });
   await store.createDataSource({ id: 'ds-b', name: 'B', kind: 'postgres', connectionId: 'c1' });
+  // B1a: authz is by Data Source membership — the owner needs an owner role on each.
+  await store.createDataSourceMembership({
+    id: 'dm-a',
+    userId: 'owner',
+    dataSourceId: 'ds-a',
+    role: 'owner',
+  });
+  await store.createDataSourceMembership({
+    id: 'dm-b',
+    userId: 'owner',
+    dataSourceId: 'ds-b',
+    role: 'owner',
+  });
 
   // Seed: ds-a has a suggested + a verified term, a suggested mapping; ds-b a suggested term.
   await store.addGlossaryTerms([

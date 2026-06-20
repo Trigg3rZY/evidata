@@ -110,3 +110,33 @@ run('ConnectionService (real Postgres + store + vault)', () => {
     await expect(svc.get(ownerId, conn.id)).rejects.toBeInstanceOf(ConnectionAccessError);
   });
 });
+
+// Non-gated (metadata-only; create() makes no network call): the M2-B1a bootstrap —
+// creating a Connection grants the creator an owner role on the auto-created source.
+describe('ConnectionService bootstrap (M2-B1a, #121)', () => {
+  it('grants the creator a Data Source owner role on the new draft source', async () => {
+    const handle = await createMetadataDb();
+    const store = new DrizzleMetadataStore(handle.db);
+    const vault = credentialVaultFromEnv({
+      APP_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+    });
+    const svc = new ConnectionService({ store, vault });
+    await store.createFirstUser({ id: 'u1', username: 'u1', displayName: 'U', passwordHash: 'x' });
+
+    await svc.create('u1', {
+      name: 'DB',
+      host: 'h',
+      port: 5432,
+      database: 'd',
+      sslMode: 'disable',
+      user: 'ro',
+      password: 'pw',
+    });
+
+    const memberships = await store.listDataSourceMemberships('u1');
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0]?.role).toBe('owner');
+    expect(await store.getDataSourceRole('u1', memberships[0]!.dataSourceId)).toBe('owner');
+    await handle.close();
+  });
+});

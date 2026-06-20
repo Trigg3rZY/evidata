@@ -107,8 +107,9 @@ function makeStore(over: Partial<Record<string, unknown>> = {}) {
     getEntityMappings: (_id: string, status?: GlossaryStatus) =>
       Promise.resolve(status ? mappings.filter((m) => m.status === status) : mappings),
     getLatestSnapshot: () => Promise.resolve(snapshot),
-    // 'member' has a role on the backing connection; anyone else does not.
-    getConnectionRole: (userId: string) => Promise.resolve(userId === 'member' ? 'owner' : null),
+    // 'member' owns the Data Source, 'q' is a querier; anyone else has no role.
+    getDataSourceRole: (userId: string) =>
+      Promise.resolve(userId === 'member' ? 'owner' : userId === 'q' ? 'querier' : null),
     ...over,
   };
 }
@@ -143,11 +144,12 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
     expect(await r.resolve('ghost', MEMBER)).toBeNull(); // unknown
   });
 
-  it('gates a real source on connection membership (owner-gated slice)', async () => {
+  it('gates a real source on Data Source membership (incl. queriers — spec 09 §6)', async () => {
     const r = new PublishedDataSourceResolver(makeStore(), okConnections, STATIC);
     expect(await r.resolve('ds-x')).toBeNull(); // anonymous → withheld
     expect(await r.resolve('ds-x', 'stranger')).toBeNull(); // no role → withheld
-    expect(await r.resolve('ds-x', MEMBER)).not.toBeNull(); // member → allowed
+    expect(await r.resolve('ds-x', MEMBER)).not.toBeNull(); // owner → allowed
+    expect(await r.resolve('ds-x', 'q')).not.toBeNull(); // querier → allowed (the point)
   });
 
   it('is not runnable without a captured snapshot or a usable connector', async () => {

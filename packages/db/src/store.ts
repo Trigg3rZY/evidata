@@ -28,7 +28,9 @@ import type {
   DataSourceContextInput,
   DataSourceContextRecord,
   DataSourceLifecycle,
+  DataSourceMembershipInput,
   DataSourceRecord,
+  DataSourceRole,
   EntityMappingRecord,
   FieldRules,
   GlossaryStatus,
@@ -748,6 +750,40 @@ export class DrizzleMetadataStore implements MetadataStore {
     await this.db
       .delete(entityMappings)
       .where(and(eq(entityMappings.id, id), eq(entityMappings.dataSourceId, dataSourceId)));
+  }
+
+  async getDataSourceRole(userId: string, dataSourceId: string): Promise<DataSourceRole | null> {
+    const [row] = await this.db
+      .select({ role: dataSourceMemberships.role })
+      .from(dataSourceMemberships)
+      .where(
+        and(
+          eq(dataSourceMemberships.userId, userId),
+          eq(dataSourceMemberships.dataSourceId, dataSourceId),
+        ),
+      );
+    return row?.role ?? null;
+  }
+
+  async listDataSourceMemberships(
+    userId: string,
+  ): Promise<Array<{ dataSourceId: string; role: DataSourceRole }>> {
+    return this.db
+      .select({
+        dataSourceId: dataSourceMemberships.dataSourceId,
+        role: dataSourceMemberships.role,
+      })
+      .from(dataSourceMemberships)
+      .where(eq(dataSourceMemberships.userId, userId));
+  }
+
+  async createDataSourceMembership(input: DataSourceMembershipInput): Promise<void> {
+    await this.db.insert(dataSourceMemberships).values({
+      id: input.id,
+      userId: input.userId,
+      dataSourceId: input.dataSourceId,
+      role: input.role,
+    });
   }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
