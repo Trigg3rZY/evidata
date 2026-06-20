@@ -337,8 +337,23 @@ describe('DrizzleMetadataStore — connections (spec 08 §6)', () => {
       payload: {},
       updatedAt: now,
     });
+    // A membership + a pending invite (B1a/B1b) — both reference ds-2 (must cascade).
+    await store.createDataSourceMembership({
+      id: 'dm-2',
+      userId: 'u-1',
+      dataSourceId: 'ds-2',
+      role: 'owner',
+    });
+    await store.createDataSourceInvite({
+      id: 'inv-2',
+      dataSourceId: 'ds-2',
+      role: 'querier',
+      tokenHash: 'h-2',
+      createdBy: 'u-1',
+      expiresAt: now,
+    });
 
-    // Despite the data_source_connections FK + M2 children, delete must succeed.
+    // Despite the data_source_connections FK + M2 children (incl. invites), delete succeeds.
     await store.deleteConnection('c-2');
     expect(await store.getConnection('c-2')).toBeNull();
     expect(

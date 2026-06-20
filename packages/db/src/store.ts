@@ -445,6 +445,9 @@ export class DrizzleMetadataStore implements MetadataStore {
       await this.db
         .delete(dataSourceMemberships)
         .where(inArray(dataSourceMemberships.dataSourceId, ownedDs));
+      await this.db
+        .delete(dataSourceInvites)
+        .where(inArray(dataSourceInvites.dataSourceId, ownedDs));
     }
     // M2-style links to this connection (the join may point at sources we don't own).
     await this.db.delete(dataSourceConnections).where(eq(dataSourceConnections.connectionId, id));
