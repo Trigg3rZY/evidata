@@ -639,6 +639,7 @@ export class DrizzleMetadataStore implements MetadataStore {
     // drizzle types the enum columns as their unions, so the row IS a GlossaryTermRecord.
     return this.db
       .select({
+        id: businessGlossaryTerms.id,
         term: businessGlossaryTerms.term,
         definition: businessGlossaryTerms.definition,
         status: businessGlossaryTerms.status,
@@ -658,6 +659,7 @@ export class DrizzleMetadataStore implements MetadataStore {
     // drizzle types the enum columns as their unions, so the row IS an EntityMappingRecord.
     return this.db
       .select({
+        id: entityMappings.id,
         fromRef: entityMappings.fromRef,
         toRef: entityMappings.toRef,
         status: entityMappings.status,
@@ -699,6 +701,53 @@ export class DrizzleMetadataStore implements MetadataStore {
         createdAt: now,
       })),
     );
+  }
+
+  async setGlossaryStatus(dataSourceId: string, id: string, status: GlossaryStatus): Promise<void> {
+    await this.db
+      .update(businessGlossaryTerms)
+      .set({ status })
+      .where(
+        and(eq(businessGlossaryTerms.id, id), eq(businessGlossaryTerms.dataSourceId, dataSourceId)),
+      );
+  }
+
+  async updateGlossaryDefinition(
+    dataSourceId: string,
+    id: string,
+    definition: string,
+  ): Promise<void> {
+    await this.db
+      .update(businessGlossaryTerms)
+      .set({ definition })
+      .where(
+        and(eq(businessGlossaryTerms.id, id), eq(businessGlossaryTerms.dataSourceId, dataSourceId)),
+      );
+  }
+
+  async deleteGlossaryTerm(dataSourceId: string, id: string): Promise<void> {
+    await this.db
+      .delete(businessGlossaryTerms)
+      .where(
+        and(eq(businessGlossaryTerms.id, id), eq(businessGlossaryTerms.dataSourceId, dataSourceId)),
+      );
+  }
+
+  async setEntityMappingStatus(
+    dataSourceId: string,
+    id: string,
+    status: GlossaryStatus,
+  ): Promise<void> {
+    await this.db
+      .update(entityMappings)
+      .set({ status })
+      .where(and(eq(entityMappings.id, id), eq(entityMappings.dataSourceId, dataSourceId)));
+  }
+
+  async deleteEntityMapping(dataSourceId: string, id: string): Promise<void> {
+    await this.db
+      .delete(entityMappings)
+      .where(and(eq(entityMappings.id, id), eq(entityMappings.dataSourceId, dataSourceId)));
   }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {

@@ -130,12 +130,14 @@ describe('CalibrationService (M2-B2, #120)', () => {
     expect(res.draft.overview).toContain('orders'); // proposed in the result…
 
     const maps = await store.getEntityMappings('ds-fix', 'suggested');
-    expect(maps).toContainEqual({
-      fromRef: 'orders.customer_id',
-      toRef: 'customers.id',
-      status: 'suggested',
-      provenance: 'ai_draft',
-    });
+    expect(maps).toContainEqual(
+      expect.objectContaining({
+        fromRef: 'orders.customer_id',
+        toRef: 'customers.id',
+        status: 'suggested',
+        provenance: 'ai_draft',
+      }),
+    );
     // …but the overview is NOT written to live context (the resolver feeds it
     // unfiltered; the owner reviews + Saves — Codex P1).
     expect(await store.getDataSourceContext('ds-fix')).toBeNull();
@@ -154,12 +156,14 @@ describe('CalibrationService (M2-B2, #120)', () => {
     expect(await store.getDataSourceContext('ds-model')).toBeNull(); // overview not persisted
 
     const terms = await store.getGlossaryTerms('ds-model', 'suggested');
-    expect(terms).toContainEqual({
-      term: 'spend',
-      definition: 'sum of orders.total',
-      status: 'suggested',
-      provenance: 'ai_draft',
-    });
+    expect(terms).toContainEqual(
+      expect.objectContaining({
+        term: 'spend',
+        definition: 'sum of orders.total',
+        status: 'suggested',
+        provenance: 'ai_draft',
+      }),
+    );
   });
 
   it('dedupes against existing items and never downgrades a Verified one', async () => {
