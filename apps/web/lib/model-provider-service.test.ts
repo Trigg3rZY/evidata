@@ -131,6 +131,20 @@ describe('ModelProviderService (epic #106)', () => {
     );
     expect((await svc.resolveConfig('owner', ds.id))?.effort).toBeUndefined();
     await svc.remove('owner', ds.id);
+
+    // An effort-capable kind carrying an INVALID legacy value (effort was once free
+    // text) drops it rather than sending a value the provider would reject.
+    const bad = await svc.create(
+      'owner',
+      input({
+        name: 'OpenAI bad effort',
+        kind: 'openai',
+        baseUrl: null,
+        params: { effort: 'extreme' },
+      }),
+    );
+    expect((await svc.resolveConfig('owner', bad.id))?.effort).toBeUndefined();
+    await svc.remove('owner', bad.id);
   });
 
   it('resolveConfig is null when no OpenAI-compatible base can be determined', async () => {

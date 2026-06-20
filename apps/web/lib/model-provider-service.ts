@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { VaultUnavailableError } from '@evidata/connection';
 import type { OpenAIProviderConfig } from '@evidata/provider-openai';
-import { kindSupportsEffort } from './model-kinds';
+import { isEffortLevel, kindSupportsEffort } from './model-kinds';
 import type {
   CredentialVault,
   MetadataStore,
@@ -151,9 +151,15 @@ export class ModelProviderService {
     };
     const config: OpenAIProviderConfig = { apiKey, baseURL, model: record.model };
     if (typeof record.params.maxTokens === 'number') config.maxTokens = record.params.maxTokens;
-    // Only pass effort for a kind that actually supports it (registration gates this;
-    // re-check defensively so a record predating the gate can't send a bad param).
-    if (record.params.effort && kindSupportsEffort(record.kind)) {
+    // Only pass effort for a kind that supports it AND a valid level. Registration
+    // gates both now, but a record predating the gate (effort was once free text)
+    // could hold e.g. 'extreme' on an openai record — drop it rather than send a
+    // value the provider would reject.
+    if (
+      record.params.effort &&
+      kindSupportsEffort(record.kind) &&
+      isEffortLevel(record.params.effort)
+    ) {
       config.effort = record.params.effort;
     }
     return config;
