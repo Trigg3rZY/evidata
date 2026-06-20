@@ -4,14 +4,14 @@
  * the effort gate never drift. No node deps, so the client admin page can import it.
  */
 
-/** Provider families the API accepts and the admin UI offers. */
-export const MODEL_KINDS = [
-  'deepseek',
-  'openai',
-  'google',
-  'openai-compatible',
-  'anthropic',
-] as const;
+/** Provider families the API accepts and the admin UI offers. All run through the
+ *  one OpenAI-compatible transport. Native non-OpenAI vendors (e.g. Anthropic's
+ *  Messages API) are intentionally NOT here yet: they'd need a per-protocol adapter,
+ *  and offering `anthropic` while routing it through the openai-compatible path is a
+ *  footgun (a native Anthropic URL fails at runtime). Add a kind when its adapter
+ *  lands. An Anthropic *OpenAI-compatible proxy* can be used today as
+ *  `openai-compatible` with that base URL. */
+export const MODEL_KINDS = ['deepseek', 'openai', 'google', 'openai-compatible'] as const;
 export type ModelKind = (typeof MODEL_KINDS)[number];
 
 export function isModelKind(value: string): value is ModelKind {

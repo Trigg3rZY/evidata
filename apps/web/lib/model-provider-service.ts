@@ -59,7 +59,8 @@ export class ModelProviderAccessError extends Error {
 
 export interface CreateModelProviderInput {
   name: string;
-  /** 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | … */
+  /** An offered kind — see MODEL_KINDS ('openai' | 'deepseek' | 'google' |
+   *  'openai-compatible'). Native non-OpenAI vendors are added with their adapter. */
   kind: string;
   baseUrl: string | null;
   model: string;

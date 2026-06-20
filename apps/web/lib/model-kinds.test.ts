@@ -12,6 +12,9 @@ describe('model-kinds (epic #106)', () => {
     for (const k of MODEL_KINDS) expect(isModelKind(k)).toBe(true);
     expect(isModelKind('mistral')).toBe(false);
     expect(isModelKind('')).toBe(false);
+    // Native non-OpenAI vendors are not offered until their adapter lands — routing
+    // them through the openai-compatible transport would fail at runtime.
+    expect(isModelKind('anthropic')).toBe(false);
   });
 
   it('gates effort to effort-capable kinds (decision B)', () => {

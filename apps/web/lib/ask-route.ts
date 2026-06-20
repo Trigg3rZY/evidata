@@ -1,4 +1,5 @@
 import { askStream, type AskBody } from './ask-stream';
+import { VaultUnavailableError } from './model-provider-service';
 import { getRuntime, makeProvider, providerFromConfig } from './runtime';
 
 /**
@@ -18,9 +19,19 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
     : (body.modelProviderId ?? null);
   let providerFor = makeProvider;
   if (modelProviderId) {
-    const cfg = body.userId
-      ? await rt.modelProviders.resolveConfig(body.userId, modelProviderId)
-      : null;
+    let cfg;
+    try {
+      cfg = body.userId
+        ? await rt.modelProviders.resolveConfig(body.userId, modelProviderId)
+        : null;
+    } catch (e) {
+      // The vault isn't configured (APP_ENCRYPTION_KEY unset) — surface the same
+      // clear 503 the management routes return, not a leaked 500 (operator misconfig).
+      if (e instanceof VaultUnavailableError) {
+        return Response.json({ error: 'The credential vault is not configured.' }, { status: 503 });
+      }
+      throw e;
+    }
     if (!cfg) {
       return Response.json({ error: 'The selected model is unavailable.' }, { status: 404 });
     }
