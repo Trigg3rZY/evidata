@@ -231,6 +231,9 @@ export interface Investigation {
   id: string;
   dataSourceId: string; // bound for the Thread's lifetime
   title: LocalizedText; // renamable; defaults from first question
+  /** The model bound to this Investigation (epic #106 / #113): follow-ups reuse it
+   *  and it records which model answered. Null = the server's default model. */
+  modelProviderId: string | null;
   createdAt: string;
   updatedAt: string;
 }

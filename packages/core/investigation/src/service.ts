@@ -76,6 +76,10 @@ export interface AskParams {
   /** Regenerate the latest answer: append a version with NO new user turn and
    *  versionTrigger 'rerun' (requires investigationId). */
   rerun?: boolean;
+  /** The model to bind to a NEW Investigation (epic #106 / #113). Recorded on
+   *  create; null/omitted = the server's default. Ignored for a follow-up — that
+   *  reuses the Investigation's already-bound model (the caller resolves it). */
+  modelProviderId?: string | null;
 }
 
 export interface AskOptions {
@@ -276,6 +280,8 @@ export class InvestigationService {
         id: investigationId,
         dataSourceId: rt.id,
         title: deriveTitle(params.question),
+        // Bind the chosen model for the Investigation's lifetime (#113); null = default.
+        modelProviderId: params.modelProviderId ?? null,
       });
     }
 
@@ -294,6 +300,13 @@ export class InvestigationService {
 
   getThread(id: string): Promise<InvestigationWithAnswers | null> {
     return this.deps.store.getInvestigation(id);
+  }
+
+  /** The model bound to an Investigation (epic #106 / #113), or null if none/unknown.
+   *  Lets the HTTP layer resolve a follow-up against the Investigation's bound model
+   *  instead of the client's current selection. */
+  getInvestigationModelProviderId(id: string): Promise<string | null> {
+    return this.deps.store.getInvestigationModelProviderId(id);
   }
 
   list(opts?: ListOpts): Promise<InvestigationListItem[]> {

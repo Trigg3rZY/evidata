@@ -8,13 +8,18 @@ import { getRuntime, makeProvider, providerFromConfig } from './runtime';
  */
 export async function askSseResponse(body: AskBody, signal: AbortSignal): Promise<Response> {
   const rt = await getRuntime();
-  // A selected model must resolve to ITS provider — never silently fall back to the
-  // env/default model (that would run the question against a different model than the
-  // user chose). Only the no-selection case uses the fallback.
+  // The model is bound to the Investigation (#113): a follow-up runs on the STORED
+  // model (ignore the client's current picker) so a conversation never switches models
+  // mid-thread; a new turn uses the client's selection. Either way a selected model
+  // must resolve to ITS provider — never silently fall back to the env/default model
+  // (#111); only the no-selection case uses the fallback.
+  const modelProviderId = body.investigationId
+    ? await rt.service.getInvestigationModelProviderId(body.investigationId)
+    : (body.modelProviderId ?? null);
   let providerFor = makeProvider;
-  if (body.modelProviderId) {
+  if (modelProviderId) {
     const cfg = body.userId
-      ? await rt.modelProviders.resolveConfig(body.userId, body.modelProviderId)
+      ? await rt.modelProviders.resolveConfig(body.userId, modelProviderId)
       : null;
     if (!cfg) {
       return Response.json({ error: 'The selected model is unavailable.' }, { status: 404 });

@@ -28,6 +28,9 @@ export interface NewInvestigation {
   id: string;
   dataSourceId: string;
   title: string;
+  /** Model bound to this Investigation (epic #106 / #113). Null/omitted = the
+   *  server's default model. */
+  modelProviderId?: string | null;
 }
 
 export interface SaveAnswerInput {
@@ -60,6 +63,10 @@ export interface MetadataStore {
    */
   saveAnswer(input: SaveAnswerInput): Promise<Answer>;
   getInvestigation(id: string): Promise<InvestigationWithAnswers | null>;
+  /** The model bound to an Investigation (epic #106 / #113), or null if none is
+   *  bound or the Investigation doesn't exist. A lightweight read for the follow-up
+   *  resolve path (avoids loading the whole thread). */
+  getInvestigationModelProviderId(id: string): Promise<string | null>;
   listInvestigations(opts?: ListOpts): Promise<InvestigationListItem[]>;
 
   // --- M1 identity (spec 08 §5 / 12 §2). Credentials never stored in plaintext. ---

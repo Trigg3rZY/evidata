@@ -130,6 +130,9 @@ export async function askStream(
         ...(body.investigationId ? { investigationId: body.investigationId } : {}),
         ...(body.rerun ? { rerun: true } : {}),
         ...(body.userId ? { userId: body.userId } : {}),
+        // Recorded on a NEW Investigation so follow-ups reuse this model (#113); the
+        // service ignores it for a follow-up (that one is already bound).
+        ...(body.modelProviderId ? { modelProviderId: body.modelProviderId } : {}),
       },
       {
         provider,

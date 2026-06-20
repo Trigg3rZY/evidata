@@ -1,0 +1,1 @@
+ALTER TABLE "evidata_meta"."investigations" ADD COLUMN "model_provider_id" text;
