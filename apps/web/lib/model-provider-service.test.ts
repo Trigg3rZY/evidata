@@ -114,6 +114,25 @@ describe('ModelProviderService (epic #106)', () => {
     await svc.remove('owner', noBase.id);
   });
 
+  it('resolveConfig carries effort only for an effort-capable kind', async () => {
+    // OpenAI kind supports reasoning_effort → effort flows into the config.
+    const oa = await svc.create(
+      'owner',
+      input({ name: 'OpenAI', kind: 'openai', baseUrl: null, params: { effort: 'low' } }),
+    );
+    expect((await svc.resolveConfig('owner', oa.id))?.effort).toBe('low');
+    await svc.remove('owner', oa.id);
+
+    // A non-effort kind that somehow carries effort (e.g. a record predating the gate)
+    // never sends it — resolveConfig drops it defensively.
+    const ds = await svc.create(
+      'owner',
+      input({ name: 'DeepSeek effort', kind: 'deepseek', params: { effort: 'high' } }),
+    );
+    expect((await svc.resolveConfig('owner', ds.id))?.effort).toBeUndefined();
+    await svc.remove('owner', ds.id);
+  });
+
   it('resolveConfig is null when no OpenAI-compatible base can be determined', async () => {
     // openai-compatible kind with no baseUrl → not runnable yet.
     const p = await svc.create(
