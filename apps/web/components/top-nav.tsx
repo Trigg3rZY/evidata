@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Database, Plus } from 'lucide-react';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -8,6 +10,11 @@ import { ModelPicker } from '@/components/model-picker';
 import { Button } from '@/components/ui/button';
 import { useDataSources } from '@/lib/data-source-context';
 import { useI18n } from '@/lib/i18n';
+
+interface NavUser {
+  username: string;
+  displayName: string;
+}
 
 /**
  * The app-shell top bar (issues #65/#69): brand (→ Ask Data), section tabs, and a
@@ -23,8 +30,31 @@ export function TopNav({
   onNewChat?: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
+  const router = useRouter();
   const { dataSources, activeId } = useDataSources();
   const src = dataSources.find((d) => d.id === activeId);
+  // Login status (issue #91): undefined = loading, null = signed out. The Sample
+  // Ask path is open, so signed-out is a normal state — show a Sign in link then.
+  const [user, setUser] = useState<NavUser | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/me')
+      .then((r) => (r.ok ? (r.json() as Promise<{ user: NavUser }>) : null))
+      .then((d) => {
+        if (!cancelled) setUser(d?.user ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const signOut = async (): Promise<void> => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+    router.push('/login');
+  };
   // The sample keeps its localized name; any real source shows its own name.
   const srcName = src && src.id !== SAMPLE_DATA_SOURCE_ID ? src.name : t('sample');
 
@@ -81,6 +111,27 @@ export function TopNav({
           {lang === 'en' ? '中文' : 'EN'}
         </Button>
         <ModeToggle />
+        {/* Login status (issue #91): name + sign out, or a sign-in link. */}
+        {user === undefined ? null : user ? (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="hidden max-w-[8rem] truncate text-xs text-muted-foreground sm:inline"
+              title={user.username}
+            >
+              {user.displayName}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void signOut()}>
+              {t('signOut')}
+            </Button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="rounded-md px-2.5 py-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t('signIn')}
+          </Link>
+        )}
       </div>
     </header>
   );
