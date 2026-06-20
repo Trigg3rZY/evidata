@@ -97,10 +97,11 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `11-m0-design-system.md` | Visual language: Tailwind + shadcn stack, color tokens (`globals.css` draft), the Status × Confidence system, typography, density modes, component mapping, a11y. |
 | `12-m1-data-model.md` | M1 metadata schema: users/sessions/connections/memberships/snapshots + the minimal Data Source and `Investigation.dataSourceId` FK evolution; deploy-time migrations. |
 | `13-agent-harness.md` | **M0.5:** systematizes the AI layer into a harness — Answer-vs-Message taxonomy, tool-mediated intent (`reply`/`draft_sql`), end-to-end cancellation, IME input boundary, eval harness. Fixes greeting-over-explores, author-vs-execute, IME Enter, interruptibility. |
+| `14-byo-key-multi-model.md` | **Epic #106 (as-built):** BYO-key multi-model — Vercel AI SDK transport behind `AgentProvider`, per-user vault-encrypted model registry (`/admin/models`), per-conversation picker + per-Investigation binding, effort-by-kind, trust boundary unchanged. |
 | `packages/core/answer-contract/src/answer-contract.ts` | Source-of-truth TypeScript types (moved out of `docs/` into the package once code landed). |
 | `packages/core/answer-contract/src/answer-contract.schema.json` | JSON Schema kept in lockstep with the types (C1 schema-sync test enforces no drift). |
 
-Depth: M0 (01–06, 10, 11) and M1 (08, 12) are implementation-level; M0.5 harness (13) is implementation-level; M2 (09) is architecture-skeleton; `07` is the umbrella blueprint.
+Depth: M0 (01–06, 10, 11) and M1 (08, 12) are implementation-level; M0.5 harness (13) and BYO-key multi-model (14) are implementation-level (as-built); M2 (09) is architecture-skeleton; `07` is the umbrella blueprint.
 
 ## PRD traceability (M0)
 
