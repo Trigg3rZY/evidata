@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AdminNav } from '@/components/admin-nav';
 import { AppShell } from '@/components/app-shell';
 import { Field } from '@/components/field';
 import { Button } from '@/components/ui/button';
@@ -124,6 +125,8 @@ export default function ConnectionsAdminPage() {
               Sign out
             </Button>
           </header>
+
+          <AdminNav />
 
           {!ready ? (
             <p className="mt-6 text-sm text-muted-foreground">…</p>
