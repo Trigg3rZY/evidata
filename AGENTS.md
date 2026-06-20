@@ -29,6 +29,18 @@ contributor, not one session's memory:
 - **Attribution.** End AI-assisted commit messages with `Co-Authored-By: Claude <noreply@anthropic.com>`; end PR descriptions with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 - **Local dev for DB-backed work.** The gated Postgres integration tests need a local Postgres (e.g. colima + a `postgres:16` container) and `TEST_DATABASE_URL`; without it those tests skip.
 
+### Running work in parallel (multiple agents)
+
+When more than one agent/session works this repo at once, the goal is to minimise
+coordination — isolate, claim, and integrate through artifacts (not chat):
+
+- **One agent · one worktree · one issue.** Give each agent a dedicated `git worktree` (`git worktree add ../wt-<issue> -b <type>/<slug>-<issue> origin/main`); never run two agents in the same working tree — uncommitted WIP collides.
+- **Claim before starting (lease).** First action on an issue: self-assign + add the `status:in-progress` label. Only pick issues that are unassigned, unblocked, and highest priority.
+- **Dependencies are explicit.** Record `Depends on #N` (or use sub-issues); an issue is workable only once its dependencies are merged. Label work that's waiting `blocked`.
+- **Decompose to be file-disjoint.** Scope parallel issues to different packages/dirs so they don't touch the same files; note `Touches:` paths on the issue. This is what makes parallelism actually faster (integration cost is superlinear when work overlaps).
+- **Coordinate through artifacts, not chat.** Land shared-contract changes (schema, ports, public types) on `main` first; everyone else rebases. Agents don't talk to each other — the maintainer (or a lead/orchestrator session) is the bus.
+- **Write in parallel, merge serially.** Required checks are strict (branch must be up to date), so merge the queue one PR at a time in dependency order; `auto-merge` + `allow_update_branch` handle the rebases.
+
 ## Codex Review Guidance
 
 When reviewing pull requests, prioritize high-signal findings. Flag issues as P0/P1 when they can break trust, safety, data integrity, or core workflows.

@@ -27,3 +27,17 @@ body:
       description: How we'll know it's done (tests, behavior, verification).
     validations:
       required: false
+  - type: input
+    id: depends_on
+    attributes:
+      label: Depends on
+      description: Issues that must merge first, e.g. `#12, #15`. Leave blank if none. Label `blocked` while waiting.
+    validations:
+      required: false
+  - type: input
+    id: touches
+    attributes:
+      label: Touches (paths)
+      description: Main dirs/packages this will change (helps parallel agents stay file-disjoint), e.g. `packages/db, apps/web/lib`.
+    validations:
+      required: false
