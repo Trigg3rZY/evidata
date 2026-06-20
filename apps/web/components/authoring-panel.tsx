@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { EditableDataSource, PolicyForm } from '@/lib/authoring-service';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
+import { ContextReview } from '@/components/context-review';
 
 /**
  * Owner-only authoring panel for the Data Sources detail page (M2-S3, spec 09 §5/§7):
@@ -37,6 +38,8 @@ export function AuthoringPanel({
     mappingsAdded: number;
   } | null>(null);
   const [calibError, setCalibError] = useState(false);
+  // Bumped after calibration so the context review re-fetches the new suggestions.
+  const [contextRefresh, setContextRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +151,7 @@ export function AuthoringPanel({
         setStatus('idle');
       }
       setCalibResult({ glossaryAdded: r.glossaryAdded, mappingsAdded: r.mappingsAdded });
+      setContextRefresh((n) => n + 1); // surface the new suggestions in the review
     } else {
       setCalibError(true);
     }
@@ -209,6 +213,9 @@ export function AuthoringPanel({
           <p className="mt-2 text-xs text-destructive">{t('authoringCalibrateError')}</p>
         )}
       </div>
+
+      {/* Context review (B3): promote Suggested glossary/mappings → Verified. */}
+      <ContextReview id={id} refreshKey={contextRefresh} />
 
       {/* Included tables */}
       <fieldset className="mt-4">

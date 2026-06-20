@@ -57,12 +57,24 @@ const policy: PolicyRecord = {
 };
 
 const glossary: GlossaryTermRecord[] = [
-  { term: 'MRR', definition: 'monthly recurring revenue', status: 'verified', provenance: 'admin' },
-  { term: 'churn', definition: 'lost accounts', status: 'suggested', provenance: 'ai_draft' },
+  {
+    id: 'g1',
+    term: 'MRR',
+    definition: 'monthly recurring revenue',
+    status: 'verified',
+    provenance: 'admin',
+  },
+  {
+    id: 'g2',
+    term: 'churn',
+    definition: 'lost accounts',
+    status: 'suggested',
+    provenance: 'ai_draft',
+  },
 ];
 const mappings: EntityMappingRecord[] = [
-  { fromRef: 'acct', toRef: 'accounts', status: 'verified', provenance: 'admin' },
-  { fromRef: 'inv', toRef: 'invoices', status: 'suggested', provenance: 'ai_draft' },
+  { id: 'm1', fromRef: 'acct', toRef: 'accounts', status: 'verified', provenance: 'admin' },
+  { id: 'm2', fromRef: 'inv', toRef: 'invoices', status: 'suggested', provenance: 'ai_draft' },
 ];
 
 /** A store double whose individual reads can be overridden per test. */
