@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { reasoningProviderOptions } from './sdk-transport';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { reasoningProviderOptions, sdkComplete } from './sdk-transport';
+import type { CompletionRequest } from './types';
 
 describe('reasoningProviderOptions (epic #106)', () => {
   it('maps a set effort to the openai-compatible reasoningEffort option', () => {
@@ -16,5 +17,76 @@ describe('reasoningProviderOptions (epic #106)', () => {
   it('omits provider options when no effort is set (non-reasoning models unaffected)', () => {
     expect(reasoningProviderOptions(undefined)).toBeUndefined();
     expect(reasoningProviderOptions('')).toBeUndefined();
+  });
+});
+
+// A request-level assertion that effort actually reaches the chat-completions body
+// (not just the helper shape): stub fetch, run the transport, inspect the wire.
+describe('sdkComplete effort on the wire (epic #106)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const baseReq: CompletionRequest = {
+    model: 'o4-mini',
+    messages: [{ role: 'user', content: 'hi' }],
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'final_answer',
+          description: 'answer',
+          parameters: { type: 'object', properties: {}, additionalProperties: false },
+        },
+      },
+    ],
+    tool_choice: { type: 'function', function: { name: 'final_answer' } },
+    temperature: 0,
+    max_tokens: 16,
+  };
+
+  function stubFetchCapturing(): () => unknown {
+    let body: unknown;
+    vi.stubGlobal('fetch', (_url: string, init?: { body?: string }) => {
+      body = init?.body ? JSON.parse(init.body) : undefined;
+      const payload = {
+        id: '1',
+        object: 'chat.completion',
+        created: 0,
+        model: 'o4-mini',
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+    return () => body;
+  }
+
+  it('sends reasoning_effort when the config carries an effort', async () => {
+    const read = stubFetchCapturing();
+    const complete = sdkComplete({
+      apiKey: 'k',
+      baseURL: 'https://api.openai.com/v1',
+      model: 'o4-mini',
+      effort: 'low',
+    });
+    await complete(baseReq, {});
+    expect((read() as Record<string, unknown>).reasoning_effort).toBe('low');
+  });
+
+  it('omits reasoning_effort when no effort is set', async () => {
+    const read = stubFetchCapturing();
+    const complete = sdkComplete({
+      apiKey: 'k',
+      baseURL: 'https://api.openai.com/v1',
+      model: 'o4-mini',
+    });
+    await complete(baseReq, {});
+    expect((read() as Record<string, unknown>).reasoning_effort).toBeUndefined();
   });
 });
