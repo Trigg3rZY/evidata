@@ -145,6 +145,15 @@ export interface MetadataStore {
   deleteEntityMapping(dataSourceId: string, id: string): Promise<void>;
   /** Transition a DataSource's lifecycle (draft → published → archived). */
   setDataSourceLifecycle(dataSourceId: string, lifecycle: DataSourceLifecycle): Promise<void>;
+  // --- Data Source memberships (M2-B1a): the AI-surface role matrix (spec 09 §6). ---
+  /** The caller's role on a Data Source, or null if not a member. */
+  getDataSourceRole(userId: string, dataSourceId: string): Promise<DataSourceRole | null>;
+  /** The Data Sources the caller is a member of, with their role (for the rail). */
+  listDataSourceMemberships(
+    userId: string,
+  ): Promise<Array<{ dataSourceId: string; role: DataSourceRole }>>;
+  /** Grant a Data Source role (bootstrap on create; invites in B1b). */
+  createDataSourceMembership(input: DataSourceMembershipInput): Promise<void>;
 }
 
 export type ConnectionHealth =
@@ -156,6 +165,17 @@ export type ConnectionHealth =
   | 'PermissionInsufficient'
   | 'Disabled';
 export type ConnectionRole = 'owner' | 'admin';
+
+/** Role on a governed Data Source (the AI surface) — distinct from ConnectionRole.
+ *  Capabilities are defined in the app-layer authz matrix (spec 09 §6). */
+export type DataSourceRole = 'owner' | 'admin' | 'querier';
+
+export interface DataSourceMembershipInput {
+  id: string;
+  userId: string;
+  dataSourceId: string;
+  role: DataSourceRole;
+}
 
 export interface NewConnection {
   id: string;

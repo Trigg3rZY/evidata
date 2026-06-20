@@ -8,7 +8,7 @@
  * dataSourceId, so an item id from another source can't be touched.
  */
 import type { EntityMappingRecord, GlossaryTermRecord, MetadataStore } from '@evidata/ports';
-import { authorizeDataSourceAccess } from './authoring-service';
+import { requireDataSourceCapability } from './authoring-service';
 
 export type ContextItemKind = 'glossary' | 'mapping';
 
@@ -28,7 +28,7 @@ export class VerificationValidationError extends Error {
 type VerificationStore = Pick<
   MetadataStore,
   | 'getDataSource'
-  | 'getConnectionRole'
+  | 'getDataSourceRole'
   | 'getGlossaryTerms'
   | 'getEntityMappings'
   | 'setGlossaryStatus'
@@ -43,7 +43,7 @@ export class VerificationService {
 
   /** All glossary terms + mappings for the source (every status, with ids). */
   async list(userId: string, dataSourceId: string): Promise<ContextItems> {
-    await authorizeDataSourceAccess(this.store, userId, dataSourceId);
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
     const [glossary, mappings] = await Promise.all([
       this.store.getGlossaryTerms(dataSourceId),
       this.store.getEntityMappings(dataSourceId),
@@ -58,7 +58,7 @@ export class VerificationService {
     kind: ContextItemKind,
     id: string,
   ): Promise<void> {
-    await authorizeDataSourceAccess(this.store, userId, dataSourceId);
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
     if (kind === 'glossary') await this.store.setGlossaryStatus(dataSourceId, id, 'verified');
     else await this.store.setEntityMappingStatus(dataSourceId, id, 'verified');
   }
@@ -70,7 +70,7 @@ export class VerificationService {
     kind: ContextItemKind,
     id: string,
   ): Promise<void> {
-    await authorizeDataSourceAccess(this.store, userId, dataSourceId);
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
     if (kind === 'glossary') await this.store.deleteGlossaryTerm(dataSourceId, id);
     else await this.store.deleteEntityMapping(dataSourceId, id);
   }
@@ -82,7 +82,7 @@ export class VerificationService {
     id: string,
     definition: string,
   ): Promise<void> {
-    await authorizeDataSourceAccess(this.store, userId, dataSourceId);
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
     const def = definition.trim();
     if (!def) throw new VerificationValidationError('A definition is required.');
     await this.store.updateGlossaryDefinition(dataSourceId, id, def);

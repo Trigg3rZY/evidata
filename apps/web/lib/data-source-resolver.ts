@@ -18,6 +18,7 @@ import type {
   PolicyRecord,
   SafetyContext,
 } from '@evidata/ports';
+import { canDataSource } from './authz';
 
 /** Defaults when a published source has no explicit Policy row yet (spec 09 §5). */
 const DEFAULT_POLICY = {
@@ -37,7 +38,7 @@ type ResolverStore = Pick<
   | 'getGlossaryTerms'
   | 'getEntityMappings'
   | 'getLatestSnapshot'
-  | 'getConnectionRole'
+  | 'getDataSourceRole'
 >;
 
 export class PublishedDataSourceResolver implements DataSourceResolver {
@@ -54,7 +55,7 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     const out: Array<{ id: string; name: string }> = [];
     for (const d of published) {
       if (this.staticIds.has(d.id)) continue;
-      if (await this.authorizedConnection(d.id, userId)) out.push({ id: d.id, name: d.name });
+      if (await this.canQuery(d.id, userId)) out.push({ id: d.id, name: d.name });
     }
     return out;
   }
@@ -65,12 +66,11 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     if (!ds || ds.lifecycle !== 'published') return null;
     const binding = await this.store.getDataSourceConnection(id);
     if (!binding) return null;
-    // Authz (owner-gated for the slice, spec 09 §2): the caller must have a role on
-    // the backing Connection. Anonymous callers get nothing. Returns null (not an
-    // error) so an unauthorized id is indistinguishable from a missing one.
-    if (!userId || !(await this.store.getConnectionRole(userId, binding.connectionId))) {
-      return null;
-    }
+    // Authz (spec 09 §6): the caller needs the `query` capability via their Data
+    // Source role (owner/admin/querier) — NOT connection membership, so a querier
+    // with no connection access can still ask. Anonymous → nothing. Returns null (not
+    // an error) so an unauthorized id is indistinguishable from a missing one.
+    if (!userId || !(await this.canQuery(id, userId))) return null;
 
     // Freshest captured schema for what the model sees.
     const schema = await this.store.getLatestSnapshot(binding.connectionId);
@@ -94,11 +94,9 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     };
   }
 
-  /** True when `userId` has a role on the connection backing this published source. */
-  private async authorizedConnection(dataSourceId: string, userId: string): Promise<boolean> {
-    const binding = await this.store.getDataSourceConnection(dataSourceId);
-    if (!binding) return false;
-    return (await this.store.getConnectionRole(userId, binding.connectionId)) !== null;
+  /** True when `userId` has the `query` capability on this Data Source (spec 09 §6). */
+  private async canQuery(dataSourceId: string, userId: string): Promise<boolean> {
+    return canDataSource(await this.store.getDataSourceRole(userId, dataSourceId), 'query');
   }
 
   private async connectorOrNull(connectionId: string): Promise<Connector | null> {

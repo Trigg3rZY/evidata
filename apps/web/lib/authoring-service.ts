@@ -3,18 +3,20 @@
  * policy→publish flow behind the editable Data Sources detail page. A draft Data
  * Source already exists per Connection (created with the connection in M1); this
  * service edits it: table scope + sensitive columns, an overview, the safety
- * Policy, and the publish lifecycle. Owner-gated via the backing Connection's
- * membership (the same authz the query path uses). No AI calibration yet.
+ * Policy, and the publish lifecycle. Gated by the Data Source role matrix
+ * (spec 09 §6) — author/publish require owner/admin (M2-B1a).
  */
 import { randomUUID } from 'node:crypto';
 import type {
   DataSourceLifecycle,
   DataSourceRecord,
+  DataSourceRole,
   MetadataStore,
   SchemaSnapshot,
 } from '@evidata/ports';
+import { canDataSource, type DataSourceCapability } from './authz';
 
-/** The caller isn't an owner/admin of the source's connection (route → 404). */
+/** The caller lacks the required Data Source capability (route → 404, no leak). */
 export class AuthoringAccessError extends Error {
   constructor() {
     super('Data source not found.');
@@ -22,21 +24,22 @@ export class AuthoringAccessError extends Error {
   }
 }
 
-/** Resolve a Data Source and authorize the caller: they must have a role on its
- *  backing Connection (the same authz the query path uses). A non-owner — or a
- *  source with no backing connection (e.g. the Sample) — gets AuthoringAccessError
- *  (→ 404, no existence leak). Shared by authoring + calibration so the gate can't
- *  drift. */
-export async function authorizeDataSourceAccess(
-  store: Pick<MetadataStore, 'getDataSource' | 'getConnectionRole'>,
+/** Resolve a Data Source and authorize the caller for a capability against the
+ *  Data Source role matrix (spec 09 §6). A source with no backing connection (e.g.
+ *  the Sample) or a caller without the capability gets AuthoringAccessError (→ 404,
+ *  no existence leak). Shared by authoring/calibration/verification so the gate
+ *  can't drift. */
+export async function requireDataSourceCapability(
+  store: Pick<MetadataStore, 'getDataSource' | 'getDataSourceRole'>,
   userId: string,
   dataSourceId: string,
-): Promise<{ ds: DataSourceRecord; connectionId: string }> {
+  capability: DataSourceCapability,
+): Promise<{ ds: DataSourceRecord; connectionId: string; role: DataSourceRole }> {
   const ds = await store.getDataSource(dataSourceId);
   if (!ds || !ds.connectionId) throw new AuthoringAccessError();
-  const role = await store.getConnectionRole(userId, ds.connectionId);
-  if (!role) throw new AuthoringAccessError();
-  return { ds, connectionId: ds.connectionId };
+  const role = await store.getDataSourceRole(userId, dataSourceId);
+  if (!role || !canDataSource(role, capability)) throw new AuthoringAccessError();
+  return { ds, connectionId: ds.connectionId, role };
 }
 
 /** Publish blocked because the draft isn't ready (route → 409). */
@@ -94,7 +97,8 @@ export interface EditableDataSource extends AuthoringDraft {
 type AuthoringStore = Pick<
   MetadataStore,
   | 'getDataSource'
-  | 'getConnectionRole'
+  | 'getDataSourceRole'
+  | 'listDataSourceMemberships'
   | 'getLatestSnapshot'
   | 'getDataSourceConnection'
   | 'getDataSourceContext'
@@ -103,8 +107,6 @@ type AuthoringStore = Pick<
   | 'upsertDataSourceContext'
   | 'upsertPolicy'
   | 'setDataSourceLifecycle'
-  | 'listConnections'
-  | 'listDataSourcesByConnection'
 >;
 
 /** A source the user may author — incl. drafts — for the Data Sources view rail. */
@@ -120,23 +122,23 @@ export class DataSourceAuthoringService {
     private readonly newId: (prefix: string) => string = (p) => `${p}_${randomUUID()}`,
   ) {}
 
-  /** The sources this user may author (every data source on a connection they're a
-   *  member of) — including drafts, so the Data Sources view can list + open them. */
+  /** The sources this user may author — Data Sources they hold an author-capable role
+   *  on (owner/admin) — incl. drafts, for the Data Sources view rail. Queriers get
+   *  nothing here (they never see Drafts — spec 09 §6). */
   async listAuthorable(userId: string): Promise<AuthorableDataSource[]> {
-    const connections = await this.store.listConnections(userId);
+    const memberships = await this.store.listDataSourceMemberships(userId);
     const out: AuthorableDataSource[] = [];
-    for (const c of connections) {
-      for (const d of await this.store.listDataSourcesByConnection(c.id)) {
-        const full = await this.store.getDataSource(d.id);
-        out.push({ id: d.id, name: d.name, lifecycle: full?.lifecycle ?? 'draft' });
-      }
+    for (const m of memberships) {
+      if (!canDataSource(m.role, 'view_draft')) continue;
+      const ds = await this.store.getDataSource(m.dataSourceId);
+      if (ds) out.push({ id: ds.id, name: ds.name, lifecycle: ds.lifecycle });
     }
     return out;
   }
 
   /** The editable state for the detail page (owner-only). */
   async getEditable(userId: string, dataSourceId: string): Promise<EditableDataSource> {
-    const { ds, connectionId } = await this.authorize(userId, dataSourceId);
+    const { ds, connectionId } = await this.authorize(userId, dataSourceId, 'author');
     const schema = await this.store.getLatestSnapshot(connectionId);
     const binding = await this.store.getDataSourceConnection(dataSourceId);
     const ctx = await this.store.getDataSourceContext(dataSourceId);
@@ -174,7 +176,7 @@ export class DataSourceAuthoringService {
    *  included table is removed), it's pulled back to draft so it's never offered
    *  while unqueryable (Codex P2). */
   async save(userId: string, dataSourceId: string, draft: AuthoringDraft): Promise<void> {
-    const { ds, connectionId } = await this.authorize(userId, dataSourceId);
+    const { ds, connectionId } = await this.authorize(userId, dataSourceId, 'author');
     const schema = await this.store.getLatestSnapshot(connectionId);
     const known = new Set((schema?.tables ?? []).map((t) => t.name));
     const included = [...new Set(draft.includedTables)];
@@ -218,7 +220,7 @@ export class DataSourceAuthoringService {
 
   /** Publish a draft once it passes the readiness checklist (spec 09 §7). */
   async publish(userId: string, dataSourceId: string): Promise<void> {
-    await this.authorize(userId, dataSourceId);
+    await this.authorize(userId, dataSourceId, 'publish');
     const { missing, ready } = await this.checkReadiness(dataSourceId);
     if (!ready) throw new PublishReadinessError(missing);
     await this.store.setDataSourceLifecycle(dataSourceId, 'published');
@@ -226,16 +228,17 @@ export class DataSourceAuthoringService {
 
   /** Pull a published source back to draft (it stops being queryable). */
   async unpublish(userId: string, dataSourceId: string): Promise<void> {
-    await this.authorize(userId, dataSourceId);
+    await this.authorize(userId, dataSourceId, 'publish');
     await this.store.setDataSourceLifecycle(dataSourceId, 'draft');
   }
 
-  /** Resolve + authorize: the caller must have a role on the backing connection. */
+  /** Resolve + authorize the caller for a capability on the Data Source (spec 09 §6). */
   private authorize(
     userId: string,
     dataSourceId: string,
-  ): Promise<{ ds: DataSourceRecord; connectionId: string }> {
-    return authorizeDataSourceAccess(this.store, userId, dataSourceId);
+    capability: DataSourceCapability,
+  ): Promise<{ ds: DataSourceRecord; connectionId: string; role: DataSourceRole }> {
+    return requireDataSourceCapability(this.store, userId, dataSourceId, capability);
   }
 
   private async checkReadiness(

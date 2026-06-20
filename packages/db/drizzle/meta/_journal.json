@@ -43,6 +43,13 @@
       "when": 1781928887580,
       "tag": "0005_zippy_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781939490011,
+      "tag": "0006_backfill_ds_owner_memberships",
+      "breakpoints": true
     }
   ]
 }

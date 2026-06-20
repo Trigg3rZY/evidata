@@ -11,7 +11,7 @@ Skeleton depth.
 | `CalibrationService` | `packages/core/calibration` | Drives AI draft of `DataSourceContext`; manages Glossary/Mapping entries and their `Suggested → Verified` transitions. |
 | `PolicyService` | `packages/core/policy` | CRUD + validation of `Policy` (read-only, scope, row limits, timeout, sensitive fields, auto-exec/confirmation rules). Already consumed by SafetyGate/Redactor since M0. |
 | `PublishingService` | `packages/core/publishing` | Lifecycle Draft→Published→Archived; enforces publish-readiness checklist. |
-| `MembershipService` + `authz` | `packages/core/authz` | Data Source / Connection memberships; enforces the PRD `Roles and Capability Matrix` on every service call. |
+| `MembershipService` + `authz` | `apps/web/lib/authz.ts` (as-built, B1a) | Data Source role matrix (`canDataSource`) — the single decision point; `requireDataSourceCapability` resolves the caller's `dataSourceMemberships` role and checks the capability. Co-located with its web-layer consumers (authoring/calibration/verification/resolver) rather than a core package. Connection ops stay gated by `ConnectionRole`. Creating a Connection bootstraps a DS owner membership; migration 0006 backfills existing sources. Invite-token onboarding = B1b. |
 | `SuggestionService` (review) | `packages/core/suggestion` | The review side of the correction loop: Admins triage `Suggestion`s raised via the Unblock Path into Verified edits. |
 | Provider status page | `apps/web` | Admin-only provider/model status + minimal config; never visible to Queriers. |
 

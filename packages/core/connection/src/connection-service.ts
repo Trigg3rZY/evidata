@@ -60,6 +60,7 @@ export type ConnectionStore = Pick<
   | 'saveSchemaSnapshot'
   | 'getLatestSnapshot'
   | 'createDataSource'
+  | 'createDataSourceMembership'
   | 'listDataSourcesByConnection'
 >;
 
@@ -163,11 +164,20 @@ export class ConnectionService {
       connectionId: id,
       role: 'owner',
     });
+    const dataSourceId = this.newId('ds');
     await this.deps.store.createDataSource({
-      id: this.newId('ds'),
+      id: dataSourceId,
       name: input.name,
       kind: 'postgres',
       connectionId: id,
+    });
+    // Bootstrap the Data Source role matrix (M2-B1a): the creator owns the new source,
+    // so authoring/query gates (now keyed on Data Source membership) admit them.
+    await this.deps.store.createDataSourceMembership({
+      id: this.newId('dsm'),
+      userId,
+      dataSourceId,
+      role: 'owner',
     });
     return toSummary(record);
   }
