@@ -272,4 +272,8 @@ CREATE INDEX "mappings_ds_idx" ON "evidata_meta"."entity_mappings" USING btree (
 --> statement-breakpoint
 ALTER TABLE "evidata_meta"."model_providers" ADD CONSTRAINT "model_providers_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "evidata_meta"."users"("id") ON DELETE no action ON UPDATE no action;`,
   },
+  {
+    name: '0005_zippy_madripoor',
+    sql: `ALTER TABLE "evidata_meta"."investigations" ADD COLUMN "model_provider_id" text;`,
+  },
 ];

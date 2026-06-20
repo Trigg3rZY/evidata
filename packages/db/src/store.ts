@@ -92,10 +92,12 @@ export class DrizzleMetadataStore implements MetadataStore {
 
   async createInvestigation(init: NewInvestigation): Promise<Investigation> {
     const now = this.now();
+    const modelProviderId = init.modelProviderId ?? null;
     await this.db.insert(investigations).values({
       id: init.id,
       dataSourceId: init.dataSourceId,
       title: init.title,
+      modelProviderId,
       createdAt: now,
       updatedAt: now,
     });
@@ -103,6 +105,7 @@ export class DrizzleMetadataStore implements MetadataStore {
       id: init.id,
       dataSourceId: init.dataSourceId,
       title: init.title,
+      modelProviderId,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
@@ -246,6 +249,7 @@ export class DrizzleMetadataStore implements MetadataStore {
       id: inv.id,
       dataSourceId: inv.dataSourceId,
       title: inv.title,
+      modelProviderId: inv.modelProviderId ?? null,
       createdAt: inv.createdAt.toISOString(),
       updatedAt: inv.updatedAt.toISOString(),
       turns: turnRows.map(
@@ -265,6 +269,14 @@ export class DrizzleMetadataStore implements MetadataStore {
         return { ...doc, meta: { ...doc.meta, version: a.version, isLatest: a.isLatest } };
       }),
     };
+  }
+
+  async getInvestigationModelProviderId(id: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ modelProviderId: investigations.modelProviderId })
+      .from(investigations)
+      .where(eq(investigations.id, id));
+    return row?.modelProviderId ?? null;
   }
 
   async listInvestigations(opts: ListOpts = {}): Promise<InvestigationListItem[]> {

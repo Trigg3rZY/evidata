@@ -32,6 +32,11 @@ export const investigations = meta.table('investigations', {
     .notNull()
     .references(() => dataSources.id),
   title: text('title').notNull(),
+  // The model that produced this Investigation, bound at creation (epic #106 / #113):
+  // follow-ups reuse it so a conversation never switches models, and it records which
+  // model answered for audit. Null = the server's default model. No FK — the raw id is
+  // kept for audit even if the provider is later deleted.
+  modelProviderId: text('model_provider_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });

@@ -152,6 +152,23 @@ describe('DrizzleMetadataStore (spec 10)', () => {
   it('returns null for an unknown investigation', async () => {
     expect(await store.getInvestigation('does-not-exist')).toBeNull();
   });
+
+  it('binds + reads the model provider per investigation (epic #113)', async () => {
+    await store.createInvestigation({
+      id: 'inv-mp',
+      dataSourceId: 'sample',
+      title: 'bound',
+      modelProviderId: 'mp_abc',
+    });
+    expect((await store.getInvestigation('inv-mp'))?.modelProviderId).toBe('mp_abc');
+    expect(await store.getInvestigationModelProviderId('inv-mp')).toBe('mp_abc');
+
+    // No model bound (default) → null; unknown investigation → null.
+    await store.createInvestigation({ id: 'inv-def', dataSourceId: 'sample', title: 'default' });
+    expect((await store.getInvestigation('inv-def'))?.modelProviderId).toBeNull();
+    expect(await store.getInvestigationModelProviderId('inv-def')).toBeNull();
+    expect(await store.getInvestigationModelProviderId('does-not-exist')).toBeNull();
+  });
 });
 
 describe('DrizzleMetadataStore — identity (spec 08 §5)', () => {

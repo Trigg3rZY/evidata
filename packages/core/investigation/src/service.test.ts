@@ -197,6 +197,31 @@ describe('InvestigationService', () => {
     if (followup.kind === 'answer') expect(followup.investigationId).toBe(first.investigationId);
   });
 
+  it('binds the chosen model to a new Investigation; defaults to null (epic #113)', async () => {
+    const bound = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: "Why is ACME's ad bill higher this month?",
+        language: 'en',
+        modelProviderId: 'mp_chosen',
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (bound.kind !== 'answer') throw new Error('expected an answer');
+    expect(await service.getInvestigationModelProviderId(bound.investigationId)).toBe('mp_chosen');
+
+    const dflt = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: "Why is ACME's ad bill higher this month?",
+        language: 'en',
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (dflt.kind !== 'answer') throw new Error('expected an answer');
+    expect(await service.getInvestigationModelProviderId(dflt.investigationId)).toBeNull();
+  });
+
   it('a rerun appends a version with NO new user turn and versionTrigger rerun', async () => {
     const q = "Why is ACME's ad bill higher this month?";
     const first = await service.ask(
