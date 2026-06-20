@@ -25,6 +25,16 @@ import type {
   ToolDef,
 } from './types';
 
+/** Provider options that carry the reasoning-effort knob to the model. The
+ *  openai-compatible provider maps `openaiCompatible.reasoningEffort` to the
+ *  `reasoning_effort` request field; omitted (undefined) when no effort is set so
+ *  non-reasoning models are unaffected (epic #106). */
+export function reasoningProviderOptions(
+  effort: string | undefined,
+): { openaiCompatible: { reasoningEffort: string } } | undefined {
+  return effort ? { openaiCompatible: { reasoningEffort: effort } } : undefined;
+}
+
 export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
   const provider = createOpenAICompatible({
     name: 'evidata',
@@ -32,6 +42,7 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
     apiKey: cfg.apiKey,
   });
   const model = provider(cfg.model);
+  const providerOptions = reasoningProviderOptions(cfg.effort);
 
   return async (req, opts): Promise<AssistantMessage> => {
     try {
@@ -42,6 +53,7 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
         toolChoice: toSdkToolChoice(req.tool_choice),
         temperature: req.temperature,
         maxOutputTokens: req.max_tokens,
+        ...(providerOptions ? { providerOptions } : {}),
         // Preserve the DeepSeek tool-arg JSON repair (unescaped quotes / control
         // chars): the SDK parses+validates tool input itself and rejects these, so
         // re-run our lenient repair on the raw input before it fails the turn.

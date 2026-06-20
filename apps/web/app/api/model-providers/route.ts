@@ -1,10 +1,11 @@
 import type { ModelCapabilities, ModelParams } from '@evidata/ports';
 import { BadRequestError, withModelProviders } from '@/lib/model-provider-routes';
+import { EFFORT_LEVELS, MODEL_KINDS, isEffortLevel, kindSupportsEffort } from '@/lib/model-kinds';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const KINDS = new Set(['openai', 'anthropic', 'deepseek', 'google', 'openai-compatible']);
+const KINDS = new Set<string>(MODEL_KINDS);
 const TOOL_CHOICE = new Set(['required', 'auto', 'none']);
 
 interface CreateBody {
@@ -41,13 +42,24 @@ export function POST(req: Request): Promise<Response> {
       if (!KINDS.has(kind)) {
         throw new BadRequestError(`kind must be one of: ${[...KINDS].join(', ')}.`);
       }
+      const params = parseParams(body?.params);
+      // Effort is gated by kind (decision B): a model whose kind exposes no
+      // reasoning-effort knob must not carry one, and the value must be valid.
+      if (params.effort !== undefined) {
+        if (!kindSupportsEffort(kind)) {
+          throw new BadRequestError(`The "${kind}" model kind does not support an effort setting.`);
+        }
+        if (!isEffortLevel(params.effort)) {
+          throw new BadRequestError(`effort must be one of: ${EFFORT_LEVELS.join(', ')}.`);
+        }
+      }
       return providers.create(user.id, {
         name,
         kind,
         baseUrl,
         model,
         apiKey,
-        params: parseParams(body?.params),
+        params,
         capabilities: parseCapabilities(body?.capabilities),
       });
     },
@@ -59,7 +71,7 @@ function parseParams(raw: unknown): ModelParams {
   const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const out: ModelParams = {};
   if (typeof p.temperature === 'number') out.temperature = p.temperature;
-  if (typeof p.effort === 'string') out.effort = p.effort;
+  if (typeof p.effort === 'string' && p.effort.trim()) out.effort = p.effort.trim();
   if (typeof p.maxTokens === 'number' && Number.isInteger(p.maxTokens)) out.maxTokens = p.maxTokens;
   return out;
 }

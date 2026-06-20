@@ -6,6 +6,7 @@ import { AdminNav } from '@/components/admin-nav';
 import { AppShell } from '@/components/app-shell';
 import { Field } from '@/components/field';
 import { Button } from '@/components/ui/button';
+import { EFFORT_LEVELS, MODEL_KINDS, kindSupportsEffort } from '@/lib/model-kinds';
 
 interface ModelParams {
   temperature?: number;
@@ -29,11 +30,12 @@ interface ProviderSummary {
   runnable: boolean;
 }
 
-// Mirrors the API allowlist (apps/web/app/api/model-providers/route.ts). Vendor
-// kinds resolve a default base URL; 'openai-compatible' (and self-hosted) require
-// an explicit Base URL below. Native non-OpenAI vendors (e.g. Anthropic) are
-// registrable for forward-compat but not yet runnable until their adapter lands.
-const KINDS = ['deepseek', 'openai', 'google', 'openai-compatible', 'anthropic'];
+// Kinds + the effort gate come from the shared source of truth (lib/model-kinds),
+// so the form, the create API, and provider resolution never drift. Vendor kinds
+// resolve a default base URL; 'openai-compatible' (and self-hosted) need an explicit
+// one. Native non-OpenAI vendors (e.g. Anthropic) are registrable for forward-compat
+// but not yet runnable until their adapter lands. Effort is offered only for kinds
+// that expose a reasoning-effort knob (decision B).
 const TOOL_CHOICE = ['', 'required', 'auto', 'none'];
 
 const EMPTY = {
@@ -208,10 +210,18 @@ export default function ModelsAdminPage() {
                       <select
                         id={id}
                         value={form.kind}
-                        onChange={(e) => setForm({ ...form, kind: e.target.value })}
+                        onChange={(e) => {
+                          const kind = e.target.value;
+                          // Drop a stale effort if the new kind has no effort knob.
+                          setForm((f) => ({
+                            ...f,
+                            kind,
+                            effort: kindSupportsEffort(kind) ? f.effort : '',
+                          }));
+                        }}
                         className="rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        {KINDS.map((k) => (
+                        {MODEL_KINDS.map((k) => (
                           <option key={k} value={k}>
                             {k}
                           </option>
@@ -269,13 +279,29 @@ export default function ModelsAdminPage() {
                     onChange={(v) => setForm({ ...form, temperature: v })}
                     placeholder="0"
                   />
-                  <Field
-                    label="Effort (optional)"
-                    value={form.effort}
-                    onChange={(v) => setForm({ ...form, effort: v })}
-                    placeholder="low / medium / high"
-                    autoComplete="off"
-                  />
+                  {kindSupportsEffort(form.kind) && (
+                    <Field
+                      label="Effort (optional)"
+                      value={form.effort}
+                      onChange={(v) => setForm({ ...form, effort: v })}
+                    >
+                      {(id) => (
+                        <select
+                          id={id}
+                          value={form.effort}
+                          onChange={(e) => setForm({ ...form, effort: e.target.value })}
+                          className="rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <option value="">default</option>
+                          {EFFORT_LEVELS.map((l) => (
+                            <option key={l} value={l}>
+                              {l}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </Field>
+                  )}
                   <Field
                     label="Max tokens (optional)"
                     type="number"

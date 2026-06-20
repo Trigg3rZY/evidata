@@ -63,4 +63,7 @@ export interface OpenAIProviderConfig {
   baseURL: string;
   model: string;
   maxTokens?: number;
+  /** Reasoning effort for reasoning models (OpenAI `reasoning_effort`: low|medium|high).
+   *  Sent only when set; ignored by models without a reasoning knob (epic #106). */
+  effort?: string;
 }
