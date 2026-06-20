@@ -117,11 +117,10 @@ const dict = {
     authoringCalibrating: 'Drafting…',
     authoringCalibrateHint:
       'Propose an overview, glossary, and mappings from the schema — saved as suggestions to review.',
-    authoringCalibrateDone: 'AI draft saved as suggestions',
+    authoringCalibrateDone: 'AI draft ready — review the overview and Save; suggestions:',
     authoringCalibrateError: 'Could not draft.',
     authoringCalibrateGlossary: 'glossary',
     authoringCalibrateMappings: 'mappings',
-    authoringCalibrateOverview: 'overview',
   },
   'zh-CN': {
     brand: 'evidata',
@@ -219,11 +218,10 @@ const dict = {
     authoringCalibrate: '用 AI 起草',
     authoringCalibrating: '起草中…',
     authoringCalibrateHint: '根据表结构起草概览、术语与映射——作为待核验的建议保存。',
-    authoringCalibrateDone: 'AI 草稿已保存为建议',
+    authoringCalibrateDone: 'AI 草稿已生成——请检查概览并保存;建议:',
     authoringCalibrateError: '起草失败。',
     authoringCalibrateGlossary: '术语',
     authoringCalibrateMappings: '映射',
-    authoringCalibrateOverview: '概览',
   },
 } as const;
 

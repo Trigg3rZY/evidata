@@ -1,11 +1,16 @@
 /**
  * AI calibration (M2-B2, #120, spec 09 §3) — drafts a Data Source's overview,
- * glossary terms, and entity mappings as **Suggested** from its captured schema.
- * Nothing it drafts is auto-Verified or reaches the Ask model: only Verified items
- * do (the resolver filters to status='verified'), so an owner promotes drafts later
- * (the verification UI is B3). Owner-gated via the backing Connection (same authz as
- * authoring). The model sees only structural schema (table/column names + types) —
- * no row data — so there's no redaction concern.
+ * glossary terms, and entity mappings from its captured schema.
+ *
+ * Nothing it drafts reaches the Ask model without an explicit owner action:
+ * - Glossary/mappings are persisted as **Suggested** (status-gated — the resolver
+ *   feeds the model verified-only items), promoted later in the verification UI (B3).
+ * - The overview has NO Suggested/Verified status and the resolver passes it to the
+ *   model unfiltered, so calibration does NOT write it. It's returned in the result
+ *   for the owner to review in the authoring form; their Save is the gate (Codex P1).
+ *
+ * Owner-gated via the backing Connection (same authz as authoring). The model sees
+ * only structural schema (table/column names + types) — no row data, no redaction.
  */
 import { randomUUID } from 'node:crypto';
 import type { Complete } from '@evidata/provider-openai';
@@ -33,11 +38,10 @@ export interface CalibrationDraft {
 }
 
 export interface CalibrationResult {
-  /** True if we wrote the overview (only done when it was empty — never clobbers one). */
-  overviewSet: boolean;
   glossaryAdded: number;
   mappingsAdded: number;
-  /** The full proposal (incl. items skipped as duplicates) for display. */
+  /** The full proposal (incl. items skipped as duplicates, and the overview, which is
+   *  NOT persisted — the owner reviews + Saves it). For the UI. */
   draft: CalibrationDraft;
 }
 
@@ -46,8 +50,6 @@ type CalibrationStore = Pick<
   | 'getDataSource'
   | 'getConnectionRole'
   | 'getLatestSnapshot'
-  | 'getDataSourceContext'
-  | 'upsertDataSourceContext'
   | 'getGlossaryTerms'
   | 'getEntityMappings'
   | 'addGlossaryTerms'
@@ -86,21 +88,11 @@ export class CalibrationService {
       ? await draftViaModel(schema, this.deps.complete, this.deps.model)
       : fixtureDraft(schema);
 
-    // Overview: only set it when empty — never clobber an owner-written one.
-    const ctx = await this.deps.store.getDataSourceContext(dataSourceId);
-    let overviewSet = false;
-    if (draft.overview.trim() && !(ctx?.overview ?? '').trim()) {
-      await this.deps.store.upsertDataSourceContext({
-        id: this.newId('ctx'),
-        dataSourceId,
-        overview: draft.overview.trim(),
-        payload: ctx?.payload ?? {},
-      });
-      overviewSet = true;
-    }
-
-    // Glossary / mappings: append only NEW items as Suggested. Dedupe against every
-    // existing item (any status) so we never duplicate or downgrade a Verified one.
+    // The overview is deliberately NOT persisted here (it would reach the model
+    // unfiltered, bypassing review — Codex P1). It rides back in `draft` for the owner
+    // to review + Save. Glossary / mappings ARE persisted, but as Suggested (the
+    // resolver feeds the model verified-only), appended only when new — deduped against
+    // every existing item (any status) so we never duplicate or downgrade a Verified one.
     const existingTerms = new Set(
       (await this.deps.store.getGlossaryTerms(dataSourceId)).map((t) =>
         t.term.trim().toLowerCase(),
@@ -135,7 +127,7 @@ export class CalibrationService {
       }));
     await this.deps.store.addEntityMappings(newMaps);
 
-    return { overviewSet, glossaryAdded: newTerms.length, mappingsAdded: newMaps.length, draft };
+    return { glossaryAdded: newTerms.length, mappingsAdded: newMaps.length, draft };
   }
 }
 

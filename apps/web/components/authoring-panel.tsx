@@ -33,7 +33,6 @@ export function AuthoringPanel({
   // AI calibration (B2): drafts Suggested context/glossary/mappings from the schema.
   const [calibrating, setCalibrating] = useState(false);
   const [calibResult, setCalibResult] = useState<{
-    overviewSet: boolean;
     glossaryAdded: number;
     mappingsAdded: number;
   } | null>(null);
@@ -135,14 +134,20 @@ export function AuthoringPanel({
     }).catch(() => null);
     setCalibrating(false);
     if (res?.ok) {
-      setCalibResult(
-        (await res.json()) as {
-          overviewSet: boolean;
-          glossaryAdded: number;
-          mappingsAdded: number;
-        },
-      );
-      setReload((n) => n + 1); // a drafted overview may now populate the field
+      const r = (await res.json()) as {
+        glossaryAdded: number;
+        mappingsAdded: number;
+        draft: { overview: string };
+      };
+      // Calibration never writes the overview to live context (Save is the gate).
+      // Populate the form for review only when the owner hasn't written one, and mark
+      // it dirty. No refetch — preserves any other unsaved edits.
+      if (!overview.trim() && r.draft.overview.trim()) {
+        setOverview(r.draft.overview.trim());
+        setDirty(true);
+        setStatus('idle');
+      }
+      setCalibResult({ glossaryAdded: r.glossaryAdded, mappingsAdded: r.mappingsAdded });
     } else {
       setCalibError(true);
     }
@@ -198,7 +203,6 @@ export function AuthoringPanel({
             {t('authoringCalibrateDone')} · {calibResult.glossaryAdded}{' '}
             {t('authoringCalibrateGlossary')} · {calibResult.mappingsAdded}{' '}
             {t('authoringCalibrateMappings')}
-            {calibResult.overviewSet ? ` · ${t('authoringCalibrateOverview')}` : ''}
           </p>
         )}
         {calibError && (
