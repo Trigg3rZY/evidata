@@ -110,20 +110,12 @@ export default function ConnectionsAdminPage() {
     if (res.ok) await load();
   };
 
-  const logout = async (): Promise<void> => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
-  };
-
   return (
     <AppShell active="admin">
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-6 py-8">
-          <header className="flex items-center justify-between border-b border-border pb-4">
+          <header className="border-b border-border pb-4">
             <h1 className="text-xl font-medium">Connections</h1>
-            <Button variant="outline" size="sm" onClick={() => void logout()}>
-              Sign out
-            </Button>
           </header>
 
           <AdminNav />
