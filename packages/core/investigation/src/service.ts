@@ -280,7 +280,10 @@ export class InvestigationService {
         id: investigationId,
         dataSourceId: rt.id,
         title: deriveTitle(params.question),
-        // Bind the chosen model for the Investigation's lifetime (#113); null = default.
+        // Bind the chosen registered model for the Investigation's lifetime (#113).
+        // null = the deployment's env-configured default (the simple single-model
+        // path): not snapshotted, so a follow-up uses the current env default —
+        // immutable env-default audit is tracked separately (#116).
         modelProviderId: params.modelProviderId ?? null,
       });
     }

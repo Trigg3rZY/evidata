@@ -32,10 +32,11 @@ export const investigations = meta.table('investigations', {
     .notNull()
     .references(() => dataSources.id),
   title: text('title').notNull(),
-  // The model that produced this Investigation, bound at creation (epic #106 / #113):
+  // The registered model bound to this Investigation at creation (epic #106 / #113):
   // follow-ups reuse it so a conversation never switches models, and it records which
-  // model answered for audit. Null = the server's default model. No FK — the raw id is
-  // kept for audit even if the provider is later deleted.
+  // model answered for audit. Null = the deployment's env-configured default (not
+  // snapshotted — a follow-up then uses the current env default; immutable env-default
+  // audit is #116). No FK — the raw id is kept for audit even if the provider is deleted.
   modelProviderId: text('model_provider_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
