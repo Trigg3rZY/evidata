@@ -98,6 +98,22 @@ describe('ModelProviderService (epic #106)', () => {
     await svc.remove('owner', p.id);
   });
 
+  it('list flags runnability: a vendor default or explicit base is runnable, none is not', async () => {
+    const ok = await svc.create(
+      'owner',
+      input({ name: 'HasDefault', kind: 'deepseek', baseUrl: null }),
+    );
+    const noBase = await svc.create(
+      'owner',
+      input({ name: 'NoBaseList', kind: 'openai-compatible', baseUrl: null }),
+    );
+    const list = await svc.list('owner');
+    expect(list.find((p) => p.id === ok.id)?.runnable).toBe(true); // deepseek default base
+    expect(list.find((p) => p.id === noBase.id)?.runnable).toBe(false); // no resolvable base
+    await svc.remove('owner', ok.id);
+    await svc.remove('owner', noBase.id);
+  });
+
   it('resolveConfig is null when no OpenAI-compatible base can be determined', async () => {
     // openai-compatible kind with no baseUrl → not runnable yet.
     const p = await svc.create(

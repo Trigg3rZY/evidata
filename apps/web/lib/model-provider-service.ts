@@ -31,7 +31,22 @@ function defaultBaseFor(kind: string): string | null {
   }
 }
 
+/** The OpenAI-compatible base a provider would run against: its explicit baseUrl,
+ *  else the vendor default. Null ⇒ not runnable (e.g. self-hosted / openai-compatible
+ *  with no baseUrl, or a native vendor with no adapter yet). The single source of
+ *  truth shared by resolveConfig (run) and list (the `runnable` flag). */
+function resolvableBaseUrl(kind: string, baseUrl: string | null): string | null {
+  return baseUrl ?? defaultBaseFor(kind);
+}
+
 export { VaultUnavailableError };
+
+/** A listed provider plus whether it can actually run. A non-runnable provider
+ *  would 404 on use (resolveConfig returns null), so the picker hides it; the admin
+ *  list still shows it, flagged, so the owner can add a Base URL or delete it. */
+export interface ModelProviderListItem extends ModelProviderSummary {
+  runnable: boolean;
+}
 
 /** The caller doesn't own the target provider (route → 404; no existence leak). */
 export class ModelProviderAccessError extends Error {
@@ -93,9 +108,11 @@ export class ModelProviderService {
 
   /** The caller's own providers (summaries — never the key). Providers are
    *  per-user (BYO-key): a caller never sees or manages another user's. */
-  async list(userId: string): Promise<ModelProviderSummary[]> {
+  async list(userId: string): Promise<ModelProviderListItem[]> {
     const all = await this.deps.store.listModelProviders();
-    return all.filter((p) => p.createdBy === userId);
+    return all
+      .filter((p) => p.createdBy === userId)
+      .map((p) => ({ ...p, runnable: resolvableBaseUrl(p.kind, p.baseUrl) !== null }));
   }
 
   /** Delete one of the caller's own providers; 404 for a non-owner (no leak). */
@@ -126,7 +143,7 @@ export class ModelProviderService {
     const vault = this.requireVault();
     const record = await this.deps.store.getModelProvider(id);
     if (!record || record.createdBy !== userId) return null;
-    const baseURL = record.baseUrl ?? defaultBaseFor(record.kind);
+    const baseURL = resolvableBaseUrl(record.kind, record.baseUrl);
     if (!baseURL) return null; // e.g. self-hosted with no baseUrl, or native Anthropic (later)
     const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
       apiKey: string;
