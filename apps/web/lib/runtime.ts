@@ -29,6 +29,7 @@ import { PublishedDataSourceResolver } from './data-source-resolver';
 import { DataSourceAuthoringService } from './authoring-service';
 import { CalibrationService } from './calibration-service';
 import { VerificationService } from './verification-service';
+import { InviteService } from './invite-service';
 import { ModelProviderService } from './model-provider-service';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
@@ -55,6 +56,7 @@ export interface Runtime {
   authoring: DataSourceAuthoringService;
   calibration: CalibrationService;
   verification: VerificationService;
+  invites: InviteService;
   modelProviders: ModelProviderService;
 }
 
@@ -111,8 +113,18 @@ async function build(): Promise<Runtime> {
     model: providerConfig?.model ?? 'fixture',
   });
   const verification = new VerificationService(store);
+  const invites = new InviteService({ store, auth });
 
-  return { service, auth, connections, authoring, calibration, verification, modelProviders };
+  return {
+    service,
+    auth,
+    connections,
+    authoring,
+    calibration,
+    verification,
+    invites,
+    modelProviders,
+  };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */

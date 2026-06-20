@@ -152,8 +152,24 @@ export interface MetadataStore {
   listDataSourceMemberships(
     userId: string,
   ): Promise<Array<{ dataSourceId: string; role: DataSourceRole }>>;
-  /** Grant a Data Source role (bootstrap on create; invites in B1b). */
+  /** Grant a Data Source role (bootstrap on create; invite redemption in B1b). */
   createDataSourceMembership(input: DataSourceMembershipInput): Promise<void>;
+  /** Members of a Data Source with their user details (member-management UI). */
+  listDataSourceMembers(dataSourceId: string): Promise<DataSourceMemberView[]>;
+  /** Revoke a member's role on a Data Source. */
+  removeDataSourceMembership(dataSourceId: string, userId: string): Promise<void>;
+  // --- Invites (M2-B1b): single-use, expiring, hashed token. ---
+  createUser(user: NewUser): Promise<UserRecord | null>; // null if the username is taken
+  createDataSourceInvite(input: NewDataSourceInvite): Promise<void>;
+  getDataSourceInviteByHash(tokenHash: string): Promise<DataSourceInviteRecord | null>;
+  /** Atomically claim a pending invite (returns false if already redeemed — race-safe). */
+  redeemDataSourceInvite(id: string, userId: string, at: Date): Promise<boolean>;
+  /** Not-yet-redeemed invites for a Data Source (for the pending list). */
+  listPendingDataSourceInvites(
+    dataSourceId: string,
+  ): Promise<Array<{ id: string; role: DataSourceRole; expiresAt: string; createdAt: string }>>;
+  /** Revoke a pending invite (scoped to the Data Source). */
+  deleteDataSourceInvite(dataSourceId: string, id: string): Promise<void>;
 }
 
 export type ConnectionHealth =
@@ -175,6 +191,36 @@ export interface DataSourceMembershipInput {
   userId: string;
   dataSourceId: string;
   role: DataSourceRole;
+}
+
+/** A member of a Data Source, with the user's display details (for the member UI). */
+export interface DataSourceMemberView {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: DataSourceRole;
+}
+
+/** A new single-use invite (M2-B1b). The raw token is hashed before storage. */
+export interface NewDataSourceInvite {
+  id: string;
+  dataSourceId: string;
+  role: DataSourceRole;
+  tokenHash: string;
+  createdBy: string;
+  expiresAt: Date;
+}
+
+/** A stored invite (for redeem validation + the pending list). */
+export interface DataSourceInviteRecord {
+  id: string;
+  dataSourceId: string;
+  role: DataSourceRole;
+  createdBy: string;
+  expiresAt: string;
+  redeemedBy: string | null;
+  redeemedAt: string | null;
+  createdAt: string;
 }
 
 export interface NewConnection {

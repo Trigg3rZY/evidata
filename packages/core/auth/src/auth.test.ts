@@ -18,6 +18,13 @@ class FakeStore implements AuthStore {
     this.byUsername.set(u.username, u.id);
     return Promise.resolve(rec);
   }
+  createUser(u: NewUser): Promise<UserRecord | null> {
+    if (this.byUsername.has(u.username)) return Promise.resolve(null); // username taken
+    const rec: UserRecord = { ...u, createdAt: '2026-06-19T00:00:00.000Z' };
+    this.byId.set(u.id, rec);
+    this.byUsername.set(u.username, u.id);
+    return Promise.resolve(rec);
+  }
   getUserByUsername(username: string): Promise<UserRecord | null> {
     const id = this.byUsername.get(username);
     return Promise.resolve(id ? (this.byId.get(id) ?? null) : null);

@@ -351,6 +351,33 @@ export const dataSourceMemberships = meta.table(
   (t) => [uniqueIndex('ds_member_uq').on(t.userId, t.dataSourceId)],
 );
 
+// Single-use, expiring invite to join a Data Source with a role (M2-B1b, #121).
+// Only the SHA-256 hash of the opaque token is stored (like sessions); single-use =
+// redeemedAt set on claim. No FK from token to user (the redeemer may be created on
+// redeem). createdBy/redeemedBy reference users for audit.
+export const dataSourceInvites = meta.table(
+  'data_source_invites',
+  {
+    id: text('id').primaryKey(),
+    dataSourceId: text('data_source_id')
+      .notNull()
+      .references(() => dataSources.id),
+    role: text('role', { enum: ['owner', 'admin', 'querier'] }).notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    redeemedBy: text('redeemed_by').references(() => users.id),
+    redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('ds_invite_token_uq').on(t.tokenHash),
+    index('ds_invite_ds_idx').on(t.dataSourceId),
+  ],
+);
+
 /** The full metadata schema (M0 + M1 + M2), for the migrator and typed queries. */
 export const schema = {
   investigations,
@@ -372,4 +399,5 @@ export const schema = {
   entityMappings,
   policies,
   dataSourceMemberships,
+  dataSourceInvites,
 };

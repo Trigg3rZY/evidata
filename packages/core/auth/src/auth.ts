@@ -43,6 +43,7 @@ export type AuthStore = Pick<
   MetadataStore,
   | 'countUsers'
   | 'createFirstUser'
+  | 'createUser'
   | 'getUserByUsername'
   | 'createSession'
   | 'getSessionUser'
@@ -132,6 +133,22 @@ export class AuthService {
       return null;
     }
     if (!(await this.verifyPassword(input.password, user.passwordHash))) return null;
+    const token = await this.startSession(user.id);
+    return { user: publicUser(user.id, user.username, user.displayName), token };
+  }
+
+  /** Create a non-first user (e.g. invite redemption) + start a session. Returns null
+   *  if the username is taken. NOT a public self-signup — callers gate it (an invite). */
+  async register(
+    input: Credentials & { displayName: string },
+  ): Promise<{ user: AuthedUser; token: string } | null> {
+    const user = await this.deps.store.createUser({
+      id: this.newId('usr'),
+      username: input.username,
+      displayName: input.displayName,
+      passwordHash: await this.hashPassword(input.password),
+    });
+    if (!user) return null; // username taken
     const token = await this.startSession(user.id);
     return { user: publicUser(user.id, user.username, user.displayName), token };
   }

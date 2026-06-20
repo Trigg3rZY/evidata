@@ -6,7 +6,7 @@ import { VerificationValidationError } from '@/lib/verification-service';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** List the Data Source's glossary terms + entity mappings (every status, owner-only). */
+/** List the Data Source's glossary terms + entity mappings (every status; author-capable). */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -3,9 +3,9 @@
  * glossary terms + entity mappings (e.g. AI calibration drafts) and promotes them to
  * **Verified**, edits a definition, or rejects (deletes) them. Only Verified items
  * reach the Ask model (the resolver filters to status='verified'), so this is the
- * human gate between a draft and a live answer. Owner-gated via the backing
- * Connection (the same authz as authoring/calibration). Every mutation is scoped by
- * dataSourceId, so an item id from another source can't be touched.
+ * human gate between a draft and a live answer. Gated by the `author` capability
+ * (owner/admin) via the Data Source role matrix (spec 09 §6). Every mutation is scoped
+ * by dataSourceId, so an item id from another source can't be touched.
  */
 import type { EntityMappingRecord, GlossaryTermRecord, MetadataStore } from '@evidata/ports';
 import { requireDataSourceCapability } from './authoring-service';

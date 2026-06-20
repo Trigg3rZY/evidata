@@ -51,6 +51,7 @@ describe('M0 metadata schema (spec 10)', () => {
       'connections',
       'data_source_connections',
       'data_source_contexts',
+      'data_source_invites',
       'data_source_memberships',
       'data_sources',
       'entity_mappings',

@@ -9,8 +9,9 @@
  *   model unfiltered, so calibration does NOT write it. It's returned in the result
  *   for the owner to review in the authoring form; their Save is the gate (Codex P1).
  *
- * Owner-gated via the backing Connection (same authz as authoring). The model sees
- * only structural schema (table/column names + types) — no row data, no redaction.
+ * Gated by the `author` capability (owner/admin) via the Data Source role matrix
+ * (spec 09 §6). The model sees only structural schema (table/column names + types) —
+ * no row data, no redaction.
  */
 import { randomUUID } from 'node:crypto';
 import type { Complete } from '@evidata/provider-openai';
