@@ -123,11 +123,11 @@ afterAll(async () => {
 });
 
 describe('CalibrationService (M2-B2, #120)', () => {
-  it('fixture path (no provider): derives FK mappings + an overview from the schema', async () => {
+  it('fixture path (no provider): derives FK mappings + proposes an overview (not persisted)', async () => {
     const res = await svc(null).calibrate('owner', 'ds-fix');
-    expect(res.overviewSet).toBe(true);
     expect(res.glossaryAdded).toBe(0);
     expect(res.mappingsAdded).toBe(1); // orders.customer_id → customers.id
+    expect(res.draft.overview).toContain('orders'); // proposed in the result…
 
     const maps = await store.getEntityMappings('ds-fix', 'suggested');
     expect(maps).toContainEqual({
@@ -136,10 +136,12 @@ describe('CalibrationService (M2-B2, #120)', () => {
       status: 'suggested',
       provenance: 'ai_draft',
     });
-    expect((await store.getDataSourceContext('ds-fix'))?.overview).toContain('orders');
+    // …but the overview is NOT written to live context (the resolver feeds it
+    // unfiltered; the owner reviews + Saves — Codex P1).
+    expect(await store.getDataSourceContext('ds-fix')).toBeNull();
   });
 
-  it('model path: persists drafted glossary + mappings as Suggested/ai_draft', async () => {
+  it('model path: persists drafted glossary + mappings as Suggested/ai_draft; overview not written', async () => {
     const res = await svc(
       fakeComplete({
         overview: 'Orders and customers.',
@@ -147,7 +149,9 @@ describe('CalibrationService (M2-B2, #120)', () => {
         mappings: [{ from: 'Customer', to: 'customers.id' }],
       }),
     ).calibrate('owner', 'ds-model');
-    expect(res).toMatchObject({ overviewSet: true, glossaryAdded: 1, mappingsAdded: 1 });
+    expect(res).toMatchObject({ glossaryAdded: 1, mappingsAdded: 1 });
+    expect(res.draft.overview).toBe('Orders and customers.');
+    expect(await store.getDataSourceContext('ds-model')).toBeNull(); // overview not persisted
 
     const terms = await store.getGlossaryTerms('ds-model', 'suggested');
     expect(terms).toContainEqual({
@@ -206,17 +210,18 @@ describe('CalibrationService (M2-B2, #120)', () => {
     expect(suggested.some((t) => t.term === 'revenue')).toBe(true);
   });
 
-  it('never clobbers an owner-written overview', async () => {
+  it('never writes the overview to live context (owner Saves it)', async () => {
     await store.upsertDataSourceContext({
       id: 'ctx-ovr',
       dataSourceId: 'ds-ovr',
       overview: 'Hand-written.',
       payload: {},
     });
-    const res = await svc(
-      fakeComplete({ overview: 'AI overview', glossary: [], mappings: [] }),
-    ).calibrate('owner', 'ds-ovr');
-    expect(res.overviewSet).toBe(false);
+    await svc(fakeComplete({ overview: 'AI overview', glossary: [], mappings: [] })).calibrate(
+      'owner',
+      'ds-ovr',
+    );
+    // Calibration leaves the stored overview untouched — it only proposes (in `draft`).
     expect((await store.getDataSourceContext('ds-ovr'))?.overview).toBe('Hand-written.');
   });
 
