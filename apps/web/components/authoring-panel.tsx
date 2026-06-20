@@ -30,6 +30,14 @@ export function AuthoringPanel({
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [busy, setBusy] = useState(false);
+  // AI calibration (B2): drafts Suggested context/glossary/mappings from the schema.
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibResult, setCalibResult] = useState<{
+    overviewSet: boolean;
+    glossaryAdded: number;
+    mappingsAdded: number;
+  } | null>(null);
+  const [calibError, setCalibError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +126,28 @@ export function AuthoringPanel({
     }
   };
 
+  const calibrate = async (): Promise<void> => {
+    setCalibrating(true);
+    setCalibResult(null);
+    setCalibError(false);
+    const res = await fetch(`/api/data-sources/${encodeURIComponent(id)}/calibrate`, {
+      method: 'POST',
+    }).catch(() => null);
+    setCalibrating(false);
+    if (res?.ok) {
+      setCalibResult(
+        (await res.json()) as {
+          overviewSet: boolean;
+          glossaryAdded: number;
+          mappingsAdded: number;
+        },
+      );
+      setReload((n) => n + 1); // a drafted overview may now populate the field
+    } else {
+      setCalibError(true);
+    }
+  };
+
   const setLifecycle = async (lifecycle: 'published' | 'draft'): Promise<void> => {
     setBusy(true);
     const res = await fetch(`/api/data-sources/${encodeURIComponent(id)}/lifecycle`, {
@@ -148,6 +178,32 @@ export function AuthoringPanel({
         >
           {isPublished ? t('authoringPublished') : t('authoringDraft')}
         </span>
+      </div>
+
+      {/* AI calibration (B2): draft Suggested context from the schema. */}
+      <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void calibrate()}
+            disabled={calibrating || tables.length === 0}
+          >
+            {calibrating ? t('authoringCalibrating') : t('authoringCalibrate')}
+          </Button>
+          <span className="text-xs text-muted-foreground">{t('authoringCalibrateHint')}</span>
+        </div>
+        {calibResult && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t('authoringCalibrateDone')} · {calibResult.glossaryAdded}{' '}
+            {t('authoringCalibrateGlossary')} · {calibResult.mappingsAdded}{' '}
+            {t('authoringCalibrateMappings')}
+            {calibResult.overviewSet ? ` · ${t('authoringCalibrateOverview')}` : ''}
+          </p>
+        )}
+        {calibError && (
+          <p className="mt-2 text-xs text-destructive">{t('authoringCalibrateError')}</p>
+        )}
       </div>
 
       {/* Included tables */}

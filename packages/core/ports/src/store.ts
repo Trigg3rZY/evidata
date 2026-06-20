@@ -132,6 +132,10 @@ export interface MetadataStore {
   upsertDataSourceContext(input: DataSourceContextInput): Promise<void>;
   /** Set the safety Policy for a DataSource. */
   upsertPolicy(input: PolicyInput): Promise<void>;
+  /** Append glossary terms (e.g. AI calibration drafts as Suggested). No-op on []. */
+  addGlossaryTerms(terms: NewGlossaryTerm[]): Promise<void>;
+  /** Append entity mappings (e.g. AI calibration drafts as Suggested). No-op on []. */
+  addEntityMappings(mappings: NewEntityMapping[]): Promise<void>;
   /** Transition a DataSource's lifecycle (draft → published → archived). */
   setDataSourceLifecycle(dataSourceId: string, lifecycle: DataSourceLifecycle): Promise<void>;
 }
@@ -309,7 +313,25 @@ export interface GlossaryTermRecord {
   provenance: Provenance;
 }
 
+export interface NewGlossaryTerm {
+  id: string;
+  dataSourceId: string;
+  term: string;
+  definition: string;
+  status: GlossaryStatus;
+  provenance: Provenance;
+}
+
 export interface EntityMappingRecord {
+  fromRef: string;
+  toRef: string;
+  status: GlossaryStatus;
+  provenance: Provenance;
+}
+
+export interface NewEntityMapping {
+  id: string;
+  dataSourceId: string;
   fromRef: string;
   toRef: string;
   status: GlossaryStatus;

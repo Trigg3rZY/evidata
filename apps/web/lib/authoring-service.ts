@@ -22,6 +22,23 @@ export class AuthoringAccessError extends Error {
   }
 }
 
+/** Resolve a Data Source and authorize the caller: they must have a role on its
+ *  backing Connection (the same authz the query path uses). A non-owner — or a
+ *  source with no backing connection (e.g. the Sample) — gets AuthoringAccessError
+ *  (→ 404, no existence leak). Shared by authoring + calibration so the gate can't
+ *  drift. */
+export async function authorizeDataSourceAccess(
+  store: Pick<MetadataStore, 'getDataSource' | 'getConnectionRole'>,
+  userId: string,
+  dataSourceId: string,
+): Promise<{ ds: DataSourceRecord; connectionId: string }> {
+  const ds = await store.getDataSource(dataSourceId);
+  if (!ds || !ds.connectionId) throw new AuthoringAccessError();
+  const role = await store.getConnectionRole(userId, ds.connectionId);
+  if (!role) throw new AuthoringAccessError();
+  return { ds, connectionId: ds.connectionId };
+}
+
 /** Publish blocked because the draft isn't ready (route → 409). */
 export class PublishReadinessError extends Error {
   constructor(readonly missing: string[]) {
@@ -214,16 +231,11 @@ export class DataSourceAuthoringService {
   }
 
   /** Resolve + authorize: the caller must have a role on the backing connection. */
-  private async authorize(
+  private authorize(
     userId: string,
     dataSourceId: string,
   ): Promise<{ ds: DataSourceRecord; connectionId: string }> {
-    const ds = await this.store.getDataSource(dataSourceId);
-    // No backing connection → not an authorable real source (e.g. the Sample).
-    if (!ds || !ds.connectionId) throw new AuthoringAccessError();
-    const role = await this.store.getConnectionRole(userId, ds.connectionId);
-    if (!role) throw new AuthoringAccessError();
-    return { ds, connectionId: ds.connectionId };
+    return authorizeDataSourceAccess(this.store, userId, dataSourceId);
   }
 
   private async checkReadiness(
