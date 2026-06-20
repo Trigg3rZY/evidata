@@ -40,11 +40,13 @@ Mirrors Connections (`08 §3/§6`). Table `model_providers` (migration `0004`):
   in a summary. Decrypted only transiently on the resolve path.
 - **Per-user (BYO-key):** a caller only sees/manages/runs **their own** providers
   (`createdBy`); cross-user access 404s (no existence leak).
-- `kind` ∈ `openai | deepseek | google | openai-compatible | anthropic`. A kind maps to
-  a default OpenAI-compatible base URL (`openai`→api.openai.com/v1,
-  `deepseek`→api.deepseek.com, `google`→…/v1beta/openai/); `openai-compatible` and
-  self-hosted require an explicit Base URL. `anthropic` is registrable for
-  forward-compat but **not yet runnable** (no native adapter — deferred).
+- `kind` ∈ `openai | deepseek | google | openai-compatible`. A kind maps to a default
+  OpenAI-compatible base URL (`openai`→api.openai.com/v1, `deepseek`→api.deepseek.com,
+  `google`→…/v1beta/openai/); `openai-compatible` and self-hosted require an explicit
+  Base URL. **Native non-OpenAI vendors (e.g. Anthropic's Messages API) are not offered
+  yet** — they need a per-protocol adapter, and routing them through the
+  openai-compatible transport would fail at runtime; a kind is added when its adapter
+  lands (§7). An Anthropic *OpenAI-compatible proxy* works today as `openai-compatible`.
 - **Runnable flag:** `list()` derives `runnable` = "a base URL resolves" (explicit or
   vendor default), sharing `resolveConfig`'s logic. The picker offers only runnable
   models; the admin list shows the rest flagged "Needs base URL".
