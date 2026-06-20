@@ -2,6 +2,7 @@
   "name": "evidata",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Self-hosted AI Data Portal — trusted, evidence-backed Answers over controlled Data Sources.",
   "type": "module",
   "packageManager": "pnpm@10.28.1",
