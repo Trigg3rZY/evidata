@@ -41,6 +41,8 @@ import type {
   MetadataStore,
   NewConnection,
   NewDataSourceRecord,
+  NewEntityMapping,
+  NewGlossaryTerm,
   NewInvestigation,
   NewModelProvider,
   NewSchemaSnapshotRecord,
@@ -666,6 +668,38 @@ export class DrizzleMetadataStore implements MetadataStore {
   }
 
   // --- M2 authoring writes (spec 09 §5/§7). Upserts keyed by the source's unique. ---
+
+  async addGlossaryTerms(terms: NewGlossaryTerm[]): Promise<void> {
+    if (terms.length === 0) return;
+    const now = this.now();
+    await this.db.insert(businessGlossaryTerms).values(
+      terms.map((t) => ({
+        id: t.id,
+        dataSourceId: t.dataSourceId,
+        term: t.term,
+        definition: t.definition,
+        status: t.status,
+        provenance: t.provenance,
+        createdAt: now,
+      })),
+    );
+  }
+
+  async addEntityMappings(mappings: NewEntityMapping[]): Promise<void> {
+    if (mappings.length === 0) return;
+    const now = this.now();
+    await this.db.insert(entityMappings).values(
+      mappings.map((m) => ({
+        id: m.id,
+        dataSourceId: m.dataSourceId,
+        fromRef: m.fromRef,
+        toRef: m.toRef,
+        status: m.status,
+        provenance: m.provenance,
+        createdAt: now,
+      })),
+    );
+  }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
     await this.db

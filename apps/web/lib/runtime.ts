@@ -21,11 +21,13 @@ import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import {
   OpenAIAgentProvider,
   openAIConfigFromEnv,
+  sdkComplete,
   type OpenAIProviderConfig,
 } from '@evidata/provider-openai';
 import { pickScenario } from './ask-stream';
 import { PublishedDataSourceResolver } from './data-source-resolver';
 import { DataSourceAuthoringService } from './authoring-service';
+import { CalibrationService } from './calibration-service';
 import { ModelProviderService } from './model-provider-service';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
@@ -50,6 +52,7 @@ export interface Runtime {
   auth: AuthService;
   connections: ConnectionService;
   authoring: DataSourceAuthoringService;
+  calibration: CalibrationService;
   modelProviders: ModelProviderService;
 }
 
@@ -98,8 +101,15 @@ async function build(): Promise<Runtime> {
   });
   const auth = new AuthService({ store });
   const authoring = new DataSourceAuthoringService(store);
+  // Calibration uses the configured env provider (real when AGENT_PROVIDER=openai,
+  // else a deterministic schema-only fixture draft); it drafts Suggested context.
+  const calibration = new CalibrationService({
+    store,
+    complete: providerConfig ? sdkComplete(providerConfig) : null,
+    model: providerConfig?.model ?? 'fixture',
+  });
 
-  return { service, auth, connections, authoring, modelProviders };
+  return { service, auth, connections, authoring, calibration, modelProviders };
 }
 
 /** Lazily build (and memoize) the runtime so module import stays cheap (no build-time DB). */
