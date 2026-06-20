@@ -11,10 +11,11 @@ interface CreateBody {
 }
 
 /** List pending invites for a Data Source (manage_members). */
-export function GET(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
-  return withMembers(req, async (user, invites) =>
-    invites.listPending(user.id, (await params).id),
-  );
+export function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return withMembers(req, async (user, invites) => invites.listPending(user.id, (await params).id));
 }
 
 /** Mint a single-use invite link for a role (manage_members; owner-grant = owner only). */
