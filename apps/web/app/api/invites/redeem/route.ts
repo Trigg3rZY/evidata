@@ -21,7 +21,9 @@ export async function POST(req: Request): Promise<Response> {
   const user = await currentUser(req);
   const s = body?.signup;
   const signup =
-    typeof s?.username === 'string' && typeof s?.displayName === 'string' && typeof s?.password === 'string'
+    typeof s?.username === 'string' &&
+    typeof s?.displayName === 'string' &&
+    typeof s?.password === 'string'
       ? { username: s.username.trim(), displayName: s.displayName.trim(), password: s.password }
       : undefined;
 
