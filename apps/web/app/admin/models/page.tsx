@@ -24,6 +24,9 @@ interface ProviderSummary {
   model: string;
   params: ModelParams;
   capabilities: ModelCapabilities;
+  /** False when no base URL resolves (e.g. openai-compatible with none, or a native
+   *  vendor with no adapter yet): it would 404 on use, so it's hidden from the picker. */
+  runnable: boolean;
 }
 
 // Mirrors the API allowlist (apps/web/app/api/model-providers/route.ts). Vendor
@@ -155,6 +158,14 @@ export default function ModelsAdminPage() {
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {!m.runnable && (
+                            <span
+                              className="rounded-full border border-border px-2 py-0.5 text-xs text-status-blocked"
+                              title="No base URL resolves — add a Base URL to use this model."
+                            >
+                              Needs base URL
+                            </span>
+                          )}
                           {m.params.effort && (
                             <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                               {m.params.effort}

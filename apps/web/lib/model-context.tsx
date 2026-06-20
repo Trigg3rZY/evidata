@@ -15,6 +15,9 @@ export interface ModelItem {
   name: string;
   kind: string;
   model: string;
+  /** Whether the provider can actually run (has a resolvable base URL). The picker
+   *  only keeps runnable ones — a non-runnable selection would 404 every Ask. */
+  runnable: boolean;
 }
 
 interface ModelsValue {
@@ -45,9 +48,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     void fetch('/api/model-providers')
       .then((r) => (r.ok ? (r.json() as Promise<ModelItem[]>) : []))
       .then((d) => {
-        const list = Array.isArray(d) ? d : [];
+        // Offer only runnable models — a non-runnable one (no resolvable base URL)
+        // would 404 every Ask, so it must never be selectable.
+        const list = (Array.isArray(d) ? d : []).filter((m) => m.runnable);
         setModels(list);
-        // Drop a selection that no longer exists (e.g. the model was deleted).
+        // Drop a selection that's gone or no longer runnable (deleted / base URL removed).
         setActiveId((cur) => (cur && list.some((m) => m.id === cur) ? cur : null));
       })
       .catch(() => {});
