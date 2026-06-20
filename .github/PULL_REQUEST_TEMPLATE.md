@@ -19,4 +19,6 @@
 
 <!-- The settled goal this is measured against (what "done" requires). -->
 
+<!-- `Closes #N` if this PR fully resolves the issue; use `Part of #N` / `Refs #N`
+     for partial work on an umbrella so it isn't auto-closed early (see AGENTS.md). -->
 Closes #
