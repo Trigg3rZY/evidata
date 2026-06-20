@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Database, Plus } from 'lucide-react';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -30,7 +29,6 @@ export function TopNav({
   onNewChat?: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
-  const router = useRouter();
   const { dataSources, activeId } = useDataSources();
   const src = dataSources.find((d) => d.id === activeId);
   // Login status (issue #91): undefined = loading, null = signed out. The Sample
@@ -53,7 +51,10 @@ export function TopNav({
 
   const signOut = async (): Promise<void> => {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
-    router.push('/login');
+    // Full-page navigation (not router.push): tears down the auth-scoped providers
+    // (data sources, models) so the previous user's names/ids can't linger for a
+    // signed-out visitor or the next account in this tab (Codex P1).
+    window.location.href = '/login';
   };
   // The sample keeps its localized name; any real source shows its own name.
   const srcName = src && src.id !== SAMPLE_DATA_SOURCE_ID ? src.name : t('sample');

@@ -32,7 +32,10 @@ export default function LoginPage() {
       body: JSON.stringify({ username, password }),
     });
     setBusy(false);
-    if (res.ok) router.push('/admin/connections');
+    // Full-page navigation (not router.push): the persistent auth-scoped providers
+    // (data sources, models) only fetch on mount, so a hard load makes them reflect
+    // the newly signed-in user instead of any prior/empty state (Codex P1).
+    if (res.ok) window.location.href = '/admin/connections';
     else setError('Invalid username or password.');
   };
 
