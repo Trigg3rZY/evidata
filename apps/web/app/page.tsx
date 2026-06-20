@@ -1,17 +1,25 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Evidence } from '@evidata/answer-contract';
 import { AppShell } from '@/components/app-shell';
 import { EvidenceInspector } from '@/components/evidence-inspector';
 import { Sidebar } from '@/components/sidebar';
 import { Thread } from '@/components/thread';
 import { useDataSources } from '@/lib/data-source-context';
+import { useModels } from '@/lib/model-context';
 import { useI18n } from '@/lib/i18n';
 
 export default function Home() {
   const { t } = useI18n();
   const { activeId } = useDataSources();
+  const { activeId: activeModelId, refresh: refreshModels } = useModels();
+  // The provider context mounts once with the persistent layout, so re-fetch the
+  // model list whenever the workbench is (re)entered — a model just registered in
+  // Admin then appears in the picker without a full reload.
+  useEffect(() => {
+    refreshModels();
+  }, [refreshModels]);
   // The selected Investigation drives the Thread (via `key`): an id loads that saved
   // thread; `null` is a new conversation. `newKey` forces a fresh new-chat mount.
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -50,6 +58,7 @@ export default function Home() {
             key={selectedId ?? `new-${newKey}`}
             initialInvestigationId={selectedId}
             dataSourceId={activeId}
+            modelProviderId={activeModelId}
             onClear={newChat}
             onCreated={refreshList}
             onInspect={setInspected}

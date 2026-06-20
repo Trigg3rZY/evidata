@@ -56,6 +56,7 @@ export function Thread({
   onClear,
   initialInvestigationId,
   dataSourceId,
+  modelProviderId,
   onCreated,
   onInspect,
 }: {
@@ -65,6 +66,9 @@ export function Thread({
   /** The active source for a NEW question (owned by the shell, shown in the top nav). A
    *  follow-up ignores it server-side — the source is bound to the Investigation. */
   dataSourceId: string;
+  /** Selected model for the turn (epic #106); null/undefined = the server default.
+   *  Sent per turn as `modelProviderId`. (Per-investigation binding lands later.) */
+  modelProviderId?: string | null;
   /** Called after an Answer settles, so the history rail can refresh. */
   onCreated?: () => void;
   /** Open an evidence item in the right-pane inspector (issue #49). */
@@ -160,14 +164,14 @@ export function Thread({
       onClear();
       return;
     }
-    void ask(q, dataSourceId, lang, investigationId ?? undefined);
+    void ask(q, dataSourceId, lang, investigationId ?? undefined, false, modelProviderId);
   };
   // Regenerate the latest answer in place (issues #56/#64): same question, rerun=true.
   // `regenerating` swaps the latest answer for live progress until the new one lands.
   const rerun = (q: string): void => {
     rerunRef.current = true;
     setRegenerating(true);
-    void ask(q, dataSourceId, lang, investigationId ?? undefined, true);
+    void ask(q, dataSourceId, lang, investigationId ?? undefined, true, modelProviderId);
   };
   const isEmpty = history.length === 0 && status === 'idle';
 

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Database, Plus } from 'lucide-react';
 import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import { ModeToggle } from '@/components/mode-toggle';
+import { ModelPicker } from '@/components/model-picker';
 import { Button } from '@/components/ui/button';
 import { useDataSources } from '@/lib/data-source-context';
 import { useI18n } from '@/lib/i18n';
@@ -69,6 +70,7 @@ export function TopNav({
           <Database className="h-3 w-3 shrink-0" aria-hidden />
           <span className="truncate">{srcName}</span>
         </Link>
+        <ModelPicker />
         {onNewChat && (
           <Button variant="ghost" size="icon" className="md:hidden" onClick={onNewChat}>
             <Plus className="h-4 w-4" aria-hidden />

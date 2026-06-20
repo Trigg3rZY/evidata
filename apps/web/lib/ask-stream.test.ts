@@ -50,6 +50,19 @@ describe('ask-stream helpers', () => {
       language: 'zh-CN',
     });
   });
+
+  it('carries a selected modelProviderId, omitting it when blank/non-string (epic #106)', () => {
+    expect(parseAskBody({ question: 'hi', modelProviderId: 'mp_1' })).toMatchObject({
+      modelProviderId: 'mp_1',
+    });
+    // Blank / wrong-typed selections are dropped (so the route falls back to the default).
+    expect(parseAskBody({ question: 'hi', modelProviderId: '' })).not.toHaveProperty(
+      'modelProviderId',
+    );
+    expect(parseAskBody({ question: 'hi', modelProviderId: 42 })).not.toHaveProperty(
+      'modelProviderId',
+    );
+  });
 });
 
 describe('askStream (integration over the real Sample)', () => {

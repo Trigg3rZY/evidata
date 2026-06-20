@@ -102,6 +102,7 @@ export interface UseInvestigationStream extends StreamState {
     language?: Lang,
     investigationId?: string,
     rerun?: boolean,
+    modelProviderId?: string | null,
   ) => Promise<void>;
   reset: () => void;
   /** Interrupt the in-flight turn: aborts the request (the server stops too) and marks it stopped. */
@@ -151,6 +152,7 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
       language: Lang = 'en',
       investigationId?: string,
       rerun?: boolean,
+      modelProviderId?: string | null,
     ) => {
       controllerRef.current?.abort(); // supersede any in-flight turn
       const controller = new AbortController();
@@ -170,6 +172,7 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
             dataSourceId,
             language,
             ...(rerun ? { rerun: true } : {}),
+            ...(modelProviderId ? { modelProviderId } : {}),
           }),
           signal: controller.signal,
         });
