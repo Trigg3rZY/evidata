@@ -41,9 +41,9 @@ export function MembersPanel({ id }: { id: string }) {
   // Bumped after each mutation to refetch; also refetches when `id` changes.
   const [reload, setReload] = useState(0);
 
-  // Load members + pending invites. A cancelled flag drops a stale response when `id`
-  // changes (AuthoringPanel isn't remounted on source switch) or the panel unmounts
-  // mid-flight — otherwise a slow load for the previous source could overwrite this one.
+  // Load members + pending invites. A cancelled flag drops a stale response if the
+  // panel unmounts mid-flight (the parent keys this by source, so a source switch
+  // remounts rather than mutating `id`) — avoiding a setState on an unmounted panel.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
