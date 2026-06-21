@@ -377,8 +377,11 @@ export function AuthoringPanel({
         </p>
       )}
 
-      {/* Members & access (B1b-2): list/remove members, mint + revoke invite links. */}
-      <MembersPanel id={id} />
+      {/* Members & access (B1b-2): list/remove members, mint + revoke invite links.
+          Keyed by `id` so switching sources remounts it with fresh state — no member
+          rows or minted invite link from the previous source can linger under the new
+          one (Codex P2: a stale access link is sensitive). */}
+      <MembersPanel key={id} id={id} />
     </section>
   );
 }
