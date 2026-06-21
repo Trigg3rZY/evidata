@@ -60,7 +60,14 @@ export class ModelProviderAccessError extends Error {
 /** Result of a reachability probe (#119): a coarse status only — never the provider's
  *  response body, which could carry sensitive detail. `unconfigured` = no base URL
  *  resolves (same condition as `runnable: false`); `unauthorized` = the key was
- *  rejected; `unreachable` = the request never completed (DNS/network/timeout). */
+ *  rejected; `unreachable` = the request never completed (DNS/network/timeout).
+ *
+ *  Scope note: this validates the base URL + key, NOT that the registered `model` name
+ *  is accepted by chat/completions. A `GET /models` catalog check is unreliable for
+ *  that — e.g. DeepSeek's catalog omits the valid `deepseek-chat` alias — and the only
+ *  authoritative model check is a billable completion, out of scope for this cheap
+ *  probe. So `ok` means "endpoint + key reachable", and a wrong model name still
+ *  surfaces at ask time (resolveConfig → the run path). */
 export type ModelProviderTestStatus =
   | 'ok'
   | 'unauthorized'
@@ -77,7 +84,7 @@ const PROBE_TIMEOUT_MS = 8000;
 
 /** Probe an OpenAI-compatible endpoint with a cheap, token-free `GET /models` call —
  *  validates the base URL + key without spending a completion. Only the coarse outcome
- *  (and the numeric HTTP status) leaves this function. */
+ *  (and the numeric HTTP status) leaves this function — never the response body. */
 async function probeModelProvider(
   baseURL: string,
   apiKey: string,
