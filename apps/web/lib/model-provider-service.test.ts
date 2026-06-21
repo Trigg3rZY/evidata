@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from '@evidata/db';
 import { credentialVaultFromEnv } from '@evidata/secrets';
+import type { CredentialVault } from '@evidata/ports';
 import {
   ModelProviderAccessError,
   ModelProviderService,
@@ -11,6 +12,7 @@ import {
 
 let handle: MetadataDbHandle;
 let store: DrizzleMetadataStore;
+let vault: CredentialVault;
 let svc: ModelProviderService;
 
 const input = (over: Partial<CreateModelProviderInput> = {}): CreateModelProviderInput => ({
@@ -24,10 +26,23 @@ const input = (over: Partial<CreateModelProviderInput> = {}): CreateModelProvide
   ...over,
 });
 
+/** A typed fetch stub for the reachability probe: `respond` returns the canned
+ *  Response (or throws to simulate a network failure → a rejected promise). */
+function fetchStub(respond: (url: string, init?: RequestInit) => Response): typeof fetch {
+  return (info, init) => {
+    const url = typeof info === 'string' ? info : info instanceof URL ? info.href : info.url;
+    try {
+      return Promise.resolve(respond(url, init));
+    } catch (e) {
+      return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+    }
+  };
+}
+
 beforeAll(async () => {
   handle = await createMetadataDb();
   store = new DrizzleMetadataStore(handle.db);
-  const vault = credentialVaultFromEnv({ APP_ENCRYPTION_KEY: randomBytes(32).toString('base64') });
+  vault = credentialVaultFromEnv({ APP_ENCRYPTION_KEY: randomBytes(32).toString('base64') });
   svc = new ModelProviderService({ store, vault });
   await store.createFirstUser({
     id: 'owner',
@@ -155,5 +170,65 @@ describe('ModelProviderService (epic #106)', () => {
     );
     expect(await svc.resolveConfig('owner', p.id)).toBeNull();
     await svc.remove('owner', p.id);
+  });
+
+  it('test() probes GET {base}/models with the decrypted key and maps the outcome (#119)', async () => {
+    let lastUrl = '';
+    let lastAuth: string | undefined;
+    const fetchImpl = fetchStub((url, init) => {
+      lastUrl = url;
+      lastAuth = (init?.headers as Record<string, string> | undefined)?.authorization;
+      return new Response('{"data":[]}', { status: 200 });
+    });
+    const probeSvc = new ModelProviderService({ store, vault, fetchImpl });
+    const p = await svc.create('owner', input({ name: 'Probe', kind: 'deepseek', baseUrl: null }));
+
+    expect(await probeSvc.test('owner', p.id)).toEqual({ status: 'ok' });
+    // Cheap, token-free GET against the vendor-default base, with the (decrypted) key.
+    expect(lastUrl).toBe('https://api.deepseek.com/models');
+    expect(lastAuth).toBe('Bearer sk-secret-123');
+
+    // Owner-gated: a non-owner gets 404, never a cross-user probe.
+    await expect(probeSvc.test('stranger', p.id)).rejects.toBeInstanceOf(ModelProviderAccessError);
+    await svc.remove('owner', p.id);
+  });
+
+  it('test() reports unauthorized / unreachable / unconfigured (#119)', async () => {
+    const p = await svc.create('owner', input({ name: 'Auth', kind: 'deepseek', baseUrl: null }));
+
+    const reject = new ModelProviderService({
+      store,
+      vault,
+      fetchImpl: fetchStub(() => new Response(null, { status: 401 })),
+    });
+    expect(await reject.test('owner', p.id)).toEqual({ status: 'unauthorized', httpStatus: 401 });
+
+    const down = new ModelProviderService({
+      store,
+      vault,
+      fetchImpl: fetchStub(() => {
+        throw new Error('network down'); // must collapse to a coarse status, never leak
+      }),
+    });
+    expect(await down.test('owner', p.id)).toEqual({ status: 'unreachable' });
+    await svc.remove('owner', p.id);
+
+    // No base URL resolves → nothing to probe; never calls fetch.
+    let called = false;
+    const unconfigured = new ModelProviderService({
+      store,
+      vault,
+      fetchImpl: fetchStub(() => {
+        called = true;
+        return new Response(null, { status: 200 });
+      }),
+    });
+    const nb = await svc.create(
+      'owner',
+      input({ name: 'NoBaseProbe', kind: 'openai-compatible', baseUrl: null }),
+    );
+    expect(await unconfigured.test('owner', nb.id)).toEqual({ status: 'unconfigured' });
+    expect(called).toBe(false);
+    await svc.remove('owner', nb.id);
   });
 });

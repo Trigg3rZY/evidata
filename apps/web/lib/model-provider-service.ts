@@ -57,6 +57,53 @@ export class ModelProviderAccessError extends Error {
   }
 }
 
+/** Result of a reachability probe (#119): a coarse status only — never the provider's
+ *  response body, which could carry sensitive detail. `unconfigured` = no base URL
+ *  resolves (same condition as `runnable: false`); `unauthorized` = the key was
+ *  rejected; `unreachable` = the request never completed (DNS/network/timeout). */
+export type ModelProviderTestStatus =
+  | 'ok'
+  | 'unauthorized'
+  | 'unreachable'
+  | 'error'
+  | 'unconfigured';
+export interface ModelProviderTestResult {
+  status: ModelProviderTestStatus;
+  /** The provider's HTTP status for an `error`/`unauthorized` (a number is safe). */
+  httpStatus?: number;
+}
+
+const PROBE_TIMEOUT_MS = 8000;
+
+/** Probe an OpenAI-compatible endpoint with a cheap, token-free `GET /models` call —
+ *  validates the base URL + key without spending a completion. Only the coarse outcome
+ *  (and the numeric HTTP status) leaves this function. */
+async function probeModelProvider(
+  baseURL: string,
+  apiKey: string,
+  fetchImpl: typeof fetch,
+): Promise<ModelProviderTestResult> {
+  const url = `${baseURL.replace(/\/+$/, '')}/models`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetchImpl(url, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+  } catch {
+    return { status: 'unreachable' }; // never surface the thrown error (may leak the URL/key)
+  } finally {
+    clearTimeout(timer);
+  }
+  if (res.ok) return { status: 'ok' };
+  if (res.status === 401 || res.status === 403)
+    return { status: 'unauthorized', httpStatus: res.status };
+  return { status: 'error', httpStatus: res.status };
+}
+
 export interface CreateModelProviderInput {
   name: string;
   /** An offered kind — see MODEL_KINDS ('openai' | 'deepseek' | 'google' |
@@ -80,13 +127,17 @@ export interface ModelProviderServiceDeps {
   /** Null when APP_ENCRYPTION_KEY is unset — create/decrypt then error clearly. */
   vault: CredentialVault | null;
   newId?: (prefix: string) => string;
+  /** Injectable for tests; defaults to the global fetch (the reachability probe). */
+  fetchImpl?: typeof fetch;
 }
 
 export class ModelProviderService {
   private readonly newId: (prefix: string) => string;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly deps: ModelProviderServiceDeps) {
     this.newId = deps.newId ?? ((p) => `${p}_${randomUUID()}`);
+    this.fetchImpl = deps.fetchImpl ?? ((...args) => fetch(...args));
   }
 
   /** Register a provider, encrypting its API key under AAD = the provider id. */
@@ -123,6 +174,22 @@ export class ModelProviderService {
     if (!record || record.createdBy !== userId) throw new ModelProviderAccessError();
     await this.deps.store.deleteModelProvider(id);
     return { ok: true };
+  }
+
+  /** Reachability/health probe for one of the caller's own providers (#119): a quick
+   *  key/endpoint check so a misconfigured model is visible before a question fails.
+   *  Owner-gated (404 for a non-owner, no key use across users); ephemeral (not
+   *  persisted). `unconfigured` when no base URL resolves (nothing to probe). */
+  async test(userId: string, id: string): Promise<ModelProviderTestResult> {
+    const vault = this.requireVault();
+    const record = await this.deps.store.getModelProvider(id);
+    if (!record || record.createdBy !== userId) throw new ModelProviderAccessError();
+    const baseURL = resolvableBaseUrl(record.kind, record.baseUrl);
+    if (!baseURL) return { status: 'unconfigured' };
+    const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
+      apiKey: string;
+    };
+    return probeModelProvider(baseURL, apiKey, this.fetchImpl);
   }
 
   /** Decrypt the API key for a provider — server-internal (the agent resolve path);
