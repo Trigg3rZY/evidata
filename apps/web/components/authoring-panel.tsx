@@ -5,6 +5,7 @@ import type { EditableDataSource, PolicyForm } from '@/lib/authoring-service';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { ContextReview } from '@/components/context-review';
+import { MembersPanel } from '@/components/members-panel';
 
 /**
  * Owner-only authoring panel for the Data Sources detail page (M2-S3, spec 09 §5/§7):
@@ -375,6 +376,9 @@ export function AuthoringPanel({
           {t('authoringNotReady')} {data.readiness.missing.join(' · ')}
         </p>
       )}
+
+      {/* Members & access (B1b-2): list/remove members, mint + revoke invite links. */}
+      <MembersPanel id={id} />
     </section>
   );
 }
