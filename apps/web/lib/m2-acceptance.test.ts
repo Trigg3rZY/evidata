@@ -17,6 +17,7 @@ import { AuthService } from '@evidata/auth';
 import { canDataSource, type DataSourceCapability } from './authz';
 import { AuthoringAccessError, DataSourceAuthoringService } from './authoring-service';
 import { InviteService } from './invite-service';
+import { PublishedDataSourceResolver } from './data-source-resolver';
 
 const blob = { v: 1, keyId: 'k1', iv: 'a', ciphertext: 'b', authTag: 'c' };
 const DS = 'ds-accept';
@@ -25,12 +26,22 @@ let handle: MetadataDbHandle;
 let store: DrizzleMetadataStore;
 let invites: InviteService;
 let authoring: DataSourceAuthoringService;
+let resolver: PublishedDataSourceResolver;
 
 beforeAll(async () => {
   handle = await createMetadataDb();
   store = new DrizzleMetadataStore(handle.db);
   invites = new InviteService({ store, auth: new AuthService({ store }) });
   authoring = new DataSourceAuthoringService(store);
+  // The published-source resolver — its query gate is (DS membership ∧ `query`). `list`
+  // never builds a connector, so it proves the gate hermetically; `connectorFor` would
+  // only run on a fully-resolved query (covered with real Postgres in the integration
+  // test), so a stub that throws is never reached here.
+  resolver = new PublishedDataSourceResolver(
+    store,
+    { connectorFor: () => Promise.reject(new Error('no live Postgres in the hermetic test')) },
+    new Set(),
+  );
 
   await store.createFirstUser({
     id: 'owner',
@@ -50,8 +61,18 @@ beforeAll(async () => {
     health: 'Healthy',
     createdBy: 'owner',
   });
-  // A published Data Source the owner owns (the surface the matrix is enforced on).
+  // A published Data Source the owner owns (the surface the matrix is enforced on),
+  // bound to the connection + scoped — so the resolver reaches its authz gate (rather
+  // than bailing earlier on a missing binding) for the negative cases.
   await store.createDataSource({ id: DS, name: 'PG', kind: 'postgres', connectionId: 'c1' });
+  await store.upsertDataSourceConnection({
+    id: 'dsc1',
+    dataSourceId: DS,
+    connectionId: 'c1',
+    alias: null,
+    includedTables: ['customers'],
+    fieldRules: {},
+  });
   await store.setDataSourceLifecycle(DS, 'published');
   await store.createDataSourceMembership({
     id: 'm-own',
@@ -79,10 +100,12 @@ describe('M2 acceptance — multi-user trust boundary (spec 09 §8)', () => {
     // 2) The Querier is a member with exactly the 'querier' role.
     expect(await store.getDataSourceRole(quinn.id, DS)).toBe('querier');
 
-    // 3) The capability matrix: a Querier may query, nothing else. The resolver's query
-    //    gate is exactly (membership present ∧ `query`) — both hold here; the real
-    //    read-only execution lives in data-source-resolver.integration.test.ts.
+    // 3) The Querier CAN query — proven through the resolver's query gate, not just the
+    //    matrix: the published source shows up in the Querier's list (the gate is
+    //    membership ∧ `query`; `list` admits exactly the queryable sources). The matrix
+    //    underpins it; the real read-only execution lives in the integration test.
     expect(canDataSource('querier', 'query')).toBe(true);
+    expect((await resolver.list(quinn.id)).some((d) => d.id === DS)).toBe(true);
     const denied: DataSourceCapability[] = [
       'author',
       'publish',
@@ -100,9 +123,15 @@ describe('M2 acceptance — multi-user trust boundary (spec 09 §8)', () => {
       AuthoringAccessError,
     );
 
-    // 5) A non-member has no access at all: no role, no query, no authoring surface.
+    // 5) A non-member has no access at all: the resolver's query gate denies them (no
+    //    role → not listed; resolve returns null even though the binding exists), and
+    //    the authoring surface rejects them too.
     expect(await store.getDataSourceRole('stranger', DS)).toBeNull();
     expect(canDataSource(null, 'query')).toBe(false);
+    expect(await resolver.list('stranger')).toEqual([]);
+    expect(await resolver.list()).toEqual([]); // anonymous
+    expect(await resolver.resolve(DS, 'stranger')).toBeNull(); // gated past the binding
+    expect(await resolver.resolve(DS)).toBeNull(); // anonymous
     await expect(authoring.getEditable('stranger', DS)).rejects.toBeInstanceOf(
       AuthoringAccessError,
     );

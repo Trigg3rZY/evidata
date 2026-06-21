@@ -87,7 +87,7 @@ Each shipped criterion maps to a CI-gated test (real-Postgres ones run against t
 | Criterion | Covered by |
 |---|---|
 | Connect → introspect → publish → **read-only query on real data**, write rejected | `data-source-resolver.integration.test.ts` (gated PG: publish a real source → resolve → SELECT returns rows; INSERT rejected by the read-only role + READ ONLY tx) |
-| Multi-user trust boundary: Owner invites a Querier (signup-on-redeem) → matrix enforced across services (query ✓, authoring/members ✗); Admin manages but can't transfer/mint-Owner; stranger no access | `m2-acceptance.test.ts` (hermetic, end-to-end across `InviteService` + `authz` + `DataSourceAuthoringService`) |
+| Multi-user trust boundary: Owner invites a Querier (signup-on-redeem) → matrix enforced across services (query ✓, authoring/members ✗); Admin manages but can't transfer/mint-Owner; stranger no access | `m2-acceptance.test.ts` (hermetic, end-to-end across `InviteService` + `authz` + `DataSourceAuthoringService` + the `PublishedDataSourceResolver` query gate via `list`/`resolve`) |
 | Capability matrix (role → capability) | `authz.test.ts` (`canDataSource` for owner/admin/querier/none across all capabilities) |
 | Invite lifecycle: single-use, expiry, owner-grant gating, signup-vs-logged-in redeem, last-owner / owner-removal guards, revoke | `invite-service.test.ts` |
 | AI calibration drafts Suggested context (overview not persisted) | `calibration-service.test.ts` |
