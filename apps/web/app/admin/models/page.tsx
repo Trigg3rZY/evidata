@@ -60,6 +60,12 @@ export default function ModelsAdminPage() {
   const [form, setForm] = useState({ ...EMPTY });
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
+  // Reachability probe (#119): the ids currently being tested (a Set so concurrent
+  // probes on different rows stay independent) + the last result per provider.
+  const [testing, setTesting] = useState<Set<string>>(new Set());
+  const [testResults, setTestResults] = useState<
+    Record<string, { status: string; httpStatus?: number }>
+  >({});
 
   const load = useCallback(async (): Promise<void> => {
     const res = await fetch('/api/model-providers');
@@ -123,6 +129,56 @@ export default function ModelsAdminPage() {
     if (res.ok) await load();
   };
 
+  // Probe one provider's reachability — a cheap key/endpoint check. The route returns
+  // 200 with a coarse status (ok/unauthorized/unreachable/error/unconfigured); any
+  // non-200 (vault/session) collapses to a generic error chip.
+  const test = async (id: string): Promise<void> => {
+    setTesting((s) => new Set(s).add(id));
+    setTestResults((r) => {
+      const next = { ...r };
+      delete next[id];
+      return next;
+    });
+    const res = await fetch(`/api/model-providers/${id}/test`, { method: 'POST' }).catch(
+      () => null,
+    );
+    const body =
+      res && res.ok
+        ? ((await res.json()) as { status: string; httpStatus?: number })
+        : { status: 'error' };
+    setTesting((s) => {
+      const next = new Set(s);
+      next.delete(id);
+      return next;
+    });
+    setTestResults((r) => ({ ...r, [id]: body }));
+  };
+
+  const testChip = (id: string) => {
+    if (testing.has(id)) return <span className="text-xs text-muted-foreground">Testing…</span>;
+    const r = testResults[id];
+    if (!r) return null;
+    const label =
+      r.status === 'ok'
+        ? 'Reachable'
+        : r.status === 'unauthorized'
+          ? 'Invalid API key'
+          : r.status === 'unreachable'
+            ? 'Unreachable'
+            : r.status === 'unconfigured'
+              ? 'No base URL'
+              : `Error${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
+    return (
+      <span
+        className={`rounded-full border border-border px-2 py-0.5 text-xs ${
+          r.status === 'ok' ? 'text-status-answered' : 'text-status-blocked'
+        }`}
+      >
+        {label}
+      </span>
+    );
+  };
+
   return (
     <AppShell active="admin">
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -152,6 +208,7 @@ export default function ModelsAdminPage() {
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {testChip(m.id)}
                           {!m.runnable && (
                             <span
                               className="rounded-full border border-border px-2 py-0.5 text-xs text-status-blocked"
@@ -165,6 +222,14 @@ export default function ModelsAdminPage() {
                               {m.params.effort}
                             </span>
                           )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void test(m.id)}
+                            disabled={testing.has(m.id)}
+                          >
+                            Test
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => void remove(m.id)}>
                             Delete
                           </Button>
