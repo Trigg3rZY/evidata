@@ -75,20 +75,21 @@ describe('ModelProviderService (epic #106)', () => {
     expect(await svc.apiKeyFor('nope')).toBeNull();
 
     // Listed as a summary (no blob) for the owner.
-    expect((await svc.list('owner')).some((p) => p.id === summary.id)).toBe(true);
+    expect((await svc.list()).some((p) => p.id === summary.id)).toBe(true);
 
     await svc.remove('owner', summary.id);
     expect(await store.getModelProvider(summary.id)).toBeNull();
   });
 
-  it('scopes providers per user: a non-owner can neither see nor delete them', async () => {
+  it('shares the pool: any member sees every model; only the creator may delete (#151)', async () => {
     const mine = await svc.create('owner', input({ name: 'Mine' }));
-    // A different user doesn't see it and can't delete it.
-    expect((await svc.list('stranger')).some((p) => p.id === mine.id)).toBe(false);
+    // Shared: a different member sees it in the pool…
+    expect((await svc.list()).some((p) => p.id === mine.id)).toBe(true);
+    // …but cannot delete it (creator-only guard, so one member can't break the pool).
     await expect(svc.remove('stranger', mine.id)).rejects.toBeInstanceOf(ModelProviderAccessError);
-    // The owner still can.
-    expect((await svc.list('owner')).some((p) => p.id === mine.id)).toBe(true);
+    // The member who configured it can.
     await svc.remove('owner', mine.id);
+    expect((await svc.list()).some((p) => p.id === mine.id)).toBe(false);
   });
 
   it('errors clearly when no credential vault is configured', async () => {
@@ -96,20 +97,19 @@ describe('ModelProviderService (epic #106)', () => {
     await expect(noVault.create('owner', input())).rejects.toBeInstanceOf(VaultUnavailableError);
   });
 
-  it('resolveConfig returns a runnable config (decrypted) for the owner only', async () => {
+  it('resolveConfig returns a runnable config (decrypted) for any member — shared (#151)', async () => {
     const p = await svc.create(
       'owner',
       input({ name: 'Runnable', baseUrl: null, kind: 'deepseek' }),
     );
-    const cfg = await svc.resolveConfig('owner', p.id);
+    const cfg = await svc.resolveConfig(p.id);
     expect(cfg).toMatchObject({
       apiKey: 'sk-secret-123', // decrypted
       baseURL: 'https://api.deepseek.com', // default for the kind (baseUrl was null)
       model: 'deepseek-chat',
     });
-    // Non-owner / unknown → null (no cross-user key use).
-    expect(await svc.resolveConfig('stranger', p.id)).toBeNull();
-    expect(await svc.resolveConfig('owner', 'nope')).toBeNull();
+    // Unknown id → null (no run). Shared: there's no per-user gate to fail.
+    expect(await svc.resolveConfig('nope')).toBeNull();
     await svc.remove('owner', p.id);
   });
 
@@ -122,7 +122,7 @@ describe('ModelProviderService (epic #106)', () => {
       'owner',
       input({ name: 'NoBaseList', kind: 'openai-compatible', baseUrl: null }),
     );
-    const list = await svc.list('owner');
+    const list = await svc.list();
     expect(list.find((p) => p.id === ok.id)?.runnable).toBe(true); // deepseek default base
     expect(list.find((p) => p.id === noBase.id)?.runnable).toBe(false); // no resolvable base
     await svc.remove('owner', ok.id);
@@ -135,7 +135,7 @@ describe('ModelProviderService (epic #106)', () => {
       'owner',
       input({ name: 'OpenAI', kind: 'openai', baseUrl: null, params: { effort: 'low' } }),
     );
-    expect((await svc.resolveConfig('owner', oa.id))?.effort).toBe('low');
+    expect((await svc.resolveConfig(oa.id))?.effort).toBe('low');
     await svc.remove('owner', oa.id);
 
     // A non-effort kind that somehow carries effort (e.g. a record predating the gate)
@@ -144,7 +144,7 @@ describe('ModelProviderService (epic #106)', () => {
       'owner',
       input({ name: 'DeepSeek effort', kind: 'deepseek', params: { effort: 'high' } }),
     );
-    expect((await svc.resolveConfig('owner', ds.id))?.effort).toBeUndefined();
+    expect((await svc.resolveConfig(ds.id))?.effort).toBeUndefined();
     await svc.remove('owner', ds.id);
 
     // An effort-capable kind carrying an INVALID legacy value (effort was once free
@@ -158,7 +158,7 @@ describe('ModelProviderService (epic #106)', () => {
         params: { effort: 'extreme' },
       }),
     );
-    expect((await svc.resolveConfig('owner', bad.id))?.effort).toBeUndefined();
+    expect((await svc.resolveConfig(bad.id))?.effort).toBeUndefined();
     await svc.remove('owner', bad.id);
   });
 
@@ -168,7 +168,7 @@ describe('ModelProviderService (epic #106)', () => {
       'owner',
       input({ name: 'NoBase', kind: 'openai-compatible', baseUrl: null }),
     );
-    expect(await svc.resolveConfig('owner', p.id)).toBeNull();
+    expect(await svc.resolveConfig(p.id)).toBeNull();
     await svc.remove('owner', p.id);
   });
 
@@ -183,13 +183,13 @@ describe('ModelProviderService (epic #106)', () => {
     const probeSvc = new ModelProviderService({ store, vault, fetchImpl });
     const p = await svc.create('owner', input({ name: 'Probe', kind: 'deepseek', baseUrl: null }));
 
-    expect(await probeSvc.test('owner', p.id)).toEqual({ status: 'ok' });
+    expect(await probeSvc.test(p.id)).toEqual({ status: 'ok' });
     // Cheap, token-free GET against the vendor-default base, with the (decrypted) key.
     expect(lastUrl).toBe('https://api.deepseek.com/models');
     expect(lastAuth).toBe('Bearer sk-secret-123');
 
-    // Owner-gated: a non-owner gets 404, never a cross-user probe.
-    await expect(probeSvc.test('stranger', p.id)).rejects.toBeInstanceOf(ModelProviderAccessError);
+    // Shared (#151): any member may probe; an unknown id still 404s (no leak).
+    await expect(probeSvc.test('nope')).rejects.toBeInstanceOf(ModelProviderAccessError);
     await svc.remove('owner', p.id);
   });
 
@@ -201,7 +201,7 @@ describe('ModelProviderService (epic #106)', () => {
       vault,
       fetchImpl: fetchStub(() => new Response(null, { status: 401 })),
     });
-    expect(await reject.test('owner', p.id)).toEqual({ status: 'unauthorized', httpStatus: 401 });
+    expect(await reject.test(p.id)).toEqual({ status: 'unauthorized', httpStatus: 401 });
 
     const down = new ModelProviderService({
       store,
@@ -210,7 +210,7 @@ describe('ModelProviderService (epic #106)', () => {
         throw new Error('network down'); // must collapse to a coarse status, never leak
       }),
     });
-    expect(await down.test('owner', p.id)).toEqual({ status: 'unreachable' });
+    expect(await down.test(p.id)).toEqual({ status: 'unreachable' });
     await svc.remove('owner', p.id);
 
     // No base URL resolves → nothing to probe; never calls fetch.
@@ -227,7 +227,7 @@ describe('ModelProviderService (epic #106)', () => {
       'owner',
       input({ name: 'NoBaseProbe', kind: 'openai-compatible', baseUrl: null }),
     );
-    expect(await unconfigured.test('owner', nb.id)).toEqual({ status: 'unconfigured' });
+    expect(await unconfigured.test(nb.id)).toEqual({ status: 'unconfigured' });
     expect(called).toBe(false);
     await svc.remove('owner', nb.id);
   });

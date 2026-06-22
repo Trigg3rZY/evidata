@@ -1,10 +1,10 @@
 # 14 — BYO-key Multi-model (epic #106)
 
-As-built record of the bring-your-own-key, multi-model layer. evidata is BYO-key:
-each deployer/user brings **their own** model API key(s) and must not be locked to
-`deepseek-chat`. A user registers **multiple models** (each with its own key), then
-**picks the model** (and, where the model supports it, the **reasoning effort**) per
-conversation.
+As-built record of the multi-model layer. evidata must not be locked to `deepseek-chat`:
+a deployment registers **multiple models** (each with its own key) as a **shared team
+pool**, and every member **picks the model** (and, where the model supports it, the
+**reasoning effort**) per conversation. Keys are still bring-your-own — they're just
+shared across the team rather than private per user (revised in #151).
 
 Safety is **model-independent** — the application validates, executes (read-only),
 redacts, records, and persists; the model only proposes (`01 §4`, `13 §7`). So "any
@@ -30,7 +30,7 @@ the transport changed: `@evidata/provider-openai` runs on the **Vercel AI SDK**
   protocol family** (not per model), and most such vendors also expose OpenAI-compat
   endpoints, so the adapter is often skippable.
 
-## 2. Model registry (per-user, vault-encrypted)
+## 2. Model registry (team-shared, vault-encrypted)
 
 Mirrors Connections (`08 §3/§6`). Table `model_providers` (migration `0004`):
 `{ id, name, kind, baseUrl, model, params, capabilities, credentialBlob, createdBy }`.
@@ -38,8 +38,12 @@ Mirrors Connections (`08 §3/§6`). Table `model_providers` (migration `0004`):
 - **Keys encrypted at rest** by the same `CredentialVault` as DB connection creds
   (AES-256-GCM, AAD = the provider id). The raw key is never returned, logged, or put
   in a summary. Decrypted only transiently on the resolve path.
-- **Per-user (BYO-key):** a caller only sees/manages/runs **their own** providers
-  (`createdBy`); cross-user access 404s (no existence leak).
+- **Team-shared (#151):** every authenticated member **sees, selects, and runs** every
+  registered model; `createdBy` is **audit + a delete guard** only — a model is selectable
+  by all, but only the member who configured it may delete it (404 for a non-creator /
+  unknown id, no existence leak). The original per-user scoping was revised for the
+  self-hosted-team product (one place to manage the team's keys; members don't each need
+  their own).
 - `kind` ∈ `openai | deepseek | google | openai-compatible`. A kind maps to a default
   OpenAI-compatible base URL (`openai`→api.openai.com/v1, `deepseek`→api.deepseek.com,
   `google`→…/v1beta/openai/); `openai-compatible` and self-hosted require an explicit
@@ -51,8 +55,9 @@ Mirrors Connections (`08 §3/§6`). Table `model_providers` (migration `0004`):
   vendor default), sharing `resolveConfig`'s logic. The picker offers only runnable
   models; the admin list shows the rest flagged "Needs base URL".
 
-API: `GET/POST /api/model-providers`, `DELETE /api/model-providers/:id` (session-gated,
-owner-scoped). Admin UI: `/admin/models` (mirrors `/admin/connections`), under a shared
+API: `GET/POST /api/model-providers`, `DELETE /api/model-providers/:id`, `POST
+/api/model-providers/:id/test` (session-gated; list/select/run/test are shared, delete is
+creator-only). Admin UI: `/admin/models` (mirrors `/admin/connections`), under a shared
 Connections/Models sub-nav.
 
 ## 3. Selection & binding (per Investigation)
@@ -60,15 +65,14 @@ Connections/Models sub-nav.
 Decision A: **per-conversation selection + a default**, mirroring the data-source
 picker — not mid-conversation switching, not app-wide-only.
 
-- A top-nav `ModelPicker` ("Default model" + the user's runnable models) sends
-  `modelProviderId` on a **new** turn. Hidden when the user has no registered models.
+- A top-nav `ModelPicker` ("Default model" + the shared pool's runnable models) sends
+  `modelProviderId` on a **new** turn. Hidden when no models are registered.
 - **Bound per Investigation (#113):** `investigations.model_provider_id` (migration
   `0005`, nullable, no FK so the audit id survives provider deletion) records the model
   at creation. A **follow-up resolves the stored model** (ignores the client's current
   picker) so a conversation never switches models mid-thread.
-- **No silent fallback (#111):** a selected-but-unresolvable model (deleted, not owned,
-  no base URL) returns **404** — only the no-selection case uses the env/fixture
-  default.
+- **No silent fallback (#111):** a selected-but-unresolvable model (deleted or no base
+  URL) returns **404** — only the no-selection case uses the env/fixture default.
 - `null` binding = the deployment's **env-configured default** (simple single-model
   deploy). It is **not** snapshotted, so a default-bound follow-up uses the current env
   default; an immutable env-default audit snapshot is tracked as **#116**.
@@ -118,12 +122,14 @@ Gated on having a non-DeepSeek key to exercise:
 - **Capability-aware A/B execution** — strategy A (forced tool-calling, current) for
   models with `tool_choice`; strategy B (structured-output + validate + retry) for
   reasoning/no-tool models.
-- **Provider status/health** in the picker.
+- **Provider status/health** — an owner-gated reachability "Test" shipped in `/admin/models`
+  (#119); a per-pick health hint in the picker is still deferred.
 - **Env-default audit snapshot** (#116).
 
 ## 8. Tests
 
-`model-provider-service` (encrypt/own-scope/resolve/runnable/effort), `model-kinds`
+`model-provider-service` (encrypt / shared-pool + creator-only delete / resolve / runnable
+/ effort / reachability probe), `model-kinds`
 (kind + effort gate), `sdk-transport` (effort reaches `reasoning_effort` on the wire),
 `ask-stream` (`modelProviderId` parsing), store + `InvestigationService` (per-
 Investigation binding). The picker, effort gating, and per-Investigation binding were

@@ -1,8 +1,10 @@
 /**
- * ModelProviderService (epic #106) — manages BYO-key LLM providers behind the
- * MetadataStore + CredentialVault. The API key is encrypted on create (AAD = the
- * provider id) and decrypted only transiently here (when the agent resolves a
- * provider to run). Summaries never carry the blob. Mirrors ConnectionService.
+ * ModelProviderService (epic #106; team-shared #151) — manages the deployment's LLM
+ * providers behind the MetadataStore + CredentialVault. Models are a **shared team
+ * pool**: any authenticated member sees, selects, and runs every registered model;
+ * only the member who configured one may delete it (`createdBy` = audit + delete
+ * guard). The API key is encrypted on create (AAD = the provider id) and decrypted
+ * only transiently on the resolve path. Summaries never carry the blob.
  */
 import { randomUUID } from 'node:crypto';
 import { VaultUnavailableError } from '@evidata/connection';
@@ -166,16 +168,17 @@ export class ModelProviderService {
     return toSummary(record);
   }
 
-  /** The caller's own providers (summaries — never the key). Providers are
-   *  per-user (BYO-key): a caller never sees or manages another user's. */
-  async list(userId: string): Promise<ModelProviderListItem[]> {
+  /** The team's shared model pool (summaries — never the key). Any authenticated
+   *  member sees + can select/run every registered model (#151); `createdBy` is
+   *  audit only, not an access gate. */
+  async list(): Promise<ModelProviderListItem[]> {
     const all = await this.deps.store.listModelProviders();
-    return all
-      .filter((p) => p.createdBy === userId)
-      .map((p) => ({ ...p, runnable: resolvableBaseUrl(p.kind, p.baseUrl) !== null }));
+    return all.map((p) => ({ ...p, runnable: resolvableBaseUrl(p.kind, p.baseUrl) !== null }));
   }
 
-  /** Delete one of the caller's own providers; 404 for a non-owner (no leak). */
+  /** Delete a shared model. It's selectable by everyone, but only the member who
+   *  configured it (createdBy) may delete it — so nobody can pull the team's pool out
+   *  from under others (#151). 404 for a non-creator / unknown (no leak). */
   async remove(userId: string, id: string): Promise<{ ok: true }> {
     const record = await this.deps.store.getModelProvider(id);
     if (!record || record.createdBy !== userId) throw new ModelProviderAccessError();
@@ -183,14 +186,14 @@ export class ModelProviderService {
     return { ok: true };
   }
 
-  /** Reachability/health probe for one of the caller's own providers (#119): a quick
-   *  key/endpoint check so a misconfigured model is visible before a question fails.
-   *  Owner-gated (404 for a non-owner, no key use across users); ephemeral (not
-   *  persisted). `unconfigured` when no base URL resolves (nothing to probe). */
-  async test(userId: string, id: string): Promise<ModelProviderTestResult> {
+  /** Reachability/health probe for a shared model (#119): a quick key/endpoint check
+   *  so a misconfigured model is visible before a question fails. Any authenticated
+   *  member may test any shared model (#151); ephemeral (not persisted). 404 for an
+   *  unknown id; `unconfigured` when no base URL resolves (nothing to probe). */
+  async test(id: string): Promise<ModelProviderTestResult> {
     const vault = this.requireVault();
     const record = await this.deps.store.getModelProvider(id);
-    if (!record || record.createdBy !== userId) throw new ModelProviderAccessError();
+    if (!record) throw new ModelProviderAccessError();
     const baseURL = resolvableBaseUrl(record.kind, record.baseUrl);
     if (!baseURL) return { status: 'unconfigured' };
     const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
@@ -211,14 +214,14 @@ export class ModelProviderService {
     return apiKey;
   }
 
-  /** Resolve one of the caller's own providers into a runnable provider config
-   *  (decrypted key + base URL + model). Null if not owned, unknown, or not yet
-   *  runnable (an OpenAI-compatible base can't be determined). Owner-gated so a
-   *  caller can only run with their own key. */
-  async resolveConfig(userId: string, id: string): Promise<OpenAIProviderConfig | null> {
+  /** Resolve a shared model into a runnable provider config (decrypted key + base URL
+   *  + model). Null if unknown or not yet runnable (an OpenAI-compatible base can't be
+   *  determined). Shared (#151): any member — and a system-triggered rerun — can run any
+   *  registered model; the key still flows only vault → provider, never to the client. */
+  async resolveConfig(id: string): Promise<OpenAIProviderConfig | null> {
     const vault = this.requireVault();
     const record = await this.deps.store.getModelProvider(id);
-    if (!record || record.createdBy !== userId) return null;
+    if (!record) return null;
     const baseURL = resolvableBaseUrl(record.kind, record.baseUrl);
     if (!baseURL) return null; // e.g. self-hosted with no baseUrl, or native Anthropic (later)
     const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
