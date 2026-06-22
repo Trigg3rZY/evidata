@@ -56,6 +56,11 @@ import type {
   PolicyRecord,
   SaveAnswerInput,
   SchemaSnapshot,
+  NewSuggestion,
+  SuggestionRecord,
+  SuggestionReviewPatch,
+  SuggestionStatus,
+  SuggestionView,
   UserRecord,
 } from '@evidata/ports';
 import type { MetadataDb } from './client';
@@ -77,6 +82,7 @@ import {
   queryRuns,
   schemaSnapshots,
   sessions,
+  suggestions,
   turns,
   users,
 } from './schema';
@@ -898,6 +904,99 @@ export class DrizzleMetadataStore implements MetadataStore {
     await this.db
       .delete(dataSourceInvites)
       .where(and(eq(dataSourceInvites.id, id), eq(dataSourceInvites.dataSourceId, dataSourceId)));
+  }
+
+  async createSuggestion(input: NewSuggestion): Promise<void> {
+    await this.db.insert(suggestions).values({
+      id: input.id,
+      investigationId: input.investigationId,
+      dataSourceId: input.dataSourceId,
+      answerVersion: input.answerVersion,
+      kind: input.kind,
+      targetRef: input.targetRef,
+      description: input.description,
+      proposedDefinition: input.proposedDefinition,
+      submittedBy: input.submittedBy,
+      status: 'open',
+      createdAt: this.now(),
+    });
+  }
+
+  async listSuggestions(
+    dataSourceId: string,
+    status?: SuggestionStatus,
+  ): Promise<SuggestionView[]> {
+    const where = status
+      ? and(eq(suggestions.dataSourceId, dataSourceId), eq(suggestions.status, status))
+      : eq(suggestions.dataSourceId, dataSourceId);
+    const rows = await this.db
+      .select({
+        id: suggestions.id,
+        investigationId: suggestions.investigationId,
+        answerVersion: suggestions.answerVersion,
+        kind: suggestions.kind,
+        targetRef: suggestions.targetRef,
+        description: suggestions.description,
+        proposedDefinition: suggestions.proposedDefinition,
+        submittedByName: users.displayName,
+        status: suggestions.status,
+        createdAt: suggestions.createdAt,
+      })
+      .from(suggestions)
+      .leftJoin(users, eq(users.id, suggestions.submittedBy))
+      .where(where)
+      .orderBy(desc(suggestions.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      investigationId: r.investigationId,
+      answerVersion: r.answerVersion ?? null,
+      kind: r.kind,
+      targetRef: r.targetRef ?? null,
+      description: r.description,
+      proposedDefinition: r.proposedDefinition ?? null,
+      submittedByName: r.submittedByName ?? 'Unknown',
+      status: r.status as SuggestionStatus,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async getSuggestion(id: string): Promise<SuggestionRecord | null> {
+    const [row] = await this.db.select().from(suggestions).where(eq(suggestions.id, id));
+    if (!row) return null;
+    return {
+      id: row.id,
+      investigationId: row.investigationId,
+      dataSourceId: row.dataSourceId ?? null,
+      answerVersion: row.answerVersion ?? null,
+      kind: row.kind,
+      targetRef: row.targetRef ?? null,
+      description: row.description,
+      proposedDefinition: row.proposedDefinition ?? null,
+      submittedBy: row.submittedBy ?? null,
+      targetKind: (row.targetKind as SuggestionRecord['targetKind']) ?? null,
+      targetItemId: row.targetItemId ?? null,
+      reviewedBy: row.reviewedBy ?? null,
+      reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+      status: row.status as SuggestionStatus,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async setSuggestionReviewed(
+    dataSourceId: string,
+    id: string,
+    patch: SuggestionReviewPatch,
+  ): Promise<void> {
+    await this.db
+      .update(suggestions)
+      .set({
+        status: patch.status,
+        targetKind: patch.targetKind ?? null,
+        targetItemId: patch.targetItemId ?? null,
+        reviewedBy: patch.reviewedBy,
+        reviewedAt: patch.reviewedAt,
+      })
+      .where(and(eq(suggestions.id, id), eq(suggestions.dataSourceId, dataSourceId)));
   }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
