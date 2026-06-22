@@ -170,6 +170,21 @@ export interface MetadataStore {
   ): Promise<Array<{ id: string; role: DataSourceRole; expiresAt: string; createdAt: string }>>;
   /** Revoke a pending invite (scoped to the Data Source). */
   deleteDataSourceInvite(dataSourceId: string, id: string): Promise<void>;
+  // --- Correction-loop suggestions (M2-B4, #123). ---
+  /** Record a querier-raised correction from a blocked answer's Unblock Path. */
+  createSuggestion(input: NewSuggestion): Promise<void>;
+  /** Suggestions for a Data Source's review queue (optionally by status), newest first,
+   *  joined with the submitter's display name. */
+  listSuggestions(dataSourceId: string, status?: SuggestionStatus): Promise<SuggestionView[]>;
+  getSuggestion(id: string): Promise<SuggestionRecord | null>;
+  /** Resolve a suggestion: set its status (accepted|rejected), the reviewer, and — on
+   *  accept — which Verified item it mapped to. Scoped to the Data Source (no-op for a
+   *  mismatched id). */
+  setSuggestionReviewed(
+    dataSourceId: string,
+    id: string,
+    patch: SuggestionReviewPatch,
+  ): Promise<void>;
 }
 
 export type ConnectionHealth =
@@ -221,6 +236,67 @@ export interface DataSourceInviteRecord {
   redeemedBy: string | null;
   redeemedAt: string | null;
   createdAt: string;
+}
+
+/** Correction-loop suggestion lifecycle (M2-B4, #123): a querier raises it from a
+ *  blocked answer ('open'); an owner/admin reviews → 'accepted' | 'rejected'. */
+export type SuggestionStatus = 'open' | 'accepted' | 'rejected';
+/** Which kind of Verified context an accepted suggestion resolved to. */
+export type SuggestionTargetKind = 'glossary' | 'mapping';
+
+/** A new correction raised from a blocked answer's Unblock Path. */
+export interface NewSuggestion {
+  id: string;
+  investigationId: string;
+  dataSourceId: string;
+  answerVersion: number | null;
+  kind: string; // the UnblockActionKind that created it (e.g. notify_admin_verify)
+  targetRef: string | null; // human ref from the unblock (e.g. 'invoices.x→accounts.id')
+  description: string; // what was missing
+  proposedDefinition: string | null; // optional: the definition the querier proposed
+  submittedBy: string;
+}
+
+/** A stored suggestion (full record — for the review/accept path). */
+export interface SuggestionRecord {
+  id: string;
+  investigationId: string;
+  dataSourceId: string | null;
+  answerVersion: number | null;
+  kind: string;
+  targetRef: string | null;
+  description: string;
+  proposedDefinition: string | null;
+  submittedBy: string | null;
+  targetKind: SuggestionTargetKind | null;
+  targetItemId: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  status: SuggestionStatus;
+  createdAt: string;
+}
+
+/** A suggestion + the submitter's display name — for the review queue UI. */
+export interface SuggestionView {
+  id: string;
+  investigationId: string;
+  answerVersion: number | null;
+  kind: string;
+  targetRef: string | null;
+  description: string;
+  proposedDefinition: string | null;
+  submittedByName: string;
+  status: SuggestionStatus;
+  createdAt: string;
+}
+
+/** The reviewer's resolution applied to a suggestion. */
+export interface SuggestionReviewPatch {
+  status: SuggestionStatus;
+  targetKind?: SuggestionTargetKind | null;
+  targetItemId?: string | null;
+  reviewedBy: string;
+  reviewedAt: Date;
 }
 
 export interface NewConnection {

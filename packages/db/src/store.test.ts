@@ -597,3 +597,73 @@ describe('0006 backfill — Data Source owner memberships (M2-B1a)', () => {
     await h.close();
   });
 });
+
+describe('DrizzleMetadataStore — correction-loop suggestions (M2-B4, #123)', () => {
+  it('records, lists (by status, with submitter name), gets, and resolves a suggestion', async () => {
+    await store.createUser({
+      id: 'sg-user',
+      username: 'quinn-sg',
+      displayName: 'Quinn SG',
+      passwordHash: 'x',
+    });
+    await store.createInvestigation({ id: 'sg-inv', dataSourceId: 'sample', title: 'why blocked' });
+    await store.createSuggestion({
+      id: 'sg-1',
+      investigationId: 'sg-inv',
+      dataSourceId: 'sample',
+      answerVersion: 1,
+      kind: 'notify_admin_verify',
+      targetRef: 'invoices.customer_ref→accounts.id',
+      description: 'The mapping is only Suggested.',
+      proposedDefinition: null,
+      submittedBy: 'sg-user',
+    });
+
+    // Listed in the open queue, newest first, with the submitter's display name.
+    const open = await store.listSuggestions('sample', 'open');
+    const mine = open.find((s) => s.id === 'sg-1');
+    expect(mine).toMatchObject({
+      kind: 'notify_admin_verify',
+      targetRef: 'invoices.customer_ref→accounts.id',
+      submittedByName: 'Quinn SG',
+      status: 'open',
+    });
+
+    // Full record for the accept path.
+    expect(await store.getSuggestion('sg-1')).toMatchObject({
+      investigationId: 'sg-inv',
+      dataSourceId: 'sample',
+      answerVersion: 1,
+      status: 'open',
+      targetItemId: null,
+    });
+
+    // Resolve (accept): records the reviewer + which Verified item it mapped to; it
+    // leaves the open queue. Scoped by data source — a mismatched id is a no-op.
+    await store.setSuggestionReviewed('other-ds', 'sg-1', {
+      status: 'accepted',
+      reviewedBy: 'sg-user',
+      reviewedAt: new Date(),
+    });
+    expect((await store.getSuggestion('sg-1'))?.status).toBe('open'); // wrong DS → untouched
+
+    await store.setSuggestionReviewed('sample', 'sg-1', {
+      status: 'accepted',
+      targetKind: 'mapping',
+      targetItemId: 'map-7',
+      reviewedBy: 'sg-user',
+      reviewedAt: new Date(),
+    });
+    const resolved = await store.getSuggestion('sg-1');
+    expect(resolved).toMatchObject({
+      status: 'accepted',
+      targetKind: 'mapping',
+      targetItemId: 'map-7',
+      reviewedBy: 'sg-user',
+    });
+    expect(resolved?.reviewedAt).not.toBeNull();
+    expect((await store.listSuggestions('sample', 'open')).some((s) => s.id === 'sg-1')).toBe(
+      false,
+    );
+  });
+});

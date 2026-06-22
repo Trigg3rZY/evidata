@@ -130,18 +130,33 @@ export const evidence = meta.table(
   (t) => [uniqueIndex('evidence_ref_uq').on(t.investigationId, t.answerVersion, t.evidenceRef)],
 );
 
-export const suggestions = meta.table('suggestions', {
-  id: text('id').primaryKey(),
-  investigationId: text('investigation_id')
-    .notNull()
-    .references(() => investigations.id),
-  answerVersion: integer('answer_version'),
-  kind: text('kind').notNull(), // UnblockActionKind that created it
-  targetRef: text('target_ref'), // e.g. 'invoices.customer_ref→accounts.id'
-  description: text('description').notNull(),
-  status: text('status').notNull().default('recorded'), // M0: always 'recorded'; M2 adds review
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-});
+export const suggestions = meta.table(
+  'suggestions',
+  {
+    id: text('id').primaryKey(),
+    investigationId: text('investigation_id')
+      .notNull()
+      .references(() => investigations.id),
+    answerVersion: integer('answer_version'),
+    kind: text('kind').notNull(), // UnblockActionKind that created it
+    targetRef: text('target_ref'), // e.g. 'invoices.customer_ref→accounts.id'
+    description: text('description').notNull(),
+    // M2-B4 (#123) correction-loop review: scope the queue + authz by Data Source, who
+    // raised it, and — set at accept — which Verified edit it resolved to + the reviewer.
+    // status: M0 wrote nothing; B4 uses 'open' → 'accepted' | 'rejected' (legacy default
+    // 'recorded' kept harmless — the service always writes the new lifecycle).
+    dataSourceId: text('data_source_id').references(() => dataSources.id),
+    submittedBy: text('submitted_by').references(() => users.id),
+    targetKind: text('target_kind'), // 'glossary' | 'mapping' (resolved at accept)
+    targetItemId: text('target_item_id'), // the context-item promoted (no FK — polymorphic)
+    proposedDefinition: text('proposed_definition'), // a glossary correction's new text
+    reviewedBy: text('reviewed_by').references(() => users.id),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    status: text('status').notNull().default('recorded'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('suggestions_ds_status_idx').on(t.dataSourceId, t.status)],
+);
 
 // --- M1 additions: identity, connections, snapshots, data sources (spec 12 §2) ---
 
