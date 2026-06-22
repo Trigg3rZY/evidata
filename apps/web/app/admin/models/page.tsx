@@ -50,9 +50,10 @@ const EMPTY = {
   toolChoice: '',
 };
 
-/** Admin → Models (epic #106): manage BYO-key model providers — register a model
- *  with its own API key (encrypted at rest), then remove. Gated client-side; the
- *  APIs enforce auth + per-user ownership. Mirrors the Connections admin. */
+/** Admin → Models (epic #106; team-shared #151): manage the deployment's shared model
+ *  pool — register a model with its API key (encrypted at rest), then remove. Every
+ *  member selects from these; only the member who configured one may delete it.
+ *  Mirrors the Connections admin. */
 export default function ModelsAdminPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -124,7 +125,12 @@ export default function ModelsAdminPage() {
   };
 
   const remove = async (id: string): Promise<void> => {
-    if (!window.confirm('Delete this model? Its stored API key is removed too.')) return;
+    if (
+      !window.confirm(
+        'Delete this shared model? Members can no longer select it, and its stored API key is removed.',
+      )
+    )
+      return;
     const res = await fetch(`/api/model-providers/${id}`, { method: 'DELETE' });
     if (res.ok) await load();
   };
@@ -243,9 +249,9 @@ export default function ModelsAdminPage() {
               <section className="mt-8">
                 <h2 className="text-sm font-medium">Register a model</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Bring your own key — it is encrypted at rest and never returned. Leave Base URL
-                  empty to use the vendor default; an OpenAI-compatible or self-hosted endpoint
-                  needs an explicit one.
+                  Configure a model for the whole team — the key is encrypted at rest and never
+                  returned, and every member can select it. Leave Base URL empty to use the vendor
+                  default; an OpenAI-compatible or self-hosted endpoint needs an explicit one.
                 </p>
                 <form
                   onSubmit={(e) => void create(e)}

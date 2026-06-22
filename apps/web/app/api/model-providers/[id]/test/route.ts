@@ -10,5 +10,5 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
-  return withModelProviders(req, (user, providers) => providers.test(user.id, id));
+  return withModelProviders(req, (_user, providers) => providers.test(id));
 }

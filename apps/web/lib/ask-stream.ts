@@ -21,8 +21,9 @@ export interface AskBody {
   /** Authenticated user id — server-injected from the session, NEVER parsed from
    *  the client body. Authorizes access to a real published source. */
   userId?: string;
-  /** Selected registered model provider (epic #106); resolved against the user's
-   *  own providers. Omit to use the env/fixture provider. Client-supplied. */
+  /** Selected model provider from the shared team pool (epic #106; team-shared #151);
+   *  resolved for any authenticated member. Omit to use the env/fixture provider.
+   *  Client-supplied. */
   modelProviderId?: string;
 }
 

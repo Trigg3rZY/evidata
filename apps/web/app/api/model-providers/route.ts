@@ -18,9 +18,9 @@ interface CreateBody {
   capabilities?: unknown;
 }
 
-/** List the caller's model providers (summaries — never the API key). */
+/** List the shared model pool (summaries — never the API key). */
 export function GET(req: Request): Promise<Response> {
-  return withModelProviders(req, (user, providers) => providers.list(user.id));
+  return withModelProviders(req, (_user, providers) => providers.list());
 }
 
 /** Register a model provider — the API key is encrypted at rest (epic #106). */

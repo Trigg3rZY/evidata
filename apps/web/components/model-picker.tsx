@@ -5,10 +5,10 @@ import { useModels } from '@/lib/model-context';
 import { useI18n } from '@/lib/i18n';
 
 /**
- * Top-nav model selector (epic #106): chooses which registered model a NEW
- * question runs against. Mirrors the data-source chip. "Default model" (value "")
- * leaves the choice to the server (env/fixture provider). Hidden when the caller
- * has no registered models, so it never clutters the signed-out / empty state.
+ * Top-nav model selector (epic #106; team-shared #151): chooses which model from the
+ * shared pool a NEW question runs against. Mirrors the data-source chip. "Default model"
+ * (value "") leaves the choice to the server (env/fixture provider). Hidden when no
+ * models are registered, so it never clutters the signed-out / empty state.
  * The selection is sent per turn as `modelProviderId`.
  */
 export function ModelPicker() {
