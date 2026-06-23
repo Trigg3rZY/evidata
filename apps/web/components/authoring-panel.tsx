@@ -5,6 +5,7 @@ import type { EditableDataSource, PolicyForm } from '@/lib/authoring-service';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { ContextReview } from '@/components/context-review';
+import { CorrectionsPanel } from '@/components/corrections-panel';
 import { MembersPanel } from '@/components/members-panel';
 
 /**
@@ -217,6 +218,9 @@ export function AuthoringPanel({
 
       {/* Context review (B3): promote Suggested glossary/mappings → Verified. */}
       <ContextReview id={id} refreshKey={contextRefresh} />
+
+      {/* Correction-loop review (B4): querier-raised corrections from blocked answers. */}
+      <CorrectionsPanel id={id} />
 
       {/* Included tables */}
       <fieldset className="mt-4">
