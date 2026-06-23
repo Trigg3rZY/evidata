@@ -30,6 +30,7 @@ import { DataSourceAuthoringService } from './authoring-service';
 import { CalibrationService } from './calibration-service';
 import { VerificationService } from './verification-service';
 import { InviteService } from './invite-service';
+import { SuggestionService } from './suggestion-service';
 import { ModelProviderService } from './model-provider-service';
 
 // A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
@@ -57,6 +58,7 @@ export interface Runtime {
   calibration: CalibrationService;
   verification: VerificationService;
   invites: InviteService;
+  suggestions: SuggestionService;
   modelProviders: ModelProviderService;
 }
 
@@ -114,6 +116,7 @@ async function build(): Promise<Runtime> {
   });
   const verification = new VerificationService(store);
   const invites = new InviteService({ store, auth });
+  const suggestions = new SuggestionService(store);
 
   return {
     service,
@@ -123,6 +126,7 @@ async function build(): Promise<Runtime> {
     calibration,
     verification,
     invites,
+    suggestions,
     modelProviders,
   };
 }
