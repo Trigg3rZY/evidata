@@ -7,15 +7,22 @@ import { Button } from '@/components/ui/button';
 
 /**
  * The constructive "what's missing + next steps" panel for any non-Answered
- * result. M0: actions that create a Suggestion acknowledge inline; actions that
- * carry a follow-up question re-ask. Other actions are guidance (display-only).
+ * result. The correction actions (`notify_admin_verify` / `pick_definition`)
+ * persist a real Suggestion to the investigation's review queue (M2-B4, #123) and
+ * then acknowledge inline; other suggestion actions (e.g. `request_access`)
+ * acknowledge locally; actions that carry a follow-up question re-ask.
  */
+const CORRECTION_KINDS = new Set(['notify_admin_verify', 'pick_definition']);
+
 export function UnblockPathView({
   unblock,
+  investigationId,
   onFollowup,
   labels,
 }: {
   unblock: UnblockPath;
+  /** The investigation this answer belongs to — the correction is filed against it. */
+  investigationId?: string;
   onFollowup: (question: string) => void;
   labels: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
 }) {
@@ -30,9 +37,36 @@ export function UnblockPathView({
       return next;
     });
 
+  // File a correction against the investigation's review queue; acknowledge on success.
+  // Falls back to a local ack if there's no investigation id (e.g. a streaming preview).
+  const fileCorrection = async (action: UnblockAction, index: number): Promise<void> => {
+    if (!investigationId) {
+      setNoted((prev) => new Set(prev).add(index));
+      return;
+    }
+    const res = await fetch(
+      `/api/investigations/${encodeURIComponent(investigationId)}/suggestions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind: action.kind,
+          description: unblock.whatsMissing.map((m) => m.description).join('; '),
+          targetRef: unblock.whatsMissing[0]?.description ?? null,
+        }),
+      },
+    ).catch(() => null);
+    if (res?.ok) setNoted((prev) => new Set(prev).add(index));
+    // On failure leave the button so the querier can retry.
+  };
+
   const handle = (action: UnblockAction, index: number): void => {
     if (action.kind === 'view_mutation_draft') {
       toggleDraft(index); // reveal the proposed write read-only — it never executes
+      return;
+    }
+    if (CORRECTION_KINDS.has(action.kind)) {
+      void fileCorrection(action, index);
       return;
     }
     if (action.createsSuggestion) {

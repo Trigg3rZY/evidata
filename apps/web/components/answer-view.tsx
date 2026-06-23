@@ -128,7 +128,12 @@ export function AnswerView({
       )}
 
       {answer.unblock && (
-        <UnblockPathView unblock={answer.unblock} onFollowup={onFollowup} labels={labels.unblock} />
+        <UnblockPathView
+          unblock={answer.unblock}
+          investigationId={answer.investigationId}
+          onFollowup={onFollowup}
+          labels={labels.unblock}
+        />
       )}
 
       {answer.recommendedFollowups.length > 0 && (

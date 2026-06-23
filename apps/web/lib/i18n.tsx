@@ -134,6 +134,16 @@ const dict = {
     authoringVerify: 'Verify',
     authoringReject: 'Reject',
     authoringEdit: 'Edit',
+    // M2-B4 correction loop (#123): the review queue of querier-raised corrections.
+    correctionsLabel: 'Corrections',
+    correctionsHint:
+      'Queriers flagged these from blocked answers. Verify the matching item to resolve and re-answer.',
+    correctionsFrom: 'Raised by',
+    correctionsPickTarget: 'Choose the item to verify…',
+    correctionsDefinitionPlaceholder: 'Definition (optional)',
+    correctionsAccept: 'Verify & accept',
+    correctionsReject: 'Dismiss',
+    correctionsError: 'Could not apply this correction.',
     // M2-B1b members & access (#121): member management + invite redemption.
     membersLabel: 'Members & access',
     membersHint: 'Manage who can author and query this source.',
@@ -290,6 +300,15 @@ const dict = {
     authoringVerify: '核验',
     authoringReject: '拒绝',
     authoringEdit: '编辑',
+    // M2-B4 correction loop (#123): the review queue of querier-raised corrections.
+    correctionsLabel: '待审修正',
+    correctionsHint: '查询者从被阻断的回答里反馈的。核验对应条目即可解决并重新回答。',
+    correctionsFrom: '来自',
+    correctionsPickTarget: '选择要核验的条目…',
+    correctionsDefinitionPlaceholder: '定义(可选)',
+    correctionsAccept: '核验并接受',
+    correctionsReject: '驳回',
+    correctionsError: '无法处理此修正。',
     // M2-B1b members & access (#121): member management + invite redemption.
     membersLabel: '成员与访问',
     membersHint: '管理谁能编辑和查询此数据源。',
