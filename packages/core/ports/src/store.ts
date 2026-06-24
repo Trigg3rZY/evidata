@@ -90,6 +90,11 @@ export interface MetadataStore {
 
   // --- M1 connections (spec 08 §6 / 12 §2). Credentials stay encrypted at rest. ---
   createConnection(c: NewConnection): Promise<ConnectionRecord>;
+  /** Atomically create a Connection + the creator's owner membership + the bootstrap
+   *  draft Data Source + its owner membership, in ONE transaction (M2-B1a made the DS
+   *  owner membership load-bearing for authz — a partial create would orphan the
+   *  source). All-or-nothing. */
+  createConnectionWithOwnerSource(input: CreateConnectionBundle): Promise<ConnectionRecord>;
   /** Public summaries of the connections this user is a member of (never the blob). */
   listConnections(userId: string): Promise<ConnectionSummary[]>;
   /** Full record incl. the encrypted blob — internal use (test/introspect); never returned by the API. */
@@ -302,6 +307,14 @@ export interface SuggestionReviewPatch {
   targetItemId?: string | null;
   reviewedBy: string;
   reviewedAt: Date;
+}
+
+/** The four rows a connection-create commits together (M2-B1a, #146). */
+export interface CreateConnectionBundle {
+  connection: NewConnection;
+  membership: ConnectionMembershipInput;
+  dataSource: NewDataSourceRecord;
+  dataSourceMembership: DataSourceMembershipInput;
 }
 
 export interface NewConnection {
