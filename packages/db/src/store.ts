@@ -125,6 +125,8 @@ export class DrizzleMetadataStore implements MetadataStore {
       dataSourceId: init.dataSourceId,
       title: init.title,
       modelProviderId,
+      // Audit-only (#116) — stored, not surfaced on the Investigation contract.
+      modelSnapshot: init.modelSnapshot ?? null,
       createdAt: now,
       updatedAt: now,
     });

@@ -18,6 +18,7 @@ import { AuthService } from '@evidata/auth';
 import { ConnectionService } from '@evidata/connection';
 import { credentialVaultFromEnv } from '@evidata/secrets';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
+import type { ModelSnapshot } from '@evidata/ports';
 import {
   OpenAIAgentProvider,
   openAIConfigFromEnv,
@@ -48,6 +49,14 @@ export function makeProvider(question: string): AgentProvider {
 /** Build a stateful provider for a resolved registered model config (epic #106). */
 export function providerFromConfig(config: OpenAIProviderConfig): AgentProvider {
   return new OpenAIAgentProvider(config);
+}
+
+/** Audit snapshot of the env-default model (#116) — recorded on a new Investigation that
+ *  binds no registered provider. Null in fixture mode (no real model answered). */
+export function envModelSnapshot(): ModelSnapshot | null {
+  return providerConfig
+    ? { source: 'env', model: providerConfig.model, baseURL: providerConfig.baseURL ?? null }
+    : null;
 }
 
 export interface Runtime {

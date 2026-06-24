@@ -38,6 +38,10 @@ export const investigations = meta.table('investigations', {
   // snapshotted — a follow-up then uses the current env default; immutable env-default
   // audit is #116). No FK — the raw id is kept for audit even if the provider is deleted.
   modelProviderId: text('model_provider_id'),
+  // Immutable audit snapshot of the effective model at creation (#116): { source,
+  // model, baseURL }. Distinct from model_provider_id (which resolves follow-ups) — it
+  // records which model answered even for the env-default path, which has no provider id.
+  modelSnapshot: jsonb('model_snapshot'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });

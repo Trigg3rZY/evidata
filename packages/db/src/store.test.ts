@@ -154,6 +154,30 @@ describe('DrizzleMetadataStore (spec 10)', () => {
     expect(await store.getInvestigation('does-not-exist')).toBeNull();
   });
 
+  it('records an immutable model snapshot for audit, or null when omitted (#116)', async () => {
+    const snap = {
+      source: 'env' as const,
+      model: 'deepseek-chat',
+      baseURL: 'https://api.deepseek.com',
+    };
+    await store.createInvestigation({
+      id: 'inv-snap',
+      dataSourceId: 'sample',
+      title: 'snap',
+      modelSnapshot: snap,
+    });
+    const r = await handle.client.query<{ model_snapshot: unknown }>(
+      "select model_snapshot from evidata_meta.investigations where id = 'inv-snap'",
+    );
+    expect(r.rows[0]?.model_snapshot).toEqual(snap);
+
+    await store.createInvestigation({ id: 'inv-nosnap', dataSourceId: 'sample', title: 'x' });
+    const r2 = await handle.client.query<{ model_snapshot: unknown }>(
+      "select model_snapshot from evidata_meta.investigations where id = 'inv-nosnap'",
+    );
+    expect(r2.rows[0]?.model_snapshot).toBeNull();
+  });
+
   it('binds + reads the model provider per investigation (epic #113)', async () => {
     await store.createInvestigation({
       id: 'inv-mp',
