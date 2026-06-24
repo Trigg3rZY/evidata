@@ -682,3 +682,40 @@ describe('DrizzleMetadataStore — correction-loop suggestions (M2-B4, #123)', (
     expect((await store.getSuggestion('sg-1'))?.status).toBe('accepted'); // unchanged
   });
 });
+
+describe('DrizzleMetadataStore — saveAnswer head guard (M2-B4 ②)', () => {
+  it('appends only when expectedLatestVersion still matches the head', async () => {
+    await store.createInvestigation({ id: 'inv-hg', dataSourceId: 'sample', title: 'hg' });
+    expect(
+      (
+        await store.saveAnswer({
+          investigationId: 'inv-hg',
+          question: 'q',
+          answer: mkAnswer(1),
+          queryRuns: runs,
+        })
+      ).meta.version,
+    ).toBe(1);
+
+    // Head is still 1 → the guarded append succeeds as v2.
+    const v2 = await store.saveAnswer({
+      investigationId: 'inv-hg',
+      answer: mkAnswer(2),
+      queryRuns: runs,
+      expectedLatestVersion: 1,
+    });
+    expect(v2.meta.version).toBe(2);
+
+    // Stale: a guarded append that still expects head=1 (a concurrent turn moved it to 2)
+    // throws and writes nothing.
+    await expect(
+      store.saveAnswer({
+        investigationId: 'inv-hg',
+        answer: mkAnswer(3),
+        queryRuns: runs,
+        expectedLatestVersion: 1,
+      }),
+    ).rejects.toThrow(/head moved/i);
+    expect((await store.getInvestigation('inv-hg'))?.answers).toHaveLength(2); // no v3
+  });
+});

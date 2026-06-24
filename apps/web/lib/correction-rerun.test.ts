@@ -56,4 +56,22 @@ describe('rerunForCorrection (M2-B4 ②)', () => {
     const { rt } = mockRuntime(2, 'message');
     expect(await rerunForCorrection(rt, 'inv-1', 2, 'admin')).toBe(false);
   });
+
+  it('skips a bound model that cannot resolve — no silent env-default fallback (#111)', async () => {
+    const ask = vi.fn().mockResolvedValue({ kind: 'answer' });
+    const rt = {
+      service: {
+        getThread: vi.fn().mockResolvedValue({
+          dataSourceId: 'ds-1',
+          turns: [{ role: 'user', question: 'q' }],
+          answers: [{ meta: { version: 2 } }],
+        }),
+        getInvestigationModelProviderId: vi.fn().mockResolvedValue('mp-deleted'),
+        ask,
+      },
+      modelProviders: { resolveConfig: vi.fn().mockResolvedValue(null) },
+    } as unknown as Runtime;
+    expect(await rerunForCorrection(rt, 'inv-1', 2, 'admin')).toBe(false);
+    expect(ask).not.toHaveBeenCalled();
+  });
 });

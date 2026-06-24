@@ -92,6 +92,18 @@ export interface MetadataStoreOptions {
   newId?: () => string;
 }
 
+/** Thrown by `saveAnswer` when `expectedLatestVersion` no longer matches the head — a
+ *  concurrent turn appended first (M2-B4 ② correction-rerun head guard). */
+export class StaleAnswerHeadError extends Error {
+  constructor(
+    readonly expected: number,
+    readonly actual: number,
+  ) {
+    super(`Answer head moved: expected version ${expected}, found ${actual}.`);
+    this.name = 'StaleAnswerHeadError';
+  }
+}
+
 export class DrizzleMetadataStore implements MetadataStore {
   private readonly now: () => Date;
   private readonly newId: () => string;
@@ -134,7 +146,13 @@ export class DrizzleMetadataStore implements MetadataStore {
         .select({ version: answers.version, isLatest: answers.isLatest })
         .from(answers)
         .where(eq(answers.investigationId, investigationId));
-      const nextVersion = prior.reduce((m, r) => Math.max(m, r.version), 0) + 1;
+      const currentMax = prior.reduce((m, r) => Math.max(m, r.version), 0);
+      // Optimistic head guard (B4 ②): if the caller expects a specific head and a
+      // concurrent turn moved it, roll back rather than appending after the wrong turn.
+      if (input.expectedLatestVersion != null && currentMax !== input.expectedLatestVersion) {
+        throw new StaleAnswerHeadError(input.expectedLatestVersion, currentMax);
+      }
+      const nextVersion = currentMax + 1;
 
       if (prior.some((r) => r.isLatest)) {
         await tx

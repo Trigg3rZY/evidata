@@ -25,11 +25,14 @@ export async function rerunForCorrection(
 
   // The model is bound to the investigation (#113); resolve it from the shared team pool
   // (#151 — any member resolves it, the key stays server-side). null → the env default.
+  // A BOUND model that can't resolve must NOT silently fall back to the env default
+  // (#111) — that would persist a correction answer from the wrong model. Skip instead.
   const modelProviderId = await rt.service.getInvestigationModelProviderId(investigationId);
   let providerFor = makeProvider;
   if (modelProviderId) {
     const cfg = await rt.modelProviders.resolveConfig(modelProviderId).catch(() => null);
-    if (cfg) providerFor = () => providerFromConfig(cfg);
+    if (!cfg) return false; // bound but unresolvable → don't re-answer with the wrong model
+    providerFor = () => providerFromConfig(cfg);
   }
 
   // Build the provider from the stored latest question (the fixture path keys off it; the
@@ -44,6 +47,9 @@ export async function rerunForCorrection(
         language: 'en', // chrome-only; the answer follows the question's language
         userId,
         correction: true,
+        // Atomic head guard: only append if the version that raised the correction is
+        // STILL the head at save time (a follow-up may have landed since the pre-check).
+        expectedLatestVersion: raisedVersion,
       },
       { provider: providerFor(question) },
     );
