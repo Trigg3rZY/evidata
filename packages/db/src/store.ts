@@ -23,6 +23,7 @@ import type {
   ConnectionRecord,
   ConnectionRole,
   ConnectionSummary,
+  CreateConnectionBundle,
   DataSourceConnectionInput,
   DataSourceConnectionRecord,
   DataSourceContextInput,
@@ -416,6 +417,44 @@ export class DrizzleMetadataStore implements MetadataStore {
       updatedAt: at,
     });
     return { ...c, createdAt: at.toISOString(), updatedAt: at.toISOString() };
+  }
+
+  async createConnectionWithOwnerSource(input: CreateConnectionBundle): Promise<ConnectionRecord> {
+    const at = this.now();
+    const { connection: c, membership: m, dataSource: ds, dataSourceMembership: dsm } = input;
+    return this.db.transaction(async (tx) => {
+      await tx.insert(connections).values({
+        id: c.id,
+        kind: c.kind,
+        name: c.name,
+        host: c.host,
+        port: c.port,
+        database: c.database,
+        sslMode: c.sslMode,
+        credentialBlob: c.credentialBlob,
+        health: c.health,
+        createdBy: c.createdBy,
+        createdAt: at,
+        updatedAt: at,
+      });
+      await tx
+        .insert(connectionMemberships)
+        .values({ id: m.id, userId: m.userId, connectionId: m.connectionId, role: m.role });
+      await tx.insert(dataSources).values({
+        id: ds.id,
+        name: ds.name,
+        kind: ds.kind,
+        connectionId: ds.connectionId,
+        createdAt: at,
+      });
+      await tx.insert(dataSourceMemberships).values({
+        id: dsm.id,
+        userId: dsm.userId,
+        dataSourceId: dsm.dataSourceId,
+        role: dsm.role,
+      });
+      return { ...c, createdAt: at.toISOString(), updatedAt: at.toISOString() };
+    });
   }
 
   async listConnections(userId: string): Promise<ConnectionSummary[]> {

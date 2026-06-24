@@ -719,3 +719,73 @@ describe('DrizzleMetadataStore — saveAnswer head guard (M2-B4 ②)', () => {
     expect((await store.getInvestigation('inv-hg'))?.answers).toHaveLength(2); // no v3
   });
 });
+
+describe('DrizzleMetadataStore — createConnectionWithOwnerSource atomicity (#146)', () => {
+  it('rolls back the connection + draft source when the final membership insert fails', async () => {
+    await store.createUser({
+      id: 'tx-user',
+      username: 'tx-user',
+      displayName: 'Tx',
+      passwordHash: 'x',
+    });
+    const blob = { v: 1, keyId: 'k1', iv: 'a', ciphertext: 'b', authTag: 'c' };
+    await expect(
+      store.createConnectionWithOwnerSource({
+        connection: {
+          id: 'conn-tx',
+          kind: 'postgres',
+          name: 'TX',
+          host: 'h',
+          port: 5432,
+          database: 'd',
+          sslMode: 'disable',
+          credentialBlob: blob,
+          health: 'Untested',
+          createdBy: 'tx-user',
+        },
+        membership: { id: 'mem-tx', userId: 'tx-user', connectionId: 'conn-tx', role: 'owner' },
+        dataSource: { id: 'ds-tx', name: 'TX', kind: 'postgres', connectionId: 'conn-tx' },
+        // The LAST insert references a non-existent user → FK violation after inserts 1–3.
+        dataSourceMembership: {
+          id: 'dsm-tx',
+          userId: 'GHOST',
+          dataSourceId: 'ds-tx',
+          role: 'owner',
+        },
+      }),
+    ).rejects.toThrow();
+    // All four rows rolled back — no orphaned connection, and no owner-less draft source.
+    expect(await store.getConnection('conn-tx')).toBeNull();
+    expect(await store.getDataSource('ds-tx')).toBeNull();
+  });
+
+  it('commits all four rows on success', async () => {
+    await store.createUser({
+      id: 'tx-ok',
+      username: 'tx-ok',
+      displayName: 'Ok',
+      passwordHash: 'x',
+    });
+    const blob = { v: 1, keyId: 'k1', iv: 'a', ciphertext: 'b', authTag: 'c' };
+    const rec = await store.createConnectionWithOwnerSource({
+      connection: {
+        id: 'conn-ok',
+        kind: 'postgres',
+        name: 'OK',
+        host: 'h',
+        port: 5432,
+        database: 'd',
+        sslMode: 'disable',
+        credentialBlob: blob,
+        health: 'Untested',
+        createdBy: 'tx-ok',
+      },
+      membership: { id: 'mem-ok', userId: 'tx-ok', connectionId: 'conn-ok', role: 'owner' },
+      dataSource: { id: 'ds-ok', name: 'OK', kind: 'postgres', connectionId: 'conn-ok' },
+      dataSourceMembership: { id: 'dsm-ok', userId: 'tx-ok', dataSourceId: 'ds-ok', role: 'owner' },
+    });
+    expect(rec.id).toBe('conn-ok');
+    expect(await store.getConnection('conn-ok')).not.toBeNull();
+    expect(await store.getDataSourceRole('tx-ok', 'ds-ok')).toBe('owner'); // the load-bearing membership
+  });
+});

@@ -50,17 +50,14 @@ export class SchemaUnavailableError extends Error {
 
 export type ConnectionStore = Pick<
   MetadataStore,
-  | 'createConnection'
+  | 'createConnectionWithOwnerSource'
   | 'listConnections'
   | 'getConnection'
   | 'setConnectionHealth'
   | 'deleteConnection'
-  | 'createConnectionMembership'
   | 'getConnectionRole'
   | 'saveSchemaSnapshot'
   | 'getLatestSnapshot'
-  | 'createDataSource'
-  | 'createDataSourceMembership'
   | 'listDataSourcesByConnection'
 >;
 
@@ -146,38 +143,26 @@ export class ConnectionService {
       JSON.stringify({ user: input.user, password: input.password }),
       id,
     );
-    const record = await this.deps.store.createConnection({
-      id,
-      kind: 'postgres',
-      name: input.name,
-      host: input.host,
-      port: input.port,
-      database: input.database,
-      sslMode: input.sslMode,
-      credentialBlob,
-      health: 'Untested',
-      createdBy: userId,
-    });
-    await this.deps.store.createConnectionMembership({
-      id: this.newId('mem'),
-      userId,
-      connectionId: id,
-      role: 'owner',
-    });
     const dataSourceId = this.newId('ds');
-    await this.deps.store.createDataSource({
-      id: dataSourceId,
-      name: input.name,
-      kind: 'postgres',
-      connectionId: id,
-    });
-    // Bootstrap the Data Source role matrix (M2-B1a): the creator owns the new source,
-    // so authoring/query gates (now keyed on Data Source membership) admit them.
-    await this.deps.store.createDataSourceMembership({
-      id: this.newId('dsm'),
-      userId,
-      dataSourceId,
-      role: 'owner',
+    // One transaction (#146): the connection, the creator's owner membership, the
+    // bootstrap draft Data Source, and — load-bearing for authz since M2-B1a — its owner
+    // membership commit together, so a mid-sequence failure can't orphan the source.
+    const record = await this.deps.store.createConnectionWithOwnerSource({
+      connection: {
+        id,
+        kind: 'postgres',
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        database: input.database,
+        sslMode: input.sslMode,
+        credentialBlob,
+        health: 'Untested',
+        createdBy: userId,
+      },
+      membership: { id: this.newId('mem'), userId, connectionId: id, role: 'owner' },
+      dataSource: { id: dataSourceId, name: input.name, kind: 'postgres', connectionId: id },
+      dataSourceMembership: { id: this.newId('dsm'), userId, dataSourceId, role: 'owner' },
     });
     return toSummary(record);
   }
