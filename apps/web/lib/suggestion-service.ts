@@ -140,7 +140,7 @@ export class SuggestionService {
     dataSourceId: string,
     suggestionId: string,
     input: AcceptSuggestionInput,
-  ): Promise<{ investigationId: string }> {
+  ): Promise<{ investigationId: string; answerVersion: number | null }> {
     await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
     const sug = await this.store.getSuggestion(suggestionId);
     if (!sug || sug.dataSourceId !== dataSourceId) throw new AuthoringAccessError();
@@ -172,7 +172,7 @@ export class SuggestionService {
     } else {
       await this.verification.promote(userId, dataSourceId, 'mapping', input.targetItemId);
     }
-    return { investigationId: sug.investigationId };
+    return { investigationId: sug.investigationId, answerVersion: sug.answerVersion };
   }
 
   /** Reject a suggestion (gated on `author`). */

@@ -138,6 +138,41 @@ describe('InvestigationService', () => {
     expect(thread?.turns.filter((t) => t.role === 'user')).toHaveLength(2);
   });
 
+  it('a correction rerun appends a version tagged definition_correction, no new user turn (M2-B4)', async () => {
+    const first = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: "Why is ACME's ad bill higher this month?",
+        language: 'en',
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (first.kind !== 'answer') throw new Error('expected an answer');
+
+    // `correction` implies a rerun: regenerate the latest question, stamp the audit kind.
+    const corrected = await service.ask(
+      {
+        dataSourceId: 'sample',
+        question: 'ignored — the rerun uses the stored question',
+        language: 'en',
+        investigationId: first.investigationId,
+        correction: true,
+      },
+      { provider: fixtureFor('acme-bill-up') },
+    );
+    if (corrected.kind !== 'answer') throw new Error('expected an answer');
+    expect(corrected.answer.meta.version).toBe(2);
+    expect(corrected.answer.meta.createdAfter).toEqual({
+      kind: 'definition_correction',
+      fromVersion: 1,
+    });
+
+    const thread = await service.getThread(first.investigationId);
+    // A rerun records NO new user turn (it re-answers the existing one).
+    expect(thread?.turns.filter((t) => t.role === 'user')).toHaveLength(1);
+    expect(thread?.answers.filter((a) => a.meta.isLatest)).toHaveLength(1);
+  });
+
   it('seeds a follow-up with the prior turns as model context', async () => {
     const first = await service.ask(
       {

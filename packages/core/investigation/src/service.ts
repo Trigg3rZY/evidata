@@ -76,6 +76,10 @@ export interface AskParams {
   /** Regenerate the latest answer: append a version with NO new user turn and
    *  versionTrigger 'rerun' (requires investigationId). */
   rerun?: boolean;
+  /** A correction-loop rerun (M2-B4): like `rerun`, but the appended version records
+   *  versionTrigger 'definition_correction' (an Admin accepted a Verified edit that
+   *  affects this answer). Implies `rerun`. */
+  correction?: boolean;
   /** The model to bind to a NEW Investigation (epic #106 / #113). Recorded on
    *  create; null/omitted = the server's default. Ignored for a follow-up — that
    *  reuses the Investigation's already-bound model (the caller resolves it). */
@@ -207,7 +211,7 @@ export class InvestigationService {
    */
   async ask(params: AskParams, opts: AskOptions): Promise<AskResult> {
     const isFollowup = !!params.investigationId;
-    const isRerun = Boolean(params.rerun && params.investigationId);
+    const isRerun = Boolean((params.rerun || params.correction) && params.investigationId);
     let rt: DataSourceRuntime;
     let investigationId: string;
     let question = params.question;
@@ -250,7 +254,14 @@ export class InvestigationService {
       // provenance (createdAfter: { kind, fromVersion }); the store still re-stamps
       // the authoritative version/isLatest.
       ...(priorAnswers.length
-        ? { priorAnswers, versionTrigger: isRerun ? ('rerun' as const) : ('followup' as const) }
+        ? {
+            priorAnswers,
+            versionTrigger: isRerun
+              ? params.correction
+                ? ('definition_correction' as const)
+                : ('rerun' as const)
+              : ('followup' as const),
+          }
         : {}),
     });
 
