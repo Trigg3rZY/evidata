@@ -323,4 +323,8 @@ ALTER TABLE "evidata_meta"."suggestions" ADD CONSTRAINT "suggestions_submitted_b
 ALTER TABLE "evidata_meta"."suggestions" ADD CONSTRAINT "suggestions_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "evidata_meta"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "suggestions_ds_status_idx" ON "evidata_meta"."suggestions" USING btree ("data_source_id","status");`,
   },
+  {
+    name: '0009_gray_rick_jones',
+    sql: `ALTER TABLE "evidata_meta"."investigations" ADD COLUMN "model_snapshot" jsonb;`,
+  },
 ];

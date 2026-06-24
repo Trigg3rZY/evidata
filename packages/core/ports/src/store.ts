@@ -24,6 +24,16 @@ export interface QueryRunRecord {
   evidenceRef: string;
 }
 
+/** Immutable record of the model that actually produced an Investigation, captured at
+ *  creation for audit (#116). `model_provider_id` resolves the model for follow-ups;
+ *  this never changes — so even an env-default Investigation (no bound provider) has a
+ *  durable record of which model/endpoint answered, regardless of later env changes. */
+export interface ModelSnapshot {
+  source: 'registered' | 'env';
+  model: string;
+  baseURL: string | null;
+}
+
 export interface NewInvestigation {
   id: string;
   dataSourceId: string;
@@ -31,6 +41,8 @@ export interface NewInvestigation {
   /** Model bound to this Investigation (epic #106 / #113). Null/omitted = the
    *  server's default model. */
   modelProviderId?: string | null;
+  /** Audit snapshot of the effective model at creation (#116); null in fixture mode. */
+  modelSnapshot?: ModelSnapshot | null;
 }
 
 export interface SaveAnswerInput {

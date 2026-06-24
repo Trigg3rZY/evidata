@@ -6,6 +6,7 @@
  */
 import type { AgentProvider, AgentRunEvent } from '@evidata/agent';
 import type { InvestigationService } from '@evidata/investigation';
+import type { ModelSnapshot } from '@evidata/ports';
 import type { ProviderUsage } from '@evidata/provider-openai';
 
 export type Lang = 'en' | 'zh-CN';
@@ -102,6 +103,8 @@ export function parseAskBody(raw: unknown): AskBody | { error: string } {
 export interface AskStreamDeps {
   service: InvestigationService;
   providerFor: (question: string) => AgentProvider;
+  /** Audit snapshot of the effective model (#116); recorded on a NEW Investigation. */
+  modelSnapshot?: ModelSnapshot | null;
 }
 
 /** Read cumulative cost off a provider that reports it (the real one), else null. */
@@ -134,6 +137,8 @@ export async function askStream(
         // Recorded on a NEW Investigation so follow-ups reuse this model (#113); the
         // service ignores it for a follow-up (that one is already bound).
         ...(body.modelProviderId ? { modelProviderId: body.modelProviderId } : {}),
+        // Immutable audit snapshot of the effective model (#116); used only on create.
+        ...(deps.modelSnapshot ? { modelSnapshot: deps.modelSnapshot } : {}),
       },
       {
         provider,

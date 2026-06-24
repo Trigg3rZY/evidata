@@ -1,6 +1,7 @@
+import type { ModelSnapshot } from '@evidata/ports';
 import { askStream, type AskBody } from './ask-stream';
 import { VaultUnavailableError } from './model-provider-service';
-import { getRuntime, makeProvider, providerFromConfig } from './runtime';
+import { envModelSnapshot, getRuntime, makeProvider, providerFromConfig } from './runtime';
 
 /**
  * Shared SSE response for the Ask Data endpoints (new investigation + follow-up).
@@ -19,6 +20,9 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
     ? await rt.service.getInvestigationModelProviderId(body.investigationId)
     : (body.modelProviderId ?? null);
   let providerFor = makeProvider;
+  // Audit snapshot of the effective model recorded on a NEW Investigation (#116);
+  // defaults to the env model, overridden below when a registered model resolves.
+  let modelSnapshot: ModelSnapshot | null = envModelSnapshot();
   if (modelProviderId) {
     let cfg;
     try {
@@ -38,6 +42,7 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
       return Response.json({ error: 'The selected model is unavailable.' }, { status: 404 });
     }
     providerFor = () => providerFromConfig(cfg);
+    modelSnapshot = { source: 'registered', model: cfg.model, baseURL: cfg.baseURL ?? null };
   }
   const encoder = new TextEncoder();
   // Disconnect-safe: once the client goes away, `cancel()` flips `closed` and
@@ -53,7 +58,7 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
           closed = true;
         }
       };
-      await askStream({ service: rt.service, providerFor }, body, write, signal);
+      await askStream({ service: rt.service, providerFor, modelSnapshot }, body, write, signal);
       if (!closed) controller.close();
     },
     cancel() {
