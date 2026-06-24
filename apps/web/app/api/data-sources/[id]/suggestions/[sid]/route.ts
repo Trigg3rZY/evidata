@@ -1,5 +1,7 @@
 import { withSuggestions } from '@/lib/suggestion-routes';
 import { SuggestionValidationError } from '@/lib/suggestion-service';
+import { rerunForCorrection } from '@/lib/correction-rerun';
+import { getRuntime } from '@/lib/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +31,16 @@ export async function POST(
       const targetItemId = typeof body.targetItemId === 'string' ? body.targetItemId : '';
       if (!targetItemId) throw new SuggestionValidationError('A target item is required.');
       const definition = typeof body.definition === 'string' ? body.definition : null;
-      return suggestions.accept(user.id, id, sid, { targetKind, targetItemId, definition });
+      const { investigationId, answerVersion } = await suggestions.accept(user.id, id, sid, {
+        targetKind,
+        targetItemId,
+        definition,
+      });
+      // B4 ②: re-answer the affected investigation with the now-Verified knowledge (head-
+      // guarded + best-effort; the accept already stands regardless).
+      const rt = await getRuntime();
+      const reran = await rerunForCorrection(rt, investigationId, answerVersion, user.id);
+      return { ok: true, investigationId, reran };
     }
     throw new SuggestionValidationError('Unknown action.');
   });

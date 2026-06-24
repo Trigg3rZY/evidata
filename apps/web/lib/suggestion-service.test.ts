@@ -128,7 +128,7 @@ describe('SuggestionService (M2-B4, #123)', () => {
       targetKind: 'mapping',
       targetItemId: 'mS1',
     });
-    expect(res).toEqual({ investigationId: 'inv-s' });
+    expect(res).toEqual({ investigationId: 'inv-s', answerVersion: null });
     expect((await store.getEntityMappings('ds-s', 'verified')).some((m) => m.id === 'mS1')).toBe(
       true,
     );
