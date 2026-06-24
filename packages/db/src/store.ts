@@ -928,13 +928,25 @@ export class DrizzleMetadataStore implements MetadataStore {
   }
 
   async redeemDataSourceInvite(id: string, userId: string, at: Date): Promise<boolean> {
-    // Atomic single-use claim: only succeeds while still unredeemed.
+    // Atomic single-use claim: only succeeds while still unredeemed AND unexpired — the
+    // expiry predicate is folded in (#147) so a token expiring in the read→claim window
+    // can't slip through.
     const claimed = await this.db
       .update(dataSourceInvites)
       .set({ redeemedBy: userId, redeemedAt: at })
-      .where(and(eq(dataSourceInvites.id, id), isNull(dataSourceInvites.redeemedAt)))
+      .where(
+        and(
+          eq(dataSourceInvites.id, id),
+          isNull(dataSourceInvites.redeemedAt),
+          gt(dataSourceInvites.expiresAt, at),
+        ),
+      )
       .returning({ id: dataSourceInvites.id });
     return claimed.length === 1;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.db.delete(users).where(eq(users.id, id));
   }
 
   async listPendingDataSourceInvites(

@@ -813,3 +813,41 @@ describe('DrizzleMetadataStore — createConnectionWithOwnerSource atomicity (#1
     expect(await store.getDataSourceRole('tx-ok', 'ds-ok')).toBe('owner'); // the load-bearing membership
   });
 });
+
+describe('DrizzleMetadataStore — invite claim-time expiry + deleteUser (#147)', () => {
+  it('redeemDataSourceInvite rejects an expired token at claim time; deleteUser removes the row', async () => {
+    await store.createUser({ id: 'iv-u', username: 'iv-u', displayName: 'IV', passwordHash: 'x' });
+    // An already-expired invite can't be claimed — the expiry predicate is in the UPDATE.
+    await store.createDataSourceInvite({
+      id: 'iv-exp',
+      dataSourceId: 'sample',
+      role: 'querier',
+      tokenHash: 'h-exp',
+      createdBy: 'iv-u',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    expect(await store.redeemDataSourceInvite('iv-exp', 'iv-u', new Date())).toBe(false);
+
+    // A live invite still claims.
+    await store.createDataSourceInvite({
+      id: 'iv-live',
+      dataSourceId: 'sample',
+      role: 'querier',
+      tokenHash: 'h-live',
+      createdBy: 'iv-u',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(await store.redeemDataSourceInvite('iv-live', 'iv-u', new Date())).toBe(true);
+
+    // deleteUser removes the account (registration-rollback path).
+    await store.createUser({
+      id: 'iv-del',
+      username: 'iv-del',
+      displayName: 'Del',
+      passwordHash: 'x',
+    });
+    expect(await store.getUserByUsername('iv-del')).not.toBeNull();
+    await store.deleteUser('iv-del');
+    expect(await store.getUserByUsername('iv-del')).toBeNull();
+  });
+});

@@ -42,6 +42,12 @@ class FakeStore implements AuthStore {
     this.sessions.delete(tokenHash);
     return Promise.resolve();
   }
+  deleteUser(id: string): Promise<void> {
+    const rec = this.byId.get(id);
+    if (rec) this.byUsername.delete(rec.username);
+    this.byId.delete(id);
+    return Promise.resolve();
+  }
 }
 
 const owner = {

@@ -71,7 +71,7 @@ type InviteStore = Pick<
 
 export interface InviteServiceDeps {
   store: InviteStore;
-  auth: Pick<AuthService, 'register'>;
+  auth: Pick<AuthService, 'register' | 'rollbackRegistration'>;
   now?: () => Date;
   newId?: (prefix: string) => string;
 }
@@ -136,8 +136,11 @@ export class InviteService {
       sessionToken = created.token;
     }
 
-    // Atomic single-use claim — guards against a double-redeem race.
+    // Atomic single-use claim — guards a double-redeem race (and re-checks expiry).
     if (!(await this.deps.store.redeemDataSourceInvite(invite.id, userId, this.now()))) {
+      // Lost the race (or it expired in the window). If we created the account for this
+      // redeem, roll it back so the loser leaves no orphan user / taken username (#147).
+      if (sessionToken) await this.deps.auth.rollbackRegistration(userId, sessionToken);
       throw new InviteError('redeemed');
     }
 

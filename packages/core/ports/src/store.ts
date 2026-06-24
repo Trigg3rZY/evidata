@@ -181,6 +181,9 @@ export interface MetadataStore {
   removeDataSourceMembership(dataSourceId: string, userId: string): Promise<void>;
   // --- Invites (M2-B1b): single-use, expiring, hashed token. ---
   createUser(user: NewUser): Promise<UserRecord | null>; // null if the username is taken
+  /** Delete a user (for rolling back a just-created registration — #147). Sessions are
+   *  removed first by the caller; the brand-new user has no other references. */
+  deleteUser(id: string): Promise<void>;
   createDataSourceInvite(input: NewDataSourceInvite): Promise<void>;
   getDataSourceInviteByHash(tokenHash: string): Promise<DataSourceInviteRecord | null>;
   /** Atomically claim a pending invite (returns false if already redeemed — race-safe). */
