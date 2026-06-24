@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createMetadataDb, DrizzleMetadataStore, type MetadataDbHandle } from '@evidata/db';
 import { AuthService } from '@evidata/auth';
-import { AuthoringAccessError, InviteService } from './invite-service';
+import { AuthoringAccessError, InviteError, InviteService } from './invite-service';
 
 const blob = { v: 1, keyId: 'k1', iv: 'a', ciphertext: 'b', authTag: 'c' };
 let handle: MetadataDbHandle;
@@ -113,18 +113,25 @@ describe('InviteService (M2-B1b, #121)', () => {
     });
   });
 
-  it('rolls back the just-created account when the redeem loses the single-use claim (#147)', async () => {
+  it('rolls back the just-created account when the claim is lost AFTER registration (#147)', async () => {
     const { token } = await svc().create('owner', 'ds', 'querier');
-    // The token is consumed first (stands in for the winner of a concurrent race).
-    await svc().redeem(token, { currentUserId: 'existing' });
-    // A second anonymous redeem signs up, but the claim then fails (already redeemed) →
-    // the brand-new account is rolled back, leaving no orphan and freeing the username.
-    await expect(
-      svc().redeem(token, {
-        signup: { username: 'racer', displayName: 'Racer', password: 'pw-12345' },
-      }),
-    ).rejects.toMatchObject({ code: 'redeemed' });
-    expect(await store.getUserByUsername('racer')).toBeNull();
+    // Simulate losing the race *after* the account is created: the invite still reads as
+    // unredeemed (so the early check passes and register runs), but the atomic claim
+    // returns false. Spying only on redeemDataSourceInvite leaves the rest of the redeem
+    // path (register, rollback, re-fetch) on the real store.
+    const spy = vi.spyOn(store, 'redeemDataSourceInvite').mockResolvedValue(false);
+    try {
+      await expect(
+        svc().redeem(token, {
+          signup: { username: 'racer', displayName: 'Racer', password: 'pw-12345' },
+        }),
+      ).rejects.toBeInstanceOf(InviteError);
+      // 'racer' was created during the redeem, then rolled back — no orphan, username
+      // freed. (Removing the rollback leaves 'racer' here, failing this assertion.)
+      expect(await store.getUserByUsername('racer')).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('rejects an expired token', async () => {

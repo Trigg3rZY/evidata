@@ -141,7 +141,10 @@ export class InviteService {
       // Lost the race (or it expired in the window). If we created the account for this
       // redeem, roll it back so the loser leaves no orphan user / taken username (#147).
       if (sessionToken) await this.deps.auth.rollbackRegistration(userId, sessionToken);
-      throw new InviteError('redeemed');
+      // Surface the right reason: a claim lost to another redeem now shows `redeemedAt`;
+      // the only other reason the atomic claim fails is the folded-in expiry predicate.
+      const after = await this.deps.store.getDataSourceInviteByHash(hashToken(token));
+      throw new InviteError(after?.redeemedAt ? 'redeemed' : 'expired');
     }
 
     // Grant the role unless they're already a member (idempotent join — keep existing).
