@@ -639,21 +639,26 @@ describe('DrizzleMetadataStore — correction-loop suggestions (M2-B4, #123)', (
     });
 
     // Resolve (accept): records the reviewer + which Verified item it mapped to; it
-    // leaves the open queue. Scoped by data source — a mismatched id is a no-op.
-    await store.setSuggestionReviewed('other-ds', 'sg-1', {
-      status: 'accepted',
-      reviewedBy: 'sg-user',
-      reviewedAt: new Date(),
-    });
+    // leaves the open queue. Scoped by data source — a mismatched id updates nothing
+    // (returns false), and the row stays open.
+    expect(
+      await store.setSuggestionReviewed('other-ds', 'sg-1', {
+        status: 'accepted',
+        reviewedBy: 'sg-user',
+        reviewedAt: new Date(),
+      }),
+    ).toBe(false);
     expect((await store.getSuggestion('sg-1'))?.status).toBe('open'); // wrong DS → untouched
 
-    await store.setSuggestionReviewed('sample', 'sg-1', {
-      status: 'accepted',
-      targetKind: 'mapping',
-      targetItemId: 'map-7',
-      reviewedBy: 'sg-user',
-      reviewedAt: new Date(),
-    });
+    expect(
+      await store.setSuggestionReviewed('sample', 'sg-1', {
+        status: 'accepted',
+        targetKind: 'mapping',
+        targetItemId: 'map-7',
+        reviewedBy: 'sg-user',
+        reviewedAt: new Date(),
+      }),
+    ).toBe(true);
     const resolved = await store.getSuggestion('sg-1');
     expect(resolved).toMatchObject({
       status: 'accepted',
@@ -665,5 +670,15 @@ describe('DrizzleMetadataStore — correction-loop suggestions (M2-B4, #123)', (
     expect((await store.listSuggestions('sample', 'open')).some((s) => s.id === 'sg-1')).toBe(
       false,
     );
+
+    // Conditional on still-open: resolving an already-resolved row updates nothing.
+    expect(
+      await store.setSuggestionReviewed('sample', 'sg-1', {
+        status: 'rejected',
+        reviewedBy: 'sg-user',
+        reviewedAt: new Date(),
+      }),
+    ).toBe(false);
+    expect((await store.getSuggestion('sg-1'))?.status).toBe('accepted'); // unchanged
   });
 });

@@ -177,14 +177,15 @@ export interface MetadataStore {
    *  joined with the submitter's display name. */
   listSuggestions(dataSourceId: string, status?: SuggestionStatus): Promise<SuggestionView[]>;
   getSuggestion(id: string): Promise<SuggestionRecord | null>;
-  /** Resolve a suggestion: set its status (accepted|rejected), the reviewer, and — on
-   *  accept — which Verified item it mapped to. Scoped to the Data Source (no-op for a
-   *  mismatched id). */
+  /** Atomically resolve a still-`open` suggestion: set its status (accepted|rejected),
+   *  the reviewer, and — on accept — which Verified item it mapped to. Scoped to the
+   *  Data Source AND `status = 'open'`, so concurrent reviewers can't double-resolve;
+   *  returns false if no row was updated (already reviewed / mismatched id). */
   setSuggestionReviewed(
     dataSourceId: string,
     id: string,
     patch: SuggestionReviewPatch,
-  ): Promise<void>;
+  ): Promise<boolean>;
 }
 
 export type ConnectionHealth =

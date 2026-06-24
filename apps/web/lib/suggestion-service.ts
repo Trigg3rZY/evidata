@@ -146,8 +146,19 @@ export class SuggestionService {
     if (!sug || sug.dataSourceId !== dataSourceId) throw new AuthoringAccessError();
     if (sug.status !== 'open') throw new SuggestionStateError();
 
-    // Apply the Verified edit. promote/editGlossary re-check `author` (harmless) and are
-    // scoped by dataSourceId, so a target id from another source is a no-op.
+    // Claim the suggestion FIRST (atomic, conditional on still-open) so a concurrent
+    // reviewer loses the race here and never promotes a (possibly different) item.
+    const claimed = await this.store.setSuggestionReviewed(dataSourceId, suggestionId, {
+      status: 'accepted',
+      targetKind: input.targetKind,
+      targetItemId: input.targetItemId,
+      reviewedBy: userId,
+      reviewedAt: this.now(),
+    });
+    if (!claimed) throw new SuggestionStateError();
+
+    // Now apply the Verified edit (the winner only). promote/editGlossary re-check
+    // `author` (harmless) and are scoped by dataSourceId, so a foreign id is a no-op.
     if (input.targetKind === 'glossary') {
       if (input.definition && input.definition.trim()) {
         await this.verification.editGlossary(
@@ -161,14 +172,6 @@ export class SuggestionService {
     } else {
       await this.verification.promote(userId, dataSourceId, 'mapping', input.targetItemId);
     }
-
-    await this.store.setSuggestionReviewed(dataSourceId, suggestionId, {
-      status: 'accepted',
-      targetKind: input.targetKind,
-      targetItemId: input.targetItemId,
-      reviewedBy: userId,
-      reviewedAt: this.now(),
-    });
     return { investigationId: sug.investigationId };
   }
 
@@ -178,10 +181,11 @@ export class SuggestionService {
     const sug = await this.store.getSuggestion(suggestionId);
     if (!sug || sug.dataSourceId !== dataSourceId) throw new AuthoringAccessError();
     if (sug.status !== 'open') throw new SuggestionStateError();
-    await this.store.setSuggestionReviewed(dataSourceId, suggestionId, {
+    const claimed = await this.store.setSuggestionReviewed(dataSourceId, suggestionId, {
       status: 'rejected',
       reviewedBy: userId,
       reviewedAt: this.now(),
     });
+    if (!claimed) throw new SuggestionStateError();
   }
 }

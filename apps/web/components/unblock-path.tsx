@@ -37,16 +37,14 @@ export function UnblockPathView({
       return next;
     });
 
-  // File a correction against the investigation's review queue; acknowledge on success.
-  // Falls back to a local ack if there's no investigation id (e.g. a streaming preview).
+  // File a correction against the investigation's review queue when we can (an
+  // authenticated member of a real source), then ALWAYS acknowledge locally — so the
+  // built-in Sample / anonymous path (where the correction route 401s, and there's no
+  // owner to review anyway) keeps the prior "recorded for an Admin" ack instead of a
+  // dead button.
   const fileCorrection = async (action: UnblockAction, index: number): Promise<void> => {
-    if (!investigationId) {
-      setNoted((prev) => new Set(prev).add(index));
-      return;
-    }
-    const res = await fetch(
-      `/api/investigations/${encodeURIComponent(investigationId)}/suggestions`,
-      {
+    if (investigationId) {
+      await fetch(`/api/investigations/${encodeURIComponent(investigationId)}/suggestions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -54,10 +52,9 @@ export function UnblockPathView({
           description: unblock.whatsMissing.map((m) => m.description).join('; '),
           targetRef: unblock.whatsMissing[0]?.description ?? null,
         }),
-      },
-    ).catch(() => null);
-    if (res?.ok) setNoted((prev) => new Set(prev).add(index));
-    // On failure leave the button so the querier can retry.
+      }).catch(() => null);
+    }
+    setNoted((prev) => new Set(prev).add(index));
   };
 
   const handle = (action: UnblockAction, index: number): void => {
