@@ -986,8 +986,10 @@ export class DrizzleMetadataStore implements MetadataStore {
     dataSourceId: string,
     id: string,
     patch: SuggestionReviewPatch,
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    // Conditional on status='open' so two reviewers can't both resolve the same row —
+    // the loser updates 0 rows and the caller surfaces a 409 (and never promotes).
+    const updated = await this.db
       .update(suggestions)
       .set({
         status: patch.status,
@@ -996,7 +998,15 @@ export class DrizzleMetadataStore implements MetadataStore {
         reviewedBy: patch.reviewedBy,
         reviewedAt: patch.reviewedAt,
       })
-      .where(and(eq(suggestions.id, id), eq(suggestions.dataSourceId, dataSourceId)));
+      .where(
+        and(
+          eq(suggestions.id, id),
+          eq(suggestions.dataSourceId, dataSourceId),
+          eq(suggestions.status, 'open'),
+        ),
+      )
+      .returning({ id: suggestions.id });
+    return updated.length === 1;
   }
 
   async upsertDataSourceConnection(input: DataSourceConnectionInput): Promise<void> {
