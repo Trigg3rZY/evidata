@@ -80,6 +80,9 @@ export interface AskParams {
    *  versionTrigger 'definition_correction' (an Admin accepted a Verified edit that
    *  affects this answer). Implies `rerun`. */
   correction?: boolean;
+  /** Optimistic head guard (M2-B4 ②): append the new version only if the head is still
+   *  this version at save time; otherwise the save throws (a follow-up moved the head). */
+  expectedLatestVersion?: number;
   /** The model to bind to a NEW Investigation (epic #106 / #113). Recorded on
    *  create; null/omitted = the server's default. Ignored for a follow-up — that
    *  reuses the Investigation's already-bound model (the caller resolves it). */
@@ -307,6 +310,9 @@ export class InvestigationService {
       ...(isRerun ? {} : { question: params.question }),
       answer: result.answer,
       queryRuns: result.queryRuns,
+      ...(params.expectedLatestVersion != null
+        ? { expectedLatestVersion: params.expectedLatestVersion }
+        : {}),
     });
 
     return { kind: 'answer', investigationId, answer };

@@ -39,6 +39,10 @@ export interface SaveAnswerInput {
   question?: string;
   answer: Answer;
   queryRuns: QueryRunRecord[];
+  /** Optional optimistic-concurrency guard (M2-B4 ②): append only if the current head
+   *  version still equals this; otherwise the save throws (a concurrent follow-up moved
+   *  the head). Used by the correction rerun so it can't append after a newer turn. */
+  expectedLatestVersion?: number;
 }
 
 export interface InvestigationListItem {
