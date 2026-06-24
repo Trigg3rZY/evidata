@@ -48,6 +48,7 @@ export type AuthStore = Pick<
   | 'createSession'
   | 'getSessionUser'
   | 'deleteSession'
+  | 'deleteUser'
 >;
 
 /** A user as exposed to callers — never the password hash. */
@@ -155,6 +156,14 @@ export class AuthService {
 
   async logout(token: string): Promise<void> {
     await this.deps.store.deleteSession(hashToken(token));
+  }
+
+  /** Undo a just-created registration — used when a redeem creates the account but then
+   *  loses the single-use claim race (#147), so a failed claim leaves no orphan account
+   *  or taken username. Deletes the session, then the brand-new (reference-free) user. */
+  async rollbackRegistration(userId: string, token: string): Promise<void> {
+    await this.deps.store.deleteSession(hashToken(token));
+    await this.deps.store.deleteUser(userId);
   }
 
   /** Resolve a cookie token to the current user (null if missing/expired/revoked). */

@@ -113,6 +113,20 @@ describe('InviteService (M2-B1b, #121)', () => {
     });
   });
 
+  it('rolls back the just-created account when the redeem loses the single-use claim (#147)', async () => {
+    const { token } = await svc().create('owner', 'ds', 'querier');
+    // The token is consumed first (stands in for the winner of a concurrent race).
+    await svc().redeem(token, { currentUserId: 'existing' });
+    // A second anonymous redeem signs up, but the claim then fails (already redeemed) →
+    // the brand-new account is rolled back, leaving no orphan and freeing the username.
+    await expect(
+      svc().redeem(token, {
+        signup: { username: 'racer', displayName: 'Racer', password: 'pw-12345' },
+      }),
+    ).rejects.toMatchObject({ code: 'redeemed' });
+    expect(await store.getUserByUsername('racer')).toBeNull();
+  });
+
   it('rejects an expired token', async () => {
     const { token } = await svc().create('owner', 'ds', 'querier', 7);
     const future = () => new Date(Date.now() + 8 * 86_400_000); // 8 days later
