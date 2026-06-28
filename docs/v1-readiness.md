@@ -26,7 +26,7 @@ This checklist is the shortest path from a fresh checkout to a useful dogfood ru
    METADATA_DATA_DIR=<absolute path to a local metadata directory>
    ```
 
-   Leave `AGENT_PROVIDER` unset for the deterministic fixture provider. Set `AGENT_PROVIDER=openai` plus an OpenAI-compatible key only when testing live model behavior.
+   Leave `AGENT_PROVIDER` unset only for the Sample fixture flow. For a real or semi-real Data Source dogfood run, set `AGENT_PROVIDER=openai` plus an OpenAI-compatible key so the model can plan against that source's schema.
 
 3. Start the app.
 
@@ -55,7 +55,7 @@ password: postgres
 ssl: disable
 ```
 
-Seed a small schema before the UI trial, or point the Connection form at an existing safe database. `METADATA_DATA_DIR` stores evidata's own metadata; the Postgres Connection is the business data source.
+Seed a small schema before the UI trial, or point the Connection form at an existing safe database. `METADATA_DATA_DIR` stores evidata's own metadata; the Postgres Connection is the business data source. If you stay on the fixture provider, use the Sample Data Source and Sample-compatible questions instead of this real-source path.
 
 ## Golden Path
 
