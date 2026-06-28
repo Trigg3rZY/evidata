@@ -72,7 +72,7 @@ Invariants enforced: a Querier may only query (never sees Drafts, never reaches 
 | `GET /api/data-sources/:id/suggestions` | Owner/Admin open correction queue. |
 | `POST /api/data-sources/:id/suggestions/:sid` | Accept (promote to Verified + best-effort rerun) or reject a correction. |
 
-All capability-gated in the service; a non-manager gets 404 (no existence leak).
+All capability-gated in the service. Correction submission is intentionally `query`-gated so Queriers can raise unblock feedback; the Data Source queue and review routes are `author`-gated and return 404 to non-managers (no existence leak).
 
 ## 7. Publish-readiness (enforced)
 
