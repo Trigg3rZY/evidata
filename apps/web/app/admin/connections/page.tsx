@@ -6,6 +6,7 @@ import { AdminNav } from '@/components/admin-nav';
 import { AppShell } from '@/components/app-shell';
 import { Field } from '@/components/field';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface ConnSummary {
   id: string;
@@ -38,6 +39,7 @@ export default function ConnectionsAdminPage() {
   const [form, setForm] = useState({ ...EMPTY });
   const [createErr, setCreateErr] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const res = await fetch('/api/connections');
@@ -105,9 +107,17 @@ export default function ConnectionsAdminPage() {
   };
 
   const remove = async (id: string): Promise<void> => {
-    if (!window.confirm('Delete this connection?')) return;
     const res = await fetch(`/api/connections/${id}`, { method: 'DELETE' });
     if (res.ok) await load();
+  };
+
+  // Two-step delete: the ConfirmDialog gates the destructive call (#165) — no
+  // native window.confirm, which blocked browser automation during dogfood.
+  const confirmRemove = async (): Promise<void> => {
+    const id = pendingDelete;
+    setPendingDelete(null);
+    if (!id) return;
+    await remove(id);
   };
 
   return (
@@ -148,7 +158,7 @@ export default function ConnectionsAdminPage() {
                         <Button size="sm" variant="outline" onClick={() => void introspect(c.id)}>
                           Introspect
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => void remove(c.id)}>
+                        <Button size="sm" variant="ghost" onClick={() => setPendingDelete(c.id)}>
                           Delete
                         </Button>
                         {note[c.id] && (
@@ -241,6 +251,16 @@ export default function ConnectionsAdminPage() {
           )}
         </div>
       </main>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this connection?"
+        description="This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </AppShell>
   );
 }
