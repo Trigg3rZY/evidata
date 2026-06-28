@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditableDataSource, PolicyForm } from '@/lib/authoring-service';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,12 @@ export function AuthoringPanel({
   const [policy, setPolicy] = useState<PolicyForm | null>(null);
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Holds the id of the source whose save is waiting on the readiness refetch, so
+  // that refetch (which normally resets status to idle) keeps the "saved" signal
+  // visible instead of snapping back to "Save". Scoped to the saved id — not a
+  // plain bool — so switching source before the refetch resolves can't leak a stale
+  // "Saved" onto the new source (the panel isn't keyed by id) (#166, Codex P2).
+  const savedRef = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   // AI calibration (B2): drafts Suggested context/glossary/mappings from the schema.
   const [calibrating, setCalibrating] = useState(false);
@@ -60,7 +66,13 @@ export function AuthoringPanel({
         setOverview(d.overview);
         setPolicy(d.policy);
         setDirty(false);
-        setStatus('idle');
+        // A refetch for the source we just saved keeps the "saved" signal; any other
+        // refetch (initial load, lifecycle change, switching source) returns to idle.
+        if (savedRef.current === id) {
+          savedRef.current = null;
+        } else {
+          setStatus('idle');
+        }
       })
       .catch(() => {
         if (!cancelled) setHidden(true);
@@ -69,6 +81,14 @@ export function AuthoringPanel({
       cancelled = true;
     };
   }, [id, reload]);
+
+  // "saved" holds for a few seconds so the success state is readable, then clears
+  // to idle on its own — it no longer depends on refetch timing (#166).
+  useEffect(() => {
+    if (status !== 'saved') return;
+    const timer = setTimeout(() => setStatus('idle'), 4000);
+    return () => clearTimeout(timer);
+  }, [status]);
 
   const tables = useMemo(() => data?.schema?.tables ?? [], [data]);
 
@@ -124,6 +144,7 @@ export function AuthoringPanel({
     if (res?.ok) {
       setStatus('saved');
       setDirty(false);
+      savedRef.current = id; // the next refetch is ours — keep "saved" visible
       setReload((n) => n + 1); // refresh server-computed readiness
     } else {
       setStatus('error');
