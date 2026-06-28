@@ -1,10 +1,10 @@
-# AI Data Portal — M0 Tech Spec
+# AI Data Portal — Tech Spec
 
-Status: Tech Spec v0.1 (M0), derived from PRD v0.3
-Last updated: 2026-06-17
+Status: V1 feature-complete as-built baseline, derived from PRD v0.3
+Last updated: 2026-06-28
 Language: en (engineering docs and code are English, per PRD)
 
-This is the technical specification for **Milestone M0** of the AI Data Portal (repo: `evidata`). It is the implementation-level companion to the PRD in `../prd.en.md`. M0 builds the conversation-first trusted-answer loop end to end against the executable Sample Data Source, with no real database and no calibration authoring. M1/M2 are scoped here only as placeholders so M0 interfaces are forward-compatible.
+This is the technical specification set for the AI Data Portal (repo: `evidata`). It started as the implementation-level companion for M0 and now records the as-built V1 path through M0, M1, M0.5, multi-model support, and M2. The current readiness work is tracked in `../v1-readiness.md`.
 
 ## M0 goal (from PRD `Implementation Milestones`)
 
@@ -92,7 +92,7 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `06-acceptance-and-smoke-tests.md` | M0 acceptance checklist and end-to-end smoke specs (the M0 gate). |
 | `07-v1-blueprint.md` | Full-V1 umbrella: system at end of V1, milestone→capability map, data-model evolution, trust boundary. |
 | `08-m1-real-postgres-and-execution.md` | **M1 (impl depth):** PostgresConnector + cursor-bounded read-only execution, AbortSignal cancellation, AES-256-GCM CredentialVault, introspection, auth/first-run, metadata store on real Postgres. |
-| `09-m2-calibration-publishing-and-roles.md` | M2 architecture skeleton: calibration, Suggested→Verified, Policy, lifecycle, roles, correction loop. |
+| `09-m2-calibration-publishing-and-roles.md` | **M2 (as-built):** calibration, Suggested→Verified, Policy, lifecycle, roles, invite onboarding, correction loop. |
 | `10-m0-data-model-and-persistence.md` | M0 MetadataStore entities, contract-as-document + normalized provenance, Drizzle schema draft, Answer versioning, guardrail traceability. |
 | `11-m0-design-system.md` | Visual language: Tailwind + shadcn stack, color tokens (`globals.css` draft), the Status × Confidence system, typography, density modes, component mapping, a11y. |
 | `12-m1-data-model.md` | M1 metadata schema: users/sessions/connections/memberships/snapshots + the minimal Data Source and `Investigation.dataSourceId` FK evolution; deploy-time migrations. |
@@ -101,7 +101,7 @@ Everything that will differ in M1/M2 sits behind a port (interface), so M0 code 
 | `packages/core/answer-contract/src/answer-contract.ts` | Source-of-truth TypeScript types (moved out of `docs/` into the package once code landed). |
 | `packages/core/answer-contract/src/answer-contract.schema.json` | JSON Schema kept in lockstep with the types (C1 schema-sync test enforces no drift). |
 
-Depth: M0 (01–06, 10, 11) and M1 (08, 12) are implementation-level; M0.5 harness (13) and BYO-key multi-model (14) are implementation-level (as-built); M2 (09) is architecture-skeleton; `07` is the umbrella blueprint.
+Depth: M0 (01–06, 10, 11), M1 (08, 12), M0.5 harness (13), BYO-key multi-model (14), and M2 (09) are as-built implementation docs; `07` is the umbrella blueprint.
 
 ## PRD traceability (M0)
 
