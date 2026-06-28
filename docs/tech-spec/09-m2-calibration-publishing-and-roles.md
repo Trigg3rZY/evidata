@@ -2,7 +2,7 @@
 
 Goal (PRD): make a real Connection into a **governed, queryable Data Source** a team can use. M2 adds the authoring side — AI-drafted context, Glossary/Mapping with `Suggested → Verified`, Policy editing, the Draft↔Published lifecycle, memberships with the capability matrix, invite-token onboarding, and a provider status check. After M2, V1 is feature-complete.
 
-**Status.** Built as a vertical slice (S1/S2/S3) then backfilled. As-built except the **correction-loop review side (§3), which is `needs-design` and tracked as B4 #123** — the one remaining M2 piece. Component/flow notes below reflect the shipped code; §3 stays a forward sketch until B4 lands.
+**Status.** Built as a vertical slice (S1/S2/S3) then backfilled. B4 #123 shipped the correction-loop review and accept-to-rerun path; #146 and #147 closed the follow-up consistency/race fixes. V1 is feature-complete at this boundary and is in readiness/dogfood validation.
 
 ## 1. Components (as-built)
 
@@ -17,7 +17,7 @@ The M2 surface lives in `apps/web/lib` next to its route handlers rather than in
 | Invite onboarding + members | `InviteService` (`apps/web/lib/invite-service.ts`, B1b #145/#148) | Single-use, expiring, **SHA-256-hashed** invite tokens (`data_source_invites`, migration `0007`) → grant a DS role, or **signup-on-redeem** (create account + session). `create` (owner-grant = owner-only), `redeem` (atomic single-use claim), `listMembers`/`removeMember` (last-owner + owner-removal guards), `listPending`/`revoke`. UI: `members-panel` + the `/invite` redeem page. |
 | Published-source resolution | `PublishedDataSourceResolver` (`apps/web/lib/data-source-resolver.ts`, S2 #102) | Assembles a query runtime from a published source: `allowedTables` from scope, `sensitiveColumns` from field rules, the per-source `Policy`, and **Verified-only** context. The query gate is **Data Source membership** (`getDataSourceRole` ∧ `canDataSource(role, 'query')`). |
 | Provider status | `/admin/models` "Test" (`ModelProviderService.test`, #119) | Admin-only, owner-gated reachability probe (cheap `GET /models`) so a misconfigured model is visible before a question fails. Never visible to Queriers. |
-| Correction-loop review | **B4 #123 — `needs-design`, not built** (see §3) | The review side of the Unblock Path → Verified edit + rerun. |
+| Correction-loop review | `SuggestionService` + `CorrectionsPanel` (`apps/web/lib/suggestion-service.ts`, `apps/web/components/corrections-panel.tsx`, B4 #123) | Queriers submit corrections from blocked answers; owners/admins accept them into Verified context or reject them. Accept is head-guarded and best-effort reruns the affected Investigation. |
 
 ## 2. Calibration flow (AI drafts, owner verifies) — as-built
 
@@ -28,14 +28,16 @@ The M2 surface lives in `apps/web/lib` next to its route handlers rather than in
 
 This is the prototype's Admin flow (connect → snapshot → semantics → policy → publish) made real, owner/admin-gated by the capability matrix.
 
-## 3. Suggested → Verified + correction loop — **B4 #123, not yet built**
+## 3. Suggested → Verified + correction loop — as-built
 
-Glossary/Mapping entries already carry `status: 'suggested' | 'verified'` and provenance (`ai_draft` | `admin`; `querier_correction` is reserved). The **review side** is the remaining M2 piece and is `needs-design`:
+Glossary/Mapping entries carry `status: 'suggested' | 'verified'` and provenance (`ai_draft` | `admin`; `querier_correction` is reserved). The review side is implemented:
 
-- The M0 Unblock-Path actions (`notify_admin_verify` / `pick_definition`) would raise `Suggestion` rows.
-- B4's review surface would let an Admin accept (→ a Verified edit, optionally triggering a rerun → a new Answer version) or reject. Queriers never mutate Verified context directly (PRD invariant).
+- Unblock-Path actions (`notify_admin_verify` / `pick_definition`) create `Suggestion` rows scoped to the Investigation's Data Source and submitter.
+- Owners/Admins list the open queue on the Data Source authoring surface, choose the Suggested glossary term or mapping the correction applies to, then accept or reject.
+- Accept promotes the chosen item to Verified (and applies the proposed glossary definition when supplied), records reviewer metadata, and triggers a best-effort rerun of the affected Investigation only if the answer version that raised the correction is still the head.
+- Queriers never mutate Verified context directly.
 
-Design to be agreed in #123 before implementation; this section and the §8 correction-loop acceptance bullet are updated when it lands.
+The service is race-safe enough for V1: reviewed suggestions cannot be accepted/rejected twice, suggestion ids are scoped by Data Source, and rerun skips rather than falling back to an unintended model when a bound provider cannot resolve.
 
 ## 4. Capability matrix enforcement (as-built)
 
@@ -51,7 +53,7 @@ Invariants enforced: a Querier may only query (never sees Drafts, never reaches 
 
 ## 5. Data model (as-built, migrations on M1)
 
-`DataSource { id, name, kind, connectionId, lifecycle: 'draft'|'published'|'archived' }` (only `draft`↔`published` are exposed via publish/unpublish; `archived` is reserved), `DataSourceConnection { dataSourceId, connectionId, alias, includedTables, fieldRules }`, `DataSourceContext` (+ overview), `BusinessGlossaryTerm { id, dataSourceId, term, definition, status, provenance }`, `EntityMapping { id, dataSourceId, fromRef, toRef, status, provenance }`, `Policy { dataSourceId, rowLimit, timeoutMs, statementTimeoutMs, confirmOnBroadScan, confirmOnSensitiveAccess }`, `DataSourceMembership { id, userId, dataSourceId, role }`, `DataSourceInvite { id, dataSourceId, role, tokenHash, createdBy, expiresAt, redeemedAt, redeemedBy }`. Migrations: `0006` (DS owner backfill), `0007` (invites). `Suggestion` (correction loop) arrives with B4.
+`DataSource { id, name, kind, connectionId, lifecycle: 'draft'|'published'|'archived' }` (only `draft`↔`published` are exposed via publish/unpublish; `archived` is reserved), `DataSourceConnection { dataSourceId, connectionId, alias, includedTables, fieldRules }`, `DataSourceContext` (+ overview), `BusinessGlossaryTerm { id, dataSourceId, term, definition, status, provenance }`, `EntityMapping { id, dataSourceId, fromRef, toRef, status, provenance }`, `Policy { dataSourceId, rowLimit, timeoutMs, statementTimeoutMs, confirmOnBroadScan, confirmOnSensitiveAccess }`, `DataSourceMembership { id, userId, dataSourceId, role }`, `DataSourceInvite { id, dataSourceId, role, tokenHash, createdBy, expiresAt, redeemedAt, redeemedBy }`, `Suggestion { id, investigationId, answerVersion, dataSourceId, submittedBy, kind, targetRef, description, proposedDefinition, status, targetKind, targetItemId, reviewedBy, reviewedAt }`. Migrations: `0006` (DS owner backfill), `0007` (invites), `0008` (correction-loop suggestion review fields).
 
 ## 6. API surface (as-built)
 
@@ -66,8 +68,11 @@ Invariants enforced: a Querier may only query (never sees Drafts, never reaches 
 | `GET/POST /api/data-sources/:id/invites` · `DELETE …/invites/:inviteId` | List/mint/revoke single-use invites (owner-grant = owner-only). |
 | `POST /api/invites/redeem` | Redeem a token: grant to the signed-in user, or signup-on-redeem + session. |
 | `POST /api/model-providers/:id/test` | Provider reachability probe (#119). |
+| `POST /api/investigations/:id/suggestions` | Submit a correction from a blocked answer's Unblock Path. |
+| `GET /api/data-sources/:id/suggestions` | Owner/Admin open correction queue. |
+| `POST /api/data-sources/:id/suggestions/:sid` | Accept (promote to Verified + best-effort rerun) or reject a correction. |
 
-All capability-gated in the service; a non-manager gets 404 (no existence leak). The correction-loop `/api/suggestions*` arrives with B4.
+All capability-gated in the service; a non-manager gets 404 (no existence leak).
 
 ## 7. Publish-readiness (enforced)
 
@@ -78,7 +83,7 @@ All capability-gated in the service; a non-manager gets 404 (no existence leak).
 - An Owner completes connect → snapshot → AI draft → verify semantics → configure Policy → publish, and a Querier (separate identity, onboarded by an **invite link** — no email server) asks a question on the published source and gets an Answer with Evidence — **without DB credentials or SQL**.
 - Capability matrix enforced: a Querier cannot see Draft sources, author, manage members, or reach Connections; an Admin can author/manage members but cannot transfer ownership or mint an Owner; a stranger has no access.
 - Provider config/status is Admin-only and never appears in the Querier flow.
-- **(B4 #123, pending)** A Querier-raised Suggested correction appears in the Admin review queue; accepting it verifies the edit and a rerun reflects it in a new Answer version.
+- A Querier-raised Suggested correction appears in the Admin review queue; accepting it verifies the edit and a rerun reflects it in a new Answer version when the raised answer is still the head.
 
 ## 9. As-built coverage (acceptance → tests)
 
@@ -96,9 +101,11 @@ Each shipped criterion maps to a CI-gated test (real-Postgres ones run against t
 | Query gate is DS membership (member resolves; non-member / anonymous denied) | `data-source-resolver.test.ts` + the integration test above |
 | Provider reachability probe (owner-gated; no key/body leak) | `model-provider-service.test.ts` (#119) |
 | DS owner bootstrap on connection create; `0006` backfill | `connection-service.test.ts`, `store.test.ts` |
+| Correction submit/list/accept/reject, Data Source scoping, reviewed-once guard | `suggestion-service.test.ts` |
+| Accept-to-rerun is head-guarded, best-effort, and preserves no-silent-fallback for bound models | `correction-rerun.test.ts` |
 
-The full Ask loop over a real Connection is exercised by the gated integration test (resolver → connector) and the Sample smoke gate (`06`); B4's correction-loop scenario is added when #123 lands.
+The full Ask loop over a real Connection is exercised by the gated integration test (resolver → connector) and the Sample smoke gate (`06`); the correction-loop service/rerun behavior is covered hermetically.
 
 ## 10. End of V1
 
-With M2 merged (and B4 #123 the last piece), V1 satisfies the PRD `V1 Product Scope` loop: an Owner creates and publishes a controlled Data Source; a Querier — onboarded by invite — asks against it; the system runs a controlled read-only Investigation; the user receives an Answer with Evidence. Open review follow-ups carried past M2: #146 (`ConnectionService.create` transaction), #147 (invite-redeem races — lost-claim orphan account, owner-removal TOCTOU, claim-time expiry re-check). Roadmap Phases 2+ begin after V1 ships and the Success Measurement signals are read.
+With M2 merged, V1 satisfies the PRD `V1 Product Scope` loop: an Owner creates and publishes a controlled Data Source; a Querier onboarded by invite asks against it; the system runs a controlled read-only Investigation; the user receives an Answer with Evidence; and the correction loop can turn a blocked-answer suggestion into Verified context plus a guarded rerun. Roadmap Phases 2+ begin after V1 readiness validation and dogfood signals are read.

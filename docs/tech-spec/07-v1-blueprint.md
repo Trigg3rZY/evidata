@@ -1,6 +1,6 @@
 # 07 — Full V1 Blueprint (M0 → M1 → M2)
 
-This is the umbrella view of the whole V1: how the system grows from the M0 trusted-answer loop into a self-hosted, multi-user, calibrated product, with every milestone adding capability behind interfaces that already exist in M0. M0 (01–06, 10, 11) and M1 (08, 12) are specified to implementation depth; M2 (09) remains an architecture skeleton until M1 is built.
+This is the umbrella view of the whole V1: how the system grows from the M0 trusted-answer loop into a self-hosted, multi-user, calibrated product, with every milestone adding capability behind interfaces that already exist in M0. M0 (01–06, 10, 11), M1 (08, 12), and M2 (09) are now as-built implementation docs.
 
 PRD references: `V1 Product Scope`, `Implementation Milestones`, `Roles and Capability Matrix`, `Product-level Architecture Boundaries`.
 
