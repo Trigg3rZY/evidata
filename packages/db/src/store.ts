@@ -127,6 +127,8 @@ export class DrizzleMetadataStore implements MetadataStore {
       modelProviderId,
       // Audit-only (#116) — stored, not surfaced on the Investigation contract.
       modelSnapshot: init.modelSnapshot ?? null,
+      // Owner scoping (#177) — null = anonymous (Sample). Drives list/get filtering.
+      ownerId: init.ownerId ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -265,10 +267,11 @@ export class DrizzleMetadataStore implements MetadataStore {
 
   // Reads are non-transactional (3 sequential queries) — fine for M0; a
   // concurrent saveAnswer could interleave. Wrap in a tx if that ever matters.
-  async getInvestigation(id: string): Promise<InvestigationWithAnswers | null> {
+  private async loadThread(
+    id: string,
+  ): Promise<{ ownerId: string | null; thread: InvestigationWithAnswers } | null> {
     const [inv] = await this.db.select().from(investigations).where(eq(investigations.id, id));
     if (!inv) return null;
-
     const turnRows = await this.db
       .select()
       .from(turns)
@@ -279,31 +282,50 @@ export class DrizzleMetadataStore implements MetadataStore {
       .from(answers)
       .where(eq(answers.investigationId, id))
       .orderBy(answers.version);
-
     return {
-      id: inv.id,
-      dataSourceId: inv.dataSourceId,
-      title: inv.title,
-      modelProviderId: inv.modelProviderId ?? null,
-      createdAt: inv.createdAt.toISOString(),
-      updatedAt: inv.updatedAt.toISOString(),
-      turns: turnRows.map(
-        (t): Turn => ({
-          id: t.id,
-          role: t.role,
-          createdAt: t.createdAt.toISOString(),
-          ...(t.question != null ? { question: t.question } : {}),
-          ...(t.answerVersion != null ? { answerVersion: t.answerVersion } : {}),
+      ownerId: inv.ownerId,
+      thread: {
+        id: inv.id,
+        dataSourceId: inv.dataSourceId,
+        title: inv.title,
+        modelProviderId: inv.modelProviderId ?? null,
+        createdAt: inv.createdAt.toISOString(),
+        updatedAt: inv.updatedAt.toISOString(),
+        turns: turnRows.map(
+          (t): Turn => ({
+            id: t.id,
+            role: t.role,
+            createdAt: t.createdAt.toISOString(),
+            ...(t.question != null ? { question: t.question } : {}),
+            ...(t.answerVersion != null ? { answerVersion: t.answerVersion } : {}),
+          }),
+        ),
+        // The columns are authoritative for version + the single is_latest head; the
+        // stored document's meta is stamped at write time and goes stale when a later
+        // version demotes it, so overlay the columns onto the returned meta.
+        answers: answerRows.map((a) => {
+          const doc = a.payload as Answer;
+          return { ...doc, meta: { ...doc.meta, version: a.version, isLatest: a.isLatest } };
         }),
-      ),
-      // The columns are authoritative for version + the single is_latest head; the
-      // stored document's meta is stamped at write time and goes stale when a later
-      // version demotes it, so overlay the columns onto the returned meta.
-      answers: answerRows.map((a) => {
-        const doc = a.payload as Answer;
-        return { ...doc, meta: { ...doc.meta, version: a.version, isLatest: a.isLatest } };
-      }),
+      },
     };
+  }
+
+  /** Trusted internal read — NO owner scoping. For privileged flows that already
+   *  authorized at a higher layer (correction submit / rerun, which act on a known
+   *  investigationId from the DB, not a user-supplied one). User-facing reads MUST go
+   *  through the scoped `getInvestigation` (#177, IDOR). */
+  async getInvestigationUnchecked(id: string): Promise<InvestigationWithAnswers | null> {
+    return (await this.loadThread(id))?.thread ?? null;
+  }
+
+  async getInvestigation(id: string, userId?: string): Promise<InvestigationWithAnswers | null> {
+    const row = await this.loadThread(id);
+    if (!row) return null;
+    // Owner scoping (#177, IDOR): a logged-in user sees only their own; anonymous sees
+    // only ownerId-null threads. A mismatch returns null (404) — never leaks existence.
+    if ((userId ?? null) !== (row.ownerId ?? null)) return null;
+    return row.thread;
   }
 
   async getInvestigationModelProviderId(id: string): Promise<string | null> {
@@ -328,6 +350,9 @@ export class DrizzleMetadataStore implements MetadataStore {
         answers,
         and(eq(answers.investigationId, investigations.id), eq(answers.isLatest, true)),
       )
+      // Owner scoping (#177): a logged-in user lists only their own; anonymous lists
+      // only ownerId-null threads. Never cross-user.
+      .where(opts.userId ? eq(investigations.ownerId, opts.userId) : isNull(investigations.ownerId))
       .orderBy(desc(investigations.updatedAt))
       .limit(opts.limit ?? 50);
 

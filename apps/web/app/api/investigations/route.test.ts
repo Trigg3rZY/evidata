@@ -33,7 +33,7 @@ describe('POST /api/investigations', () => {
 describe('GET /api/investigations', () => {
   it('lists prior investigations', async () => {
     await post({ question: 'Top customers by spend last quarter?' });
-    const res = await GET();
+    const res = await GET(new Request('http://localhost/api/investigations'));
     const list = (await res.json()) as unknown[];
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBeGreaterThan(0);

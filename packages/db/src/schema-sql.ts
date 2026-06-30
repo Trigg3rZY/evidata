@@ -327,4 +327,8 @@ CREATE INDEX "suggestions_ds_status_idx" ON "evidata_meta"."suggestions" USING b
     name: '0009_gray_rick_jones',
     sql: `ALTER TABLE "evidata_meta"."investigations" ADD COLUMN "model_snapshot" jsonb;`,
   },
+  {
+    name: '0010_harsh_king_bedlam',
+    sql: `ALTER TABLE "evidata_meta"."investigations" ADD COLUMN "owner_id" text;`,
+  },
 ];

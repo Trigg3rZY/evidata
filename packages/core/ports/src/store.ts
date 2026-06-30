@@ -43,6 +43,8 @@ export interface NewInvestigation {
   modelProviderId?: string | null;
   /** Audit snapshot of the effective model at creation (#116); null in fixture mode. */
   modelSnapshot?: ModelSnapshot | null;
+  /** The user who owns this conversation (#177); null/omitted = anonymous (Sample). */
+  ownerId?: string | null;
 }
 
 export interface SaveAnswerInput {
@@ -67,6 +69,9 @@ export interface InvestigationListItem {
 
 export interface ListOpts {
   limit?: number;
+  /** If set, list only investigations owned by this user; if unset, only anonymous
+   *  (ownerId IS NULL) threads — never cross-user (#177). */
+  userId?: string;
 }
 
 export interface MetadataStore {
@@ -78,7 +83,12 @@ export interface MetadataStore {
    * stored answer with authoritative version meta.
    */
   saveAnswer(input: SaveAnswerInput): Promise<Answer>;
-  getInvestigation(id: string): Promise<InvestigationWithAnswers | null>;
+  /** If `userId` is set, return null unless this investigation is owned by that user;
+   *  if unset, only anonymous (ownerId IS NULL) threads are visible (#177, IDOR fix). */
+  getInvestigation(id: string, userId?: string): Promise<InvestigationWithAnswers | null>;
+  /** Trusted internal read — no owner scoping. For privileged flows (correction
+   *  submit/rerun) that authorized upstream; NOT for user-facing reads (#177). */
+  getInvestigationUnchecked(id: string): Promise<InvestigationWithAnswers | null>;
   /** The model bound to an Investigation (epic #106 / #113), or null if none is
    *  bound or the Investigation doesn't exist. A lightweight read for the follow-up
    *  resolve path (avoids loading the whole thread). */

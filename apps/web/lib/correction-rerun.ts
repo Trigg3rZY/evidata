@@ -18,7 +18,9 @@ export async function rerunForCorrection(
   userId: string,
 ): Promise<boolean> {
   if (raisedVersion == null) return false;
-  const thread = await rt.service.getThread(investigationId);
+  // Privileged internal read (no owner scope): the rerun is triggered by an Admin
+  // accepting a correction, not by the thread's owner — scope would wrongly 404 (#177).
+  const thread = await rt.service.getThreadUnchecked(investigationId);
   const latest = thread?.answers.at(-1)?.meta.version ?? null;
   // Head guard: only re-answer if the version that raised the correction is still latest.
   if (!thread || latest == null || latest !== raisedVersion) return false;

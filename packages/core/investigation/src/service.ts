@@ -225,7 +225,11 @@ export class InvestigationService {
     let history: ConversationTurn[] = [];
     let priorAnswers: ReadonlyArray<Answer> = [];
     if (params.investigationId) {
-      const prior = await this.deps.store.getInvestigation(params.investigationId);
+      // A follow-up is a user action → scope by owner (IDOR). A correction rerun is a
+      // privileged system flow (an Admin accepted it) → unscoped; `ask` then appends by id.
+      const prior = isRerun
+        ? await this.deps.store.getInvestigationUnchecked(params.investigationId)
+        : await this.deps.store.getInvestigation(params.investigationId, params.userId);
       if (!prior) throw new Error(`Unknown investigation: ${params.investigationId}`);
       // The data source is bound for the Investigation's lifetime — run against the
       // STORED one, not the client-supplied params.dataSourceId (which a follow-up
@@ -305,6 +309,9 @@ export class InvestigationService {
         // Immutable audit snapshot of the model that actually answered (#116) — durable
         // even for the env-default path, where modelProviderId is null.
         modelSnapshot: params.modelSnapshot ?? null,
+        // Owner scoping (#177): null = anonymous (Sample). Threaded from the
+        // authenticated userId already in AskParams; drives list/get isolation.
+        ownerId: params.userId ?? null,
       });
     }
 
@@ -324,8 +331,13 @@ export class InvestigationService {
     return { kind: 'answer', investigationId, answer };
   }
 
-  getThread(id: string): Promise<InvestigationWithAnswers | null> {
-    return this.deps.store.getInvestigation(id);
+  getThread(id: string, userId?: string): Promise<InvestigationWithAnswers | null> {
+    return this.deps.store.getInvestigation(id, userId);
+  }
+  /** Trusted internal read (no owner scoping) — for the correction rerun, which acts
+   *  on a known investigationId from the DB. User reads use `getThread` (#177). */
+  getThreadUnchecked(id: string): Promise<InvestigationWithAnswers | null> {
+    return this.deps.store.getInvestigationUnchecked(id);
   }
 
   /** The model bound to an Investigation (epic #106 / #113), or null if none/unknown.
@@ -335,8 +347,8 @@ export class InvestigationService {
     return this.deps.store.getInvestigationModelProviderId(id);
   }
 
-  list(opts?: ListOpts): Promise<InvestigationListItem[]> {
-    return this.deps.store.listInvestigations(opts);
+  list(opts?: ListOpts, userId?: string): Promise<InvestigationListItem[]> {
+    return this.deps.store.listInvestigations({ ...(opts ?? {}), ...(userId ? { userId } : {}) });
   }
 
   /** Static-first lookup; falls back to the resolver. Throws if unknown/unrunnable

@@ -13,9 +13,11 @@ function mockRuntime(latest: number | null, askKind: 'answer' | 'message' = 'ans
           turns: [{ role: 'user', question: 'why up?' }],
           answers: [{ meta: { version: latest } }],
         };
+  const getThread = vi.fn().mockResolvedValue(thread);
   const rt = {
     service: {
-      getThread: vi.fn().mockResolvedValue(thread),
+      getThread,
+      getThreadUnchecked: getThread, // rerun uses the unchecked read (#177)
       getInvestigationModelProviderId: vi.fn().mockResolvedValue(null),
       ask,
     },
@@ -59,13 +61,15 @@ describe('rerunForCorrection (M2-B4 ②)', () => {
 
   it('skips a bound model that cannot resolve — no silent env-default fallback (#111)', async () => {
     const ask = vi.fn().mockResolvedValue({ kind: 'answer' });
+    const getThread = vi.fn().mockResolvedValue({
+      dataSourceId: 'ds-1',
+      turns: [{ role: 'user', question: 'q' }],
+      answers: [{ meta: { version: 2 } }],
+    });
     const rt = {
       service: {
-        getThread: vi.fn().mockResolvedValue({
-          dataSourceId: 'ds-1',
-          turns: [{ role: 'user', question: 'q' }],
-          answers: [{ meta: { version: 2 } }],
-        }),
+        getThread,
+        getThreadUnchecked: getThread, // #177
         getInvestigationModelProviderId: vi.fn().mockResolvedValue('mp-deleted'),
         ask,
       },

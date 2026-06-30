@@ -71,6 +71,13 @@
       "when": 1782280009175,
       "tag": "0009_gray_rick_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782831617573,
+      "tag": "0010_harsh_king_bedlam",
+      "breakpoints": true
     }
   ]
 }
