@@ -24,8 +24,10 @@ export async function POST(req: Request): Promise<Response> {
   return askSseResponse({ ...parsed, ...(user ? { userId: user.id } : {}) }, req.signal);
 }
 
-/** History rail. */
-export async function GET(): Promise<Response> {
+/** History rail. Scoped to the requesting user (#177): a logged-in user sees only
+ *  their own threads; anonymous sees only ownerId-null (Sample) threads. */
+export async function GET(req: Request): Promise<Response> {
   const rt = await getRuntime();
-  return Response.json(await rt.service.list());
+  const user = await currentUser(req);
+  return Response.json(await rt.service.list(undefined, user?.id));
 }

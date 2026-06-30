@@ -42,6 +42,10 @@ export const investigations = meta.table('investigations', {
   // model, baseURL }. Distinct from model_provider_id (which resolves follow-ups) — it
   // records which model answered even for the env-default path, which has no provider id.
   modelSnapshot: jsonb('model_snapshot'),
+  // The user who owns this conversation (#177). Nullable: null = anonymous
+  // (no-auth Sample path) — those threads stay shared among anonymous viewers.
+  // No FK — app-layer guarantees ownership (matches modelProviderId's style).
+  ownerId: text('owner_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });

@@ -42,7 +42,7 @@ export class SuggestionStateError extends Error {
 type SuggestionStore = Pick<
   MetadataStore,
   // direct
-  | 'getInvestigation'
+  | 'getInvestigationUnchecked'
   | 'getDataSource'
   | 'getDataSourceRole'
   | 'createSuggestion'
@@ -97,7 +97,9 @@ export class SuggestionService {
     investigationId: string,
     input: SubmitSuggestionInput,
   ): Promise<{ id: string }> {
-    const inv = await this.store.getInvestigation(investigationId);
+    // Privileged internal read (no owner scope): the caller's authority is checked
+    // right below via the data-source role, not by thread ownership (#177).
+    const inv = await this.store.getInvestigationUnchecked(investigationId);
     if (!inv) throw new AuthoringAccessError();
     const dataSourceId = inv.dataSourceId;
     const role = await this.store.getDataSourceRole(userId, dataSourceId);

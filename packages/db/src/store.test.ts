@@ -196,6 +196,44 @@ describe('DrizzleMetadataStore (spec 10)', () => {
   });
 });
 
+describe('DrizzleMetadataStore — investigation owner isolation (#177)', () => {
+  it("a user lists/gets only their own; another user's thread is hidden (IDOR)", async () => {
+    await store.createInvestigation({
+      id: 'inv-alice',
+      dataSourceId: 'sample',
+      title: 'alice thread',
+      ownerId: 'user-alice',
+    });
+    await store.createInvestigation({
+      id: 'inv-bob',
+      dataSourceId: 'sample',
+      title: 'bob thread',
+      ownerId: 'user-bob',
+    });
+
+    const aliceList = (await store.listInvestigations({ userId: 'user-alice' })).map((i) => i.id);
+    const bobList = (await store.listInvestigations({ userId: 'user-bob' })).map((i) => i.id);
+    expect(aliceList).toContain('inv-alice');
+    expect(aliceList).not.toContain('inv-bob');
+    expect(bobList).toContain('inv-bob');
+    expect(bobList).not.toContain('inv-alice');
+
+    // IDOR: fetching another user's thread by id returns null (→ 404), no existence leak.
+    expect(await store.getInvestigation('inv-alice', 'user-alice')).not.toBeNull();
+    expect(await store.getInvestigation('inv-alice', 'user-bob')).toBeNull();
+    expect(await store.getInvestigation('inv-bob', 'user-alice')).toBeNull();
+  });
+
+  it('anonymous lists only ownerId-null threads; owned threads are hidden', async () => {
+    // No userId → anonymous scope (ownerId IS NULL): inv-alice/inv-bob are owned → hidden.
+    const anonList = (await store.listInvestigations({})).map((i) => i.id);
+    expect(anonList).not.toContain('inv-alice');
+    expect(anonList).not.toContain('inv-bob');
+    // Anonymous get of an owned thread → null.
+    expect(await store.getInvestigation('inv-alice')).toBeNull();
+  });
+});
+
 describe('DrizzleMetadataStore — identity (spec 08 §5)', () => {
   it('createFirstUser inserts the Owner once, then returns null (atomic first-run)', async () => {
     expect(await store.countUsers()).toBe(0);
