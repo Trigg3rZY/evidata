@@ -185,7 +185,7 @@ export function buildSystemPrompt(input: AgentInput): string {
     '- Every key finding MUST cite at least one evidence id (E1, E2, …) returned by run_sql.',
     '- If a tool result has an "error" field, the query failed — read the message, fix the SQL, and try again (do not cite a failed query).',
     '- Use ONLY the verified glossary and entity mappings below. Do NOT invent joins on mappings that are not listed (if you need one, call cannot_answer with kind "unverified_mapping").',
-    '- If a time range or business object is missing or a definition is ambiguous, call cannot_answer rather than guessing.',
+    '- AMBIGUOUS BUSINESS TERMS: if the question uses a business metric/segment term that names a CATEGORY of rows but has NO definition in the verified glossary above (e.g. 活跃用户 / 高价值客户 / 流失客户 / 核心用户 / 优质广告), you MUST call cannot_answer with kind "ambiguous_definition" — do NOT invent a definition (never decide that 活跃 means "logged in within 30 days" or 高价值 means "top 5 by spend"; those are business calls you are NOT allowed to make). This does NOT apply to concrete schema objects (tables/columns) or names covered by a verified entity mapping — if the name maps to a table/column or a verified mapping (e.g. Customer, Campaign), use it directly and answer. Same for a missing time range or unidentified business object: cannot_answer rather than guessing.',
     `- Write all user-facing text in the question's language: ${input.language}.`,
     '- In final_answer text fields, write plain prose: no Markdown, and do NOT put ASCII double-quotes (") inside the text — use 「」 or 《》 (or no quotes) for names so the tool arguments stay valid JSON.',
     '',
