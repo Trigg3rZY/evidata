@@ -13,6 +13,7 @@ import { createRedactor } from '@evidata/redaction';
 import { fixtureFor, type AgentProvider } from '@evidata/agent';
 import { InvestigationService } from '@evidata/investigation';
 import { askStream, parseAskBody, pickScenario, sseEvent } from './ask-stream';
+import { DataSourceConnectionUnavailableError } from './data-source-resolver';
 
 describe('ask-stream helpers', () => {
   it('encodes an SSE frame', () => {
@@ -139,6 +140,25 @@ describe('askStream (integration over the real Sample)', () => {
     const text = await collect('anything', 'does-not-exist');
     expect(text).toContain('event: error');
     expect(text).not.toContain('Unknown data source'); // no raw internals leaked
+  });
+
+  it('emits a connection message instead of a generic error for an unhealthy source', async () => {
+    const chunks: string[] = [];
+    await askStream(
+      {
+        service: {
+          ask: () => Promise.reject(new DataSourceConnectionUnavailableError('Unreachable')),
+        } as unknown as InvestigationService,
+        providerFor: () => ({ next: () => Promise.resolve({ kind: 'message', text: 'unused' }) }),
+      },
+      { dataSourceId: 'ds-x', question: 'anything', language: 'en' },
+      (c) => chunks.push(c),
+    );
+    const text = chunks.join('');
+    expect(text).toContain('event: message');
+    expect(text).toContain('connection is currently unavailable (Unreachable)');
+    expect(text).not.toContain('event: error');
+    expect(text.trimEnd().endsWith('event: done\ndata: {}')).toBe(true);
   });
 
   it('emits an aborted frame (not an answer) and persists nothing when already aborted', async () => {

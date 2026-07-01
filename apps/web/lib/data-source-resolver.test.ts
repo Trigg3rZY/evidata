@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  ConnectionRecord,
   Connector,
   DataSourceConnectionRecord,
   DataSourceRecord,
@@ -9,7 +10,10 @@ import type {
   PolicyRecord,
   SchemaSnapshot,
 } from '@evidata/ports';
-import { PublishedDataSourceResolver } from './data-source-resolver';
+import {
+  DataSourceConnectionUnavailableError,
+  PublishedDataSourceResolver,
+} from './data-source-resolver';
 
 const snapshot: SchemaSnapshot = {
   dataSourceId: 'ds-x',
@@ -44,6 +48,21 @@ const binding: DataSourceConnectionRecord = {
   includedTables: ['accounts', 'invoices'],
   fieldRules: { sensitiveColumns: ['accounts.email'] },
   createdAt: '2026-06-18T00:00:00.000Z',
+};
+
+const connection: ConnectionRecord = {
+  id: 'c1',
+  kind: 'postgres',
+  name: 'PG',
+  host: 'localhost',
+  port: 5432,
+  database: 'evidata',
+  sslMode: 'disable',
+  credentialBlob: { v: 1, keyId: 'k1', iv: 'iv', ciphertext: 'ct', authTag: 'tag' },
+  health: 'Healthy',
+  createdBy: 'member',
+  createdAt: '2026-06-18T00:00:00.000Z',
+  updatedAt: '2026-06-18T00:00:00.000Z',
 };
 
 const policy: PolicyRecord = {
@@ -94,6 +113,7 @@ function makeStore(over: Partial<Record<string, unknown>> = {}) {
         { id: 'sample', name: 'Sample', kind: 'sample' },
       ]),
     getDataSourceConnection: () => Promise.resolve(binding),
+    getConnection: () => Promise.resolve(connection),
     getDataSourceContext: () =>
       Promise.resolve({
         dataSourceId: 'ds-x',
@@ -166,6 +186,28 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
       STATIC,
     );
     expect(await vaultDown.resolve('ds-x', MEMBER)).toBeNull(); // error → not runnable, not a crash
+  });
+
+  it('short-circuits unavailable connections with a product-visible error on ask', async () => {
+    const r = new PublishedDataSourceResolver(
+      makeStore({ getConnection: () => Promise.resolve({ ...connection, health: 'Unreachable' }) }),
+      okConnections,
+      STATIC,
+    );
+    await expect(r.resolve('ds-x', MEMBER, 'ask')).rejects.toMatchObject({
+      name: 'DataSourceConnectionUnavailableError',
+      health: 'Unreachable',
+    } satisfies Partial<DataSourceConnectionUnavailableError>);
+    await expect(r.resolve('ds-x', MEMBER, 'overview')).resolves.toBeNull();
+  });
+
+  it('does not treat Untested as a connection failure', async () => {
+    const r = new PublishedDataSourceResolver(
+      makeStore({ getConnection: () => Promise.resolve({ ...connection, health: 'Untested' }) }),
+      okConnections,
+      STATIC,
+    );
+    expect(await r.resolve('ds-x', MEMBER)).not.toBeNull();
   });
 
   it('falls back to safe Policy defaults when none is authored', async () => {
