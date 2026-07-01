@@ -13,6 +13,7 @@ import type { ConnectionService } from '@evidata/connection';
 import type { DataSourceResolver, DataSourceRuntime } from '@evidata/investigation';
 import type {
   Connector,
+  ConnectionHealth,
   DataSourceConnectionRecord,
   MetadataStore,
   PolicyRecord,
@@ -28,9 +29,24 @@ const DEFAULT_POLICY = {
   confirmOnSensitiveAccess: true,
 } as const;
 
+const UNAVAILABLE_HEALTH = new Set<ConnectionHealth>([
+  'Unreachable',
+  'AuthFailed',
+  'TLSError',
+  'Disabled',
+]);
+
+export class DataSourceConnectionUnavailableError extends Error {
+  constructor(readonly health: ConnectionHealth) {
+    super('Data Source connection is unavailable.');
+    this.name = 'DataSourceConnectionUnavailableError';
+  }
+}
+
 type ResolverStore = Pick<
   MetadataStore,
   | 'getDataSource'
+  | 'getConnection'
   | 'listPublishedDataSources'
   | 'getDataSourceConnection'
   | 'getDataSourceContext'
@@ -60,7 +76,11 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     return out;
   }
 
-  async resolve(id: string, userId?: string): Promise<DataSourceRuntime | null> {
+  async resolve(
+    id: string,
+    userId?: string,
+    purpose: 'ask' | 'overview' = 'overview',
+  ): Promise<DataSourceRuntime | null> {
     if (this.staticIds.has(id)) return null; // owned by the static list
     const ds = await this.store.getDataSource(id);
     if (!ds || ds.lifecycle !== 'published') return null;
@@ -75,6 +95,12 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     // Freshest captured schema for what the model sees.
     const schema = await this.store.getLatestSnapshot(binding.connectionId);
     if (!schema) return null;
+    const connection = await this.store.getConnection(binding.connectionId);
+    if (!connection) return null;
+    if (UNAVAILABLE_HEALTH.has(connection.health)) {
+      if (purpose !== 'ask') return null;
+      throw new DataSourceConnectionUnavailableError(connection.health);
+    }
     // Vault unconfigured / schema uncaptured → not runnable yet (clear product error upstream).
     const connector = await this.connectorOrNull(binding.connectionId);
     if (!connector) return null;

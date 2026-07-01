@@ -8,6 +8,7 @@ import type { AgentProvider, AgentRunEvent } from '@evidata/agent';
 import type { InvestigationService } from '@evidata/investigation';
 import type { ModelSnapshot } from '@evidata/ports';
 import type { ProviderUsage } from '@evidata/provider-openai';
+import { DataSourceConnectionUnavailableError } from './data-source-resolver';
 
 export type Lang = 'en' | 'zh-CN';
 
@@ -107,6 +108,17 @@ export interface AskStreamDeps {
   modelSnapshot?: ModelSnapshot | null;
 }
 
+function connectionUnavailableMessage(health: string, language: Lang): { text: string } {
+  if (language === 'zh-CN') {
+    return {
+      text: `这个 Data Source 的连接当前不可用 (${health})。请到 Connections 修复连接后再试。`,
+    };
+  }
+  return {
+    text: `This Data Source's connection is currently unavailable (${health}). Fix it in Connections, then try again.`,
+  };
+}
+
 /** Read cumulative cost off a provider that reports it (the real one), else null. */
 function readUsage(provider: AgentProvider): ProviderUsage | null {
   const usage = (provider as Partial<{ usage: ProviderUsage }>).usage;
@@ -166,6 +178,11 @@ export async function askStream(
     // (best-effort; the client may already be gone) and persist nothing.
     if (e instanceof Error && e.name === 'AbortError') {
       write(sseEvent('aborted', {}));
+      return;
+    }
+    if (e instanceof DataSourceConnectionUnavailableError) {
+      write(sseEvent('message', connectionUnavailableMessage(e.health, body.language)));
+      write(sseEvent('done', {}));
       return;
     }
     write(sseEvent('error', { message: 'The investigation could not be completed.' }));

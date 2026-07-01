@@ -50,7 +50,11 @@ export interface DataSourceResolver {
   list(userId?: string): Promise<Array<{ id: string; name: string }>>;
   /** Build a runtime for a source id, or null if it isn't published/runnable OR the
    *  user isn't authorized for it (owner-gated for the slice — spec 09 §2). */
-  resolve(id: string, userId?: string): Promise<DataSourceRuntime | null>;
+  resolve(
+    id: string,
+    userId?: string,
+    purpose?: 'ask' | 'overview',
+  ): Promise<DataSourceRuntime | null>;
 }
 
 export interface InvestigationServiceDeps {
@@ -234,7 +238,7 @@ export class InvestigationService {
       // The data source is bound for the Investigation's lifetime — run against the
       // STORED one, not the client-supplied params.dataSourceId (which a follow-up
       // request may omit or get wrong).
-      rt = await this.dataSource(prior.dataSourceId, params.userId);
+      rt = await this.dataSource(prior.dataSourceId, params.userId, 'ask');
       investigationId = prior.id;
       history = priorTurns(prior);
       priorAnswers = prior.answers;
@@ -247,7 +251,7 @@ export class InvestigationService {
         history = history.slice(0, -1);
       }
     } else {
-      rt = await this.dataSource(params.dataSourceId, params.userId);
+      rt = await this.dataSource(params.dataSourceId, params.userId, 'ask');
       investigationId = this.newId('inv');
     }
 
@@ -353,17 +357,25 @@ export class InvestigationService {
 
   /** Static-first lookup; falls back to the resolver. Throws if unknown/unrunnable
    *  or the user isn't authorized (the error is generic — no existence leak). */
-  private async dataSource(id: string, userId?: string): Promise<DataSourceRuntime> {
-    const rt = await this.resolveOrNull(id, userId);
+  private async dataSource(
+    id: string,
+    userId?: string,
+    purpose?: 'ask' | 'overview',
+  ): Promise<DataSourceRuntime> {
+    const rt = await this.resolveOrNull(id, userId, purpose);
     if (!rt) throw new Error(`Unknown data source: ${id}`);
     return rt;
   }
 
   /** Static-first lookup (static sources are open); resolver fallback (authorized
    *  per userId); null if neither yields a runtime. */
-  private async resolveOrNull(id: string, userId?: string): Promise<DataSourceRuntime | null> {
+  private async resolveOrNull(
+    id: string,
+    userId?: string,
+    purpose?: 'ask' | 'overview',
+  ): Promise<DataSourceRuntime | null> {
     const stat = this.deps.dataSources.find((d) => d.id === id);
     if (stat) return stat;
-    return this.deps.resolver ? this.deps.resolver.resolve(id, userId) : null;
+    return this.deps.resolver ? this.deps.resolver.resolve(id, userId, purpose) : null;
   }
 }
