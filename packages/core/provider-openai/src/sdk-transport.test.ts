@@ -23,7 +23,10 @@ describe('reasoningProviderOptions (epic #106)', () => {
 // A request-level assertion that effort actually reaches the chat-completions body
 // (not just the helper shape): stub fetch, run the transport, inspect the wire.
 describe('sdkComplete effort on the wire (epic #106)', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   const baseReq: CompletionRequest = {
     model: 'o4-mini',
@@ -88,5 +91,49 @@ describe('sdkComplete effort on the wire (epic #106)', () => {
     });
     await complete(baseReq, {});
     expect((read() as Record<string, unknown>).reasoning_effort).toBeUndefined();
+  });
+
+  it('passes the leading system prompt through the SDK system option without warning', async () => {
+    const read = stubFetchCapturing();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const complete = sdkComplete({
+      apiKey: 'k',
+      baseURL: 'https://api.openai.com/v1',
+      model: 'o4-mini',
+    });
+    await complete(
+      {
+        ...baseReq,
+        messages: [
+          { role: 'system', content: 'You are careful.' },
+          { role: 'user', content: 'hi' },
+        ],
+      },
+      {},
+    );
+    expect(warn).not.toHaveBeenCalled();
+    expect(read()).toBeDefined();
+  });
+
+  it('throws if a system message remains in the messages array', async () => {
+    const read = stubFetchCapturing();
+    const complete = sdkComplete({
+      apiKey: 'k',
+      baseURL: 'https://api.openai.com/v1',
+      model: 'o4-mini',
+    });
+    await expect(
+      complete(
+        {
+          ...baseReq,
+          messages: [
+            { role: 'user', content: 'hi' },
+            { role: 'system', content: 'late system' },
+          ],
+        },
+        {},
+      ),
+    ).rejects.toThrow(/System messages/);
+    expect(read()).toBeUndefined();
   });
 });

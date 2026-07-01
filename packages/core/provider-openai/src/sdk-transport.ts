@@ -46,9 +46,12 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
 
   return async (req, opts): Promise<AssistantMessage> => {
     try {
+      const prompt = splitSystemMessage(req.messages);
       const result = await generateText({
         model,
-        messages: toModelMessages(req.messages),
+        ...(prompt.system !== undefined ? { system: prompt.system } : {}),
+        messages: toModelMessages(prompt.messages),
+        allowSystemInMessages: false,
         tools: toSdkTools(req.tools),
         toolChoice: toSdkToolChoice(req.tool_choice),
         temperature: req.temperature,
@@ -93,6 +96,12 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
       throw err;
     }
   };
+}
+
+function splitSystemMessage(messages: ChatMessage[]): { system?: string; messages: ChatMessage[] } {
+  const [first, ...rest] = messages;
+  if (first?.role !== 'system') return { messages };
+  return { system: first.content ?? '', messages: rest };
 }
 
 /** Our tools have no `execute`: we want the model's tool CALL back (the runner
