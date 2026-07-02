@@ -20,7 +20,13 @@ import type { Confidence, KeyFinding, MissingInfo, MissingKind } from '@evidata/
 import { AGENT_TOOLS, buildSystemPrompt } from './tools';
 import { sdkComplete } from './sdk-transport';
 import { lenientJson } from './json-repair';
-import type { ChatMessage, Complete, OpenAIProviderConfig, ProviderUsage } from './types';
+import type {
+  AssistantMessage,
+  ChatMessage,
+  Complete,
+  OpenAIProviderConfig,
+  ProviderUsage,
+} from './types';
 
 const MISSING_KINDS: ReadonlySet<string> = new Set<MissingKind>([
   'business_object',
@@ -119,14 +125,74 @@ function resultForModel(tr: ToolResult): Record<string, unknown> {
   };
 }
 
+function structuredActionInstruction(mustFinalize: boolean): string {
+  const actions = mustFinalize
+    ? 'final_answer'
+    : 'run_sql, cannot_answer, final_answer, reply, or draft_sql';
+  return [
+    'Return exactly one JSON object matching the provided schema. No Markdown, no prose.',
+    `Choose one action: ${actions}.`,
+    'The JSON shape is {"action":"run_sql","arguments":{...}}.',
+  ].join('\n');
+}
+
+function nullableSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...schema };
+  if (typeof next.type === 'string') {
+    next.type = [next.type, 'null'];
+  } else if (Array.isArray(next.type) && !next.type.includes('null')) {
+    next.type = [...(next.type as unknown[]), 'null'];
+  }
+  if (Array.isArray(next.enum) && !next.enum.includes(null)) {
+    next.enum = [...(next.enum as unknown[]), null];
+  }
+  return next;
+}
+
+function strictStructuredSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...schema };
+  if (next.type === 'object') {
+    const properties = asRecord(next.properties);
+    const required = new Set(asArray(next.required).map(asString).filter(Boolean));
+    const strictProperties: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(properties)) {
+      const child = strictStructuredSchema(asRecord(value));
+      strictProperties[key] = required.has(key) ? child : nullableSchema(child);
+    }
+    next.properties = strictProperties;
+    next.required = Object.keys(strictProperties);
+    next.additionalProperties = false;
+  }
+  if (next.type === 'array' && next.items) {
+    next.items = strictStructuredSchema(asRecord(next.items));
+  }
+  return next;
+}
+
+function structuredActionSchema(mustFinalize: boolean): Record<string, unknown> {
+  const tools = AGENT_TOOLS.filter((t) => !mustFinalize || t.function.name === 'final_answer');
+  const argumentSchemas = tools.map((t) => strictStructuredSchema(t.function.parameters));
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      action: { type: 'string', enum: tools.map((t) => t.function.name) },
+      arguments: argumentSchemas.length === 1 ? argumentSchemas[0]! : { anyOf: argumentSchemas },
+    },
+    required: ['action', 'arguments'],
+  };
+}
+
 export class OpenAIAgentProvider implements AgentProvider {
   private readonly complete: Complete;
   private readonly model: string;
   private readonly maxTokens: number;
+  private readonly structuredOutput: boolean;
   private readonly messages: ChatMessage[] = [];
   private started = false;
   private pendingCallId: string | undefined;
   private pendingFinalCallId: string | undefined;
+  private validationFeedbackConsumed = false;
   private consumed = 0;
   private readonly _usage: ProviderUsage = {
     promptTokens: 0,
@@ -143,6 +209,7 @@ export class OpenAIAgentProvider implements AgentProvider {
   constructor(cfg: OpenAIProviderConfig, complete?: Complete) {
     this.complete = complete ?? sdkComplete(cfg);
     this.model = cfg.model;
+    this.structuredOutput = cfg.structuredOutput === true;
     // A detailed, evidence-backed final_answer (esp. in CJK, where one char ≈ 1+
     // token) can exceed 1k tokens. If the tool-call arguments are truncated, the
     // JSON won't parse and the answer is lost — so default generously. Note:
@@ -169,6 +236,10 @@ export class OpenAIAgentProvider implements AgentProvider {
       }
       this.messages.push({ role: 'user', content: input.question });
       this.started = true;
+    }
+
+    if (this.structuredOutput) {
+      return this.nextStructured(history, signal);
     }
 
     // Feed back the previous run_sql's redacted result. The runner pushes exactly
@@ -222,12 +293,7 @@ export class OpenAIAgentProvider implements AgentProvider {
       { ...(signal ? { signal } : {}) },
     );
     // Tally cost: one model round-trip, plus tokens when the provider reports them.
-    this._usage.calls += 1;
-    if (assistant.usage) {
-      this._usage.promptTokens += assistant.usage.promptTokens;
-      this._usage.completionTokens += assistant.usage.completionTokens;
-      this._usage.totalTokens += assistant.usage.totalTokens;
-    }
+    this.tally(assistant);
     // We act on exactly one tool call per turn. DeepSeek occasionally returns
     // several in one assistant message; recording the extras would leave them
     // unanswered, and the NEXT request then violates the "every tool_call needs a
@@ -246,9 +312,78 @@ export class OpenAIAgentProvider implements AgentProvider {
     if (!call) return unblock('insufficient_results', 'The assistant did not take an action.');
     const args = asRecord(safeParse(call.function.arguments));
 
-    switch (call.function.name) {
+    return this.decisionFromAction(call.function.name, args, call.id);
+  }
+
+  private async nextStructured(
+    history: AgentHistory,
+    signal?: AbortSignal,
+  ): Promise<AgentDecision> {
+    if (history.toolResults.length > this.consumed) {
+      const tr = history.toolResults[history.toolResults.length - 1]!;
+      this.messages.push({
+        role: 'user',
+        content: `The previous run_sql result was:\n${JSON.stringify(resultForModel(tr))}`,
+      });
+      this.consumed = history.toolResults.length;
+    }
+
+    if (history.validationFeedback?.length && !this.validationFeedbackConsumed) {
+      this.messages.push({
+        role: 'user',
+        content: `Your previous final_answer was rejected: ${history.validationFeedback.join('; ')}. Fix it and cite only evidence ids returned by run_sql.`,
+      });
+      this.validationFeedbackConsumed = true;
+    }
+
+    if (history.mustFinalize) {
+      this.messages.push({
+        role: 'user',
+        content:
+          'This is your last step — do not run more queries. Return final_answer now using the evidence already gathered (cite the E# ids). If the evidence is thin, still answer, but use a lower confidence (Low) and note the limitation in a caveat.',
+      });
+    }
+
+    const assistant = await this.complete(
+      {
+        model: this.model,
+        messages: [
+          ...this.messages,
+          { role: 'user', content: structuredActionInstruction(history.mustFinalize === true) },
+        ],
+        output_schema: structuredActionSchema(history.mustFinalize === true),
+        temperature: 0,
+        max_tokens: this.maxTokens,
+      },
+      { ...(signal ? { signal } : {}) },
+    );
+    this.tally(assistant);
+    this.messages.push({ role: 'assistant', content: assistant.content ?? null });
+
+    const action = asRecord(safeParse(assistant.content ?? '{}'));
+    const name = asString(action.action);
+    const args = asRecord(action.arguments);
+    if (!name) return unblock('insufficient_results', 'The assistant did not take an action.');
+    return this.decisionFromAction(name, args);
+  }
+
+  private tally(assistant: AssistantMessage): void {
+    this._usage.calls += 1;
+    if (assistant.usage) {
+      this._usage.promptTokens += assistant.usage.promptTokens;
+      this._usage.completionTokens += assistant.usage.completionTokens;
+      this._usage.totalTokens += assistant.usage.totalTokens;
+    }
+  }
+
+  private decisionFromAction(
+    name: string,
+    args: Record<string, unknown>,
+    callId?: string,
+  ): AgentDecision {
+    switch (name) {
       case 'run_sql':
-        this.pendingCallId = call.id;
+        if (callId) this.pendingCallId = callId;
         return {
           kind: 'query',
           proposal: { purpose: asString(args.purpose), sql: asString(args.sql) },
@@ -256,7 +391,7 @@ export class OpenAIAgentProvider implements AgentProvider {
       case 'cannot_answer':
         return { kind: 'unblock', missing: toMissing(args.missing) };
       case 'final_answer':
-        this.pendingFinalCallId = call.id; // so a re-prompt can respond to this call
+        if (callId) this.pendingFinalCallId = callId; // so a re-prompt can respond to this call
         return { kind: 'final', draft: toDraft(args) };
       case 'reply':
         // Conversational message — no data claim, no evidence (spec 13). The turn ends.
@@ -267,7 +402,7 @@ export class OpenAIAgentProvider implements AgentProvider {
         return { kind: 'message', text: asString(args.explanation), ...(sql ? { sql } : {}) };
       }
       default:
-        return unblock('insufficient_results', `Unknown action: ${call.function.name}`);
+        return unblock('insufficient_results', `Unknown action: ${name}`);
     }
   }
 }

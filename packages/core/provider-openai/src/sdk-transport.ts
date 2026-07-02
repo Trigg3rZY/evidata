@@ -9,6 +9,7 @@
 import {
   generateText,
   jsonSchema,
+  Output,
   tool,
   InvalidToolInputError,
   type ModelMessage,
@@ -40,6 +41,7 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
     name: 'evidata',
     baseURL: cfg.baseURL,
     apiKey: cfg.apiKey,
+    supportsStructuredOutputs: cfg.structuredOutput === true,
   });
   const model = provider(cfg.model);
   const providerOptions = reasoningProviderOptions(cfg.effort);
@@ -47,29 +49,50 @@ export function sdkComplete(cfg: OpenAIProviderConfig): Complete {
   return async (req, opts): Promise<AssistantMessage> => {
     try {
       const prompt = splitSystemMessage(req.messages);
+      const tools = req.tools ?? [];
+      const structuredOutput = req.output_schema
+        ? Output.object({
+            schema: jsonSchema(req.output_schema),
+            name: 'agent_action',
+            description: 'The next agent action.',
+          })
+        : undefined;
       const result = await generateText({
         model,
         ...(prompt.system !== undefined ? { system: prompt.system } : {}),
         messages: toModelMessages(prompt.messages),
         allowSystemInMessages: false,
-        tools: toSdkTools(req.tools),
-        toolChoice: toSdkToolChoice(req.tool_choice),
+        ...(tools.length ? { tools: toSdkTools(tools) } : {}),
+        ...(tools.length && req.tool_choice
+          ? { toolChoice: toSdkToolChoice(req.tool_choice) }
+          : {}),
         temperature: req.temperature,
         maxOutputTokens: req.max_tokens,
+        ...(structuredOutput ? { output: structuredOutput } : {}),
         ...(providerOptions ? { providerOptions } : {}),
         // Preserve the DeepSeek tool-arg JSON repair (unescaped quotes / control
         // chars): the SDK parses+validates tool input itself and rejects these, so
         // re-run our lenient repair on the raw input before it fails the turn.
-        experimental_repairToolCall: ({ toolCall, error }) => {
-          if (!InvalidToolInputError.isInstance(error)) return Promise.resolve(null);
-          const repaired = lenientJson(toolCall.input);
-          // Unrepairable → null lets it fail closed through the answer contract.
-          return Promise.resolve(isParseable(repaired) ? { ...toolCall, input: repaired } : null);
-        },
+        ...(tools.length
+          ? {
+              experimental_repairToolCall: ({ toolCall, error }) => {
+                if (!InvalidToolInputError.isInstance(error)) return Promise.resolve(null);
+                const repaired = lenientJson(toolCall.input);
+                // Unrepairable → null lets it fail closed through the answer contract.
+                return Promise.resolve(
+                  isParseable(repaired) ? { ...toolCall, input: repaired } : null,
+                );
+              },
+            }
+          : {}),
         ...(opts.signal ? { abortSignal: opts.signal } : {}),
       });
       return {
-        content: result.text ? result.text : null,
+        content: structuredOutput
+          ? JSON.stringify(result.output)
+          : result.text
+            ? result.text
+            : null,
         ...(result.toolCalls.length
           ? {
               tool_calls: result.toolCalls.map((tc) => ({

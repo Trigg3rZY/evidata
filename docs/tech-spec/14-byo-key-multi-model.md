@@ -98,6 +98,15 @@ data-source picker — not mid-conversation switching, not app-wide-only.
 - Applied via the openai-compatible provider's `providerOptions.openaiCompatible.
   reasoningEffort` → the `reasoning_effort` request field.
 
+## 4.1 Tool-call vs structured-output execution (#118)
+
+The registered model's `capabilities` selects the provider strategy. Tool-capable
+models keep the forced tool-call loop. A provider with `toolChoice: "none"` or
+`structuredOutput: true` uses the same agent loop through JSON-schema structured
+actions (`run_sql`, `final_answer`, `cannot_answer`, `reply`, `draft_sql`) instead of
+tool calls. The runner boundary is unchanged: application code still executes,
+redacts, records, and validates.
+
 ## 5. Trust boundary (extends `01 §4`, `13 §7`)
 
 Unchanged by model choice: only read-only SQL executes (`SafetyGate`), only

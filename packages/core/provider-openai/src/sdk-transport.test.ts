@@ -46,7 +46,7 @@ describe('sdkComplete effort on the wire (epic #106)', () => {
     max_tokens: 16,
   };
 
-  function stubFetchCapturing(): () => unknown {
+  function stubFetchCapturing(content = 'ok'): () => unknown {
     let body: unknown;
     vi.stubGlobal('fetch', (_url: string, init?: { body?: string }) => {
       body = init?.body ? JSON.parse(init.body) : undefined;
@@ -55,9 +55,7 @@ describe('sdkComplete effort on the wire (epic #106)', () => {
         object: 'chat.completion',
         created: 0,
         model: 'o4-mini',
-        choices: [
-          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
-        ],
+        choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       };
       return Promise.resolve(
@@ -135,5 +133,37 @@ describe('sdkComplete effort on the wire (epic #106)', () => {
       ),
     ).rejects.toThrow(/System messages/);
     expect(read()).toBeUndefined();
+  });
+
+  it('omits tools for structured-output requests (#118)', async () => {
+    const read = stubFetchCapturing('{"action":"reply","arguments":{"text":"ok"}}');
+    const complete = sdkComplete({
+      apiKey: 'k',
+      baseURL: 'https://api.openai.com/v1',
+      model: 'o4-mini',
+      structuredOutput: true,
+    });
+    await complete(
+      {
+        model: 'o4-mini',
+        messages: [{ role: 'user', content: 'Return the action JSON.' }],
+        output_schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            action: { type: 'string' },
+            arguments: { type: 'object' },
+          },
+          required: ['action', 'arguments'],
+        },
+        temperature: 0,
+        max_tokens: 16,
+      },
+      {},
+    );
+    const body = read() as Record<string, unknown>;
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect((body.response_format as Record<string, unknown>).type).toBe('json_schema');
   });
 });

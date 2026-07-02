@@ -251,6 +251,12 @@ export class ModelProviderService {
     };
     const config: OpenAIProviderConfig = { apiKey, baseURL, model: record.model };
     if (typeof record.params.maxTokens === 'number') config.maxTokens = record.params.maxTokens;
+    if (
+      record.capabilities.structuredOutput === true ||
+      record.capabilities.toolChoice === 'none'
+    ) {
+      config.structuredOutput = true;
+    }
     // Only pass effort for a kind that supports it AND a valid level. Registration
     // gates both now, but a record predating the gate (effort was once free text)
     // could hold e.g. 'extreme' on an openai record — drop it rather than send a

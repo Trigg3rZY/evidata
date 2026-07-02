@@ -184,6 +184,22 @@ describe('ModelProviderService (epic #106)', () => {
     await svc.remove('owner', bad.id);
   });
 
+  it('resolveConfig enables structured output for no-tool models (#118)', async () => {
+    const noTool = await svc.create(
+      'owner',
+      input({ name: 'No tools', capabilities: { toolChoice: 'none' } }),
+    );
+    expect((await svc.resolveConfig(noTool.id))?.structuredOutput).toBe(true);
+    await svc.remove('owner', noTool.id);
+
+    const explicit = await svc.create(
+      'owner',
+      input({ name: 'Structured', capabilities: { structuredOutput: true } }),
+    );
+    expect((await svc.resolveConfig(explicit.id))?.structuredOutput).toBe(true);
+    await svc.remove('owner', explicit.id);
+  });
+
   it('resolveConfig is null when no OpenAI-compatible base can be determined', async () => {
     // openai-compatible kind with no baseUrl → not runnable yet.
     const p = await svc.create(
