@@ -11,6 +11,28 @@ trust boundaries as first-class requirements.
 - Do not weaken the core boundary: AI proposes; application code validates, executes, redacts, records, and persists.
 - For behavior changes, run the narrowest relevant tests first, then broader verification when the change touches shared contracts or user-facing flows.
 
+## Ponytail mode
+
+Use Ponytail mode for coding work in this repo: the laziest solution that is
+correct, tested, and compatible with evidata's trust boundaries.
+
+Before writing code, stop at the first rung that holds:
+
+1. Does this need to exist at all?
+2. Does this already exist in the codebase? Reuse the helper, type, or pattern.
+3. Does the standard library or native platform cover it?
+4. Does an already-installed dependency cover it?
+5. Can it be one line?
+6. Only then, write the minimum code that works.
+
+- No speculative abstractions, boilerplate, config, or dependencies.
+- Deletion over addition; boring over clever; fewest files possible.
+- Bug fixes go at the root cause: read callers and fix the shared path once.
+- Non-trivial logic leaves one focused runnable check. Trivial one-liners need no test.
+- Mark intentional shortcuts with a `ponytail:` comment that names the ceiling and upgrade path.
+- Never simplify away trust-boundary validation, security, redaction, persistence,
+  data-loss-preventing error handling, accessibility, or explicit product requirements.
+
 ## Collaboration & workflow
 
 How work is run in this repo — project conventions that apply to any agent or
