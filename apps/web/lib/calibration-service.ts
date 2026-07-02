@@ -14,7 +14,7 @@
  * no row data, no redaction.
  */
 import { randomUUID } from 'node:crypto';
-import type { Complete } from '@evidata/provider-openai';
+import { sdkComplete, type Complete } from '@evidata/provider-openai';
 import type {
   MetadataStore,
   NewEntityMapping,
@@ -22,6 +22,7 @@ import type {
   SchemaSnapshot,
 } from '@evidata/ports';
 import { requireDataSourceCapability } from './authoring-service';
+import type { ResolvedModelProvider } from './model-provider-service';
 
 /** Calibration couldn't run (e.g. no captured schema) — route → 409. */
 export class CalibrationError extends Error {
@@ -59,12 +60,13 @@ type CalibrationStore = Pick<
 
 export interface CalibrationServiceDeps {
   store: CalibrationStore;
-  /** The provider transport, or null to use the deterministic schema-only fixture
-   *  draft (keyless dev/CI/demo). */
-  complete: Complete | null;
-  /** Model id for the request (the transport closes over the real one; this keeps
-   *  the request accurate). */
-  model: string;
+  /** Resolve the registered deployment default model. Null means deterministic
+   *  schema-only fixture draft (keyless dev/CI/demo). */
+  models?: { resolveDefaultConfig(): Promise<ResolvedModelProvider | null> };
+  /** Test hook: bypass registered model resolution with a fake provider transport. */
+  complete?: Complete | null;
+  /** Model id for the injected test transport. */
+  model?: string;
   newId?: (prefix: string) => string;
 }
 
@@ -90,9 +92,7 @@ export class CalibrationService {
       );
     }
 
-    const draft = this.deps.complete
-      ? await draftViaModel(schema, this.deps.complete, this.deps.model)
-      : fixtureDraft(schema);
+    const draft = await this.draft(schema);
 
     // The overview is deliberately NOT persisted here (it would reach the model
     // unfiltered, bypassing review — Codex P1). It rides back in `draft` for the owner
@@ -134,6 +134,16 @@ export class CalibrationService {
     await this.deps.store.addEntityMappings(newMaps);
 
     return { glossaryAdded: newTerms.length, mappingsAdded: newMaps.length, draft };
+  }
+
+  private async draft(schema: SchemaSnapshot): Promise<CalibrationDraft> {
+    if (this.deps.complete) {
+      return draftViaModel(schema, this.deps.complete, this.deps.model ?? 'test-model');
+    }
+    const resolved = this.deps.models ? await this.deps.models.resolveDefaultConfig() : null;
+    return resolved
+      ? draftViaModel(schema, sdkComplete(resolved.config), resolved.config.model)
+      : fixtureDraft(schema);
   }
 }
 

@@ -17,15 +17,8 @@ import { InvestigationService, type DataSourceRuntime } from '@evidata/investiga
 import { AuthService } from '@evidata/auth';
 import { ConnectionService } from '@evidata/connection';
 import { credentialVaultFromEnv } from '@evidata/secrets';
-import { fixtureFor, type AgentProvider } from '@evidata/agent';
-import type { ModelSnapshot } from '@evidata/ports';
-import {
-  OpenAIAgentProvider,
-  openAIConfigFromEnv,
-  sdkComplete,
-  type OpenAIProviderConfig,
-} from '@evidata/provider-openai';
-import { pickScenario } from './ask-stream';
+import type { AgentProvider } from '@evidata/agent';
+import { OpenAIAgentProvider, type OpenAIProviderConfig } from '@evidata/provider-openai';
 import { PublishedDataSourceResolver } from './data-source-resolver';
 import { DataSourceAuthoringService } from './authoring-service';
 import { CalibrationService } from './calibration-service';
@@ -34,29 +27,9 @@ import { InviteService } from './invite-service';
 import { SuggestionService } from './suggestion-service';
 import { ModelProviderService } from './model-provider-service';
 
-// A real OpenAI-compatible provider is used when AGENT_PROVIDER=openai + a key is
-// set (DeepSeek by default); otherwise we fall back to the deterministic
-// FixtureProvider so dev/CI stay hermetic. Resolved once at module load.
-const providerConfig = openAIConfigFromEnv(process.env);
-
-/** New provider per turn (the real provider is stateful per run). */
-export function makeProvider(question: string): AgentProvider {
-  return providerConfig
-    ? new OpenAIAgentProvider(providerConfig)
-    : fixtureFor(pickScenario(question));
-}
-
 /** Build a stateful provider for a resolved registered model config (epic #106). */
 export function providerFromConfig(config: OpenAIProviderConfig): AgentProvider {
   return new OpenAIAgentProvider(config);
-}
-
-/** Audit snapshot of the env-default model (#116) — recorded on a new Investigation that
- *  binds no registered provider. Null in fixture mode (no real model answered). */
-export function envModelSnapshot(): ModelSnapshot | null {
-  return providerConfig
-    ? { source: 'env', model: providerConfig.model, baseURL: providerConfig.baseURL ?? null }
-    : null;
 }
 
 export interface Runtime {
@@ -116,12 +89,11 @@ async function build(): Promise<Runtime> {
   });
   const auth = new AuthService({ store });
   const authoring = new DataSourceAuthoringService(store);
-  // Calibration uses the configured env provider (real when AGENT_PROVIDER=openai,
-  // else a deterministic schema-only fixture draft); it drafts Suggested context.
+  // Calibration resolves the newest runnable registered model; without one it uses a
+  // deterministic schema-only fixture draft so keyless dev/CI stay hermetic.
   const calibration = new CalibrationService({
     store,
-    complete: providerConfig ? sdkComplete(providerConfig) : null,
-    model: providerConfig?.model ?? 'fixture',
+    models: modelProviders,
   });
   const verification = new VerificationService(store);
   const invites = new InviteService({ store, auth });

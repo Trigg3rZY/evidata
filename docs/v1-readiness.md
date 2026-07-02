@@ -26,7 +26,7 @@ This checklist is the shortest path from a fresh checkout to a useful dogfood ru
    METADATA_DATA_DIR=<absolute path to a local metadata directory>
    ```
 
-   Leave `AGENT_PROVIDER` unset only for the Sample fixture flow. For a real or semi-real Data Source dogfood run, set `AGENT_PROVIDER=openai` plus an OpenAI-compatible key so the model can plan against that source's schema.
+   The Sample fixture needs no model registration. For a real or semi-real Data Source dogfood run, sign in and register an OpenAI-compatible model in `/admin/models`; real asks fail fast until a registered model exists.
 
 3. Start the app.
 

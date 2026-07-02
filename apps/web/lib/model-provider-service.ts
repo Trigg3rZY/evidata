@@ -51,6 +51,11 @@ export interface ModelProviderListItem extends ModelProviderSummary {
   runnable: boolean;
 }
 
+export interface ResolvedModelProvider {
+  id: string;
+  config: OpenAIProviderConfig;
+}
+
 /** The caller doesn't own the target provider (route → 404; no existence leak). */
 export class ModelProviderAccessError extends Error {
   constructor() {
@@ -219,11 +224,28 @@ export class ModelProviderService {
    *  determined). Shared (#151): any member — and a system-triggered rerun — can run any
    *  registered model; the key still flows only vault → provider, never to the client. */
   async resolveConfig(id: string): Promise<OpenAIProviderConfig | null> {
-    const vault = this.requireVault();
     const record = await this.deps.store.getModelProvider(id);
     if (!record) return null;
+    return this.configFromRecord(record);
+  }
+
+  /** Resolve the deployment default: newest runnable registered model, or null when
+   *  none exists. Used only when the client did not send an explicit selection. */
+  async resolveDefaultConfig(): Promise<ResolvedModelProvider | null> {
+    const summary = (await this.deps.store.listModelProviders()).find(
+      (p) => resolvableBaseUrl(p.kind, p.baseUrl) !== null,
+    );
+    if (!summary) return null;
+    const record = await this.deps.store.getModelProvider(summary.id);
+    if (!record) return null;
+    const config = this.configFromRecord(record);
+    return config ? { id: record.id, config } : null;
+  }
+
+  private configFromRecord(record: ModelProviderRecord): OpenAIProviderConfig | null {
     const baseURL = resolvableBaseUrl(record.kind, record.baseUrl);
     if (!baseURL) return null; // e.g. self-hosted with no baseUrl, or native Anthropic (later)
+    const vault = this.requireVault();
     const { apiKey } = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
       apiKey: string;
     };

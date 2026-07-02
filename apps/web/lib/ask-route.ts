@@ -1,7 +1,35 @@
+import { fixtureFor, type AgentProvider } from '@evidata/agent';
+import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
 import type { ModelSnapshot } from '@evidata/ports';
-import { askStream, type AskBody } from './ask-stream';
+import { askStream, pickScenario, type AskBody } from './ask-stream';
 import { VaultUnavailableError } from './model-provider-service';
-import { envModelSnapshot, getRuntime, makeProvider, providerFromConfig } from './runtime';
+import { getRuntime, providerFromConfig } from './runtime';
+
+export function noRegisteredModelMessage(language: AskBody['language']): string {
+  return language === 'zh-CN'
+    ? '请先在 Admin > Models 注册一个模型，再对真实 Data Source 提问。'
+    : 'Register a model in Admin > Models before asking a real Data Source.';
+}
+
+export function unboundInvestigationModelMessage(language: AskBody['language']): string {
+  return language === 'zh-CN'
+    ? '这个对话没有绑定注册模型。请新建对话并选择一个已注册模型。'
+    : 'This conversation is not bound to a registered model. Start a new conversation with a registered model.';
+}
+
+export function canUseFixtureProvider(body: Pick<AskBody, 'dataSourceId' | 'userId'>): boolean {
+  return body.dataSourceId === SAMPLE_DATA_SOURCE_ID && !body.userId;
+}
+
+export function canUseDefaultRegisteredModel(
+  body: Pick<AskBody, 'investigationId' | 'userId'>,
+): boolean {
+  return !body.investigationId && Boolean(body.userId);
+}
+
+function fixtureProviderFor(question: string): AgentProvider {
+  return fixtureFor(pickScenario(question));
+}
 
 /**
  * Shared SSE response for the Ask Data endpoints (new investigation + follow-up).
@@ -19,10 +47,10 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
   const modelProviderId = body.investigationId
     ? await rt.service.getInvestigationModelProviderId(body.investigationId)
     : (body.modelProviderId ?? null);
-  let providerFor = makeProvider;
-  // Audit snapshot of the effective model recorded on a NEW Investigation (#116);
-  // defaults to the env model, overridden below when a registered model resolves.
-  let modelSnapshot: ModelSnapshot | null = envModelSnapshot();
+  let effectiveBody = body;
+  let providerFor = fixtureProviderFor;
+  // Audit snapshot of the effective model recorded on a NEW Investigation (#116).
+  let modelSnapshot: ModelSnapshot | null = null;
   if (modelProviderId) {
     let cfg;
     try {
@@ -43,6 +71,35 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
     }
     providerFor = () => providerFromConfig(cfg);
     modelSnapshot = { source: 'registered', model: cfg.model, baseURL: cfg.baseURL ?? null };
+  } else if (canUseDefaultRegisteredModel(body)) {
+    let resolved;
+    try {
+      resolved = await rt.modelProviders.resolveDefaultConfig();
+    } catch (e) {
+      if (e instanceof VaultUnavailableError) {
+        return Response.json({ error: 'The credential vault is not configured.' }, { status: 503 });
+      }
+      throw e;
+    }
+    if (!resolved) {
+      return Response.json({ error: noRegisteredModelMessage(body.language) }, { status: 409 });
+    }
+    providerFor = () => providerFromConfig(resolved.config);
+    modelSnapshot = {
+      source: 'registered',
+      model: resolved.config.model,
+      baseURL: resolved.config.baseURL ?? null,
+    };
+    effectiveBody = { ...body, modelProviderId: resolved.id };
+  } else if (!canUseFixtureProvider(body)) {
+    return Response.json(
+      {
+        error: body.investigationId
+          ? unboundInvestigationModelMessage(body.language)
+          : noRegisteredModelMessage(body.language),
+      },
+      { status: 409 },
+    );
   }
   const encoder = new TextEncoder();
   // Disconnect-safe: once the client goes away, `cancel()` flips `closed` and
@@ -58,7 +115,12 @@ export async function askSseResponse(body: AskBody, signal: AbortSignal): Promis
           closed = true;
         }
       };
-      await askStream({ service: rt.service, providerFor, modelSnapshot }, body, write, signal);
+      await askStream(
+        { service: rt.service, providerFor, modelSnapshot },
+        effectiveBody,
+        write,
+        signal,
+      );
       if (!closed) controller.close();
     },
     cancel() {

@@ -154,7 +154,7 @@ if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode 
 The reactive fixes were each discovered by hand-running questions. Systematize that feedback loop.
 
 - **Per-turn trace** *(extends usage metering)* — alongside the `usage` frame, record a structured trace: `{ intent, route, queries, modelCalls, tokens, status, repaired, retried, aborted, ms }`. Logged server-side; the cost footer already surfaces tokens/calls/queries.
-- **Eval set** — `packages/core/agent/eval/` holds labeled cases: `{ question, lang, expectedRoute, expect: { status?, maxQueries?, contains? } }` spanning every intent (greeting, data-question, sql-authoring, mutation-execute, out-of-scope, meta). Routing + guardrail assertions run against the **FixtureProvider** (deterministic, in CI). An optional, env-gated pass runs the real model for end-to-end answered-rate / avg-queries / avg-tokens (hermetic CI never calls the network).
+- **Eval set** — `packages/core/agent/eval/` holds labeled cases: `{ question, lang, expectedRoute, expect: { status?, maxQueries?, contains? } }` spanning every intent (greeting, data-question, sql-authoring, mutation-execute, out-of-scope, meta). Routing + guardrail assertions run against the **FixtureProvider** (deterministic, in CI). An optional live pass uses explicit `EVIDATA_LIVE_MODEL_*` test env vars for end-to-end answered-rate / avg-queries / avg-tokens (hermetic CI never calls the network; app runtime still resolves real models from registered `ModelProvider` rows).
 - **Metrics** — routing accuracy, answered-rate, avg queries/turn, avg tokens/turn, % repaired, % aborted. These are the harness's regression signals.
 
 ---

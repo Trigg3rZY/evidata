@@ -129,6 +129,28 @@ describe('ModelProviderService (epic #106)', () => {
     await svc.remove('owner', noBase.id);
   });
 
+  it('resolveDefaultConfig selects a runnable registered model (#170)', async () => {
+    const noBase = await svc.create(
+      'owner',
+      input({ name: 'DefaultSkip', kind: 'openai-compatible', baseUrl: null }),
+    );
+    const runnable = await svc.create(
+      'owner',
+      input({ name: 'DefaultRun', kind: 'deepseek', baseUrl: null }),
+    );
+
+    const resolved = await svc.resolveDefaultConfig();
+    expect(resolved?.id).toBe(runnable.id);
+    expect(resolved?.config).toMatchObject({
+      apiKey: 'sk-secret-123',
+      baseURL: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+    });
+
+    await svc.remove('owner', noBase.id);
+    await svc.remove('owner', runnable.id);
+  });
+
   it('resolveConfig carries effort only for an effort-capable kind', async () => {
     // OpenAI kind supports reasoning_effort → effort flows into the config.
     const oa = await svc.create(

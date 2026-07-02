@@ -89,11 +89,12 @@ export interface AskParams {
    *  this version at save time; otherwise the save throws (a follow-up moved the head). */
   expectedLatestVersion?: number;
   /** The model to bind to a NEW Investigation (epic #106 / #113). Recorded on
-   *  create; null/omitted = the server's default. Ignored for a follow-up — that
-   *  reuses the Investigation's already-bound model (the caller resolves it). */
+   *  create; null/omitted = fixture-backed Sample or a legacy unbound row. Ignored
+   *  for a follow-up — that reuses the Investigation's already-bound model (the
+   *  caller resolves it). */
   modelProviderId?: string | null;
   /** Immutable audit snapshot of the effective model, recorded on a NEW Investigation
-   *  (#116). Captures which model/endpoint answered even on the env-default path. */
+   *  (#116). Captures which registered model/endpoint answered. */
   modelSnapshot?: ModelSnapshot | null;
 }
 
@@ -307,11 +308,9 @@ export class InvestigationService {
         dataSourceId: rt.id,
         title: deriveTitle(params.question),
         // Bind the chosen registered model for the Investigation's lifetime (#113).
-        // null = the deployment's env-configured default (the simple single-model
-        // path): a follow-up then uses the current env default.
+        // null = fixture-backed anonymous Sample or a legacy unbound investigation.
         modelProviderId: params.modelProviderId ?? null,
-        // Immutable audit snapshot of the model that actually answered (#116) — durable
-        // even for the env-default path, where modelProviderId is null.
+        // Immutable audit snapshot of the registered model that actually answered (#116).
         modelSnapshot: params.modelSnapshot ?? null,
         // Owner scoping (#177): null = anonymous (Sample). Threaded from the
         // authenticated userId already in AskParams; drives list/get isolation.

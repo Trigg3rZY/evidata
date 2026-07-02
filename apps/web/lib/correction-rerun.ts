@@ -9,7 +9,7 @@
  * leaves the existing answer in place. Returns whether a new Answer version was written.
  */
 import type { Runtime } from './runtime';
-import { makeProvider, providerFromConfig } from './runtime';
+import { providerFromConfig } from './runtime';
 
 export async function rerunForCorrection(
   rt: Runtime,
@@ -26,19 +26,16 @@ export async function rerunForCorrection(
   if (!thread || latest == null || latest !== raisedVersion) return false;
 
   // The model is bound to the investigation (#113); resolve it from the shared team pool
-  // (#151 — any member resolves it, the key stays server-side). null → the env default.
-  // A BOUND model that can't resolve must NOT silently fall back to the env default
+  // (#151 — any member resolves it, the key stays server-side).
+  // A BOUND model that can't resolve must NOT silently fall back to a different model
   // (#111) — that would persist a correction answer from the wrong model. Skip instead.
   const modelProviderId = await rt.service.getInvestigationModelProviderId(investigationId);
-  let providerFor = makeProvider;
-  if (modelProviderId) {
-    const cfg = await rt.modelProviders.resolveConfig(modelProviderId).catch(() => null);
-    if (!cfg) return false; // bound but unresolvable → don't re-answer with the wrong model
-    providerFor = () => providerFromConfig(cfg);
-  }
+  if (!modelProviderId) return false;
+  const cfg = await rt.modelProviders.resolveConfig(modelProviderId).catch(() => null);
+  if (!cfg) return false; // bound but unresolvable → don't re-answer with the wrong model
+  const provider = providerFromConfig(cfg);
 
-  // Build the provider from the stored latest question (the fixture path keys off it; the
-  // real provider ignores it). `ask` re-resolves the question internally for the rerun.
+  // `ask` re-resolves the question internally for the rerun.
   const question = [...thread.turns].reverse().find((t) => t.role === 'user')?.question ?? '';
   try {
     const result = await rt.service.ask(
@@ -53,7 +50,7 @@ export async function rerunForCorrection(
         // STILL the head at save time (a follow-up may have landed since the pre-check).
         expectedLatestVersion: raisedVersion,
       },
-      { provider: providerFor(question) },
+      { provider },
     );
     return result.kind === 'answer';
   } catch {

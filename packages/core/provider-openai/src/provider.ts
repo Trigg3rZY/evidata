@@ -271,19 +271,3 @@ export class OpenAIAgentProvider implements AgentProvider {
     }
   }
 }
-
-/** Build provider config from env, or null if a real provider isn't configured. */
-export function openAIConfigFromEnv(env: NodeJS.ProcessEnv): OpenAIProviderConfig | null {
-  if (env.AGENT_PROVIDER !== 'openai') return null;
-  const apiKey = env.OPENAI_API_KEY ?? env.DEEPSEEK_API_KEY;
-  if (!apiKey) return null;
-  const config: OpenAIProviderConfig = {
-    apiKey,
-    baseURL: env.OPENAI_BASE_URL ?? 'https://api.deepseek.com',
-    model: env.AGENT_MODEL ?? 'deepseek-chat',
-  };
-  // Ignore a non-numeric AGENT_MAX_TOKENS rather than sending max_tokens: NaN/null.
-  const maxTokens = Number(env.AGENT_MAX_TOKENS);
-  if (Number.isFinite(maxTokens) && maxTokens > 0) config.maxTokens = maxTokens;
-  return config;
-}
