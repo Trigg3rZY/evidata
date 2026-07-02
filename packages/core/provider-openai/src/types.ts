@@ -27,8 +27,10 @@ export type ToolChoice = 'required' | { type: 'function'; function: { name: stri
 export interface CompletionRequest {
   model: string;
   messages: ChatMessage[];
-  tools: ToolDef[];
-  tool_choice: ToolChoice;
+  tools?: ToolDef[];
+  tool_choice?: ToolChoice;
+  /** JSON schema for non-tool structured-output models. */
+  output_schema?: Record<string, unknown>;
   temperature: number;
   max_tokens: number;
 }
@@ -66,4 +68,6 @@ export interface OpenAIProviderConfig {
   /** Reasoning effort for reasoning models (OpenAI `reasoning_effort`: low|medium|high).
    *  Sent only when set; ignored by models without a reasoning knob (epic #106). */
   effort?: string;
+  /** Use JSON structured output instead of tool calls for no-tool models (#118). */
+  structuredOutput?: boolean;
 }

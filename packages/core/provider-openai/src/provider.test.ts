@@ -45,6 +45,11 @@ const toolCall = (id: string, name: string, args: unknown): ToolCall => ({
 
 const provider = (complete: Complete) =>
   new OpenAIAgentProvider({ apiKey: 'x', baseURL: 'http://localhost', model: 'm' }, complete);
+const structuredProvider = (complete: Complete) =>
+  new OpenAIAgentProvider(
+    { apiKey: 'x', baseURL: 'http://localhost', model: 'm', structuredOutput: true },
+    complete,
+  );
 
 describe('OpenAIAgentProvider', () => {
   it('maps run_sql → query, feeds the redacted result back, then final_answer → final', async () => {
@@ -264,6 +269,74 @@ describe('OpenAIAgentProvider', () => {
     const d = await provider(complete).next(input, emptyHistory());
     expect(d.kind).toBe('unblock');
     if (d.kind === 'unblock') expect(d.missing[0].kind).toBe('unverified_mapping');
+  });
+
+  it('uses structured JSON actions for no-tool models (#118)', async () => {
+    const { complete, calls } = scripted([
+      {
+        content: JSON.stringify({
+          action: 'run_sql',
+          arguments: { purpose: 'compare', sql: 'select 1' },
+        }),
+      },
+      {
+        content: JSON.stringify({
+          action: 'final_answer',
+          arguments: {
+            status: 'Answered',
+            directAnswer: 'up 38%',
+            confidence: 'Medium',
+            confidenceReason: 'single source',
+            keyFindings: [{ text: 'rose', evidenceIds: ['E1'] }],
+            assumptions: null,
+            caveats: null,
+            recommendedFollowups: null,
+          },
+        }),
+      },
+    ]);
+    const p = structuredProvider(complete);
+    const history = emptyHistory();
+
+    const d1 = await p.next(input, history);
+    expect(d1).toEqual({ kind: 'query', proposal: { purpose: 'compare', sql: 'select 1' } });
+    expect(calls[0]?.tools).toBeUndefined();
+    expect(calls[0]?.tool_choice).toBeUndefined();
+    expect(calls[0]?.output_schema).toBeDefined();
+
+    history.toolResults.push({
+      evidenceRef: 'E1',
+      purpose: 'compare',
+      columns: [{ name: 'total', dataType: 'numeric' }],
+      sampleRows: [{ total: 48200 }],
+      rowCount: 1,
+      truncated: false,
+      redactedColumns: [],
+    });
+    const d2 = await p.next(input, history);
+    expect(d2.kind).toBe('final');
+    expect(calls[1]?.messages.some((m) => m.content?.includes('"evidenceRef":"E1"'))).toBe(true);
+    const schema = calls[1]?.output_schema as Record<string, unknown>;
+    expect(schema.type).toBe('object');
+    expect(schema.oneOf).toBeUndefined();
+    const properties = schema.properties as Record<string, Record<string, unknown> | undefined>;
+    expect(properties.action?.enum as string[]).toContain('final_answer');
+    const args = properties.arguments!;
+    const finalArgs = (args.anyOf as Record<string, unknown>[]).find((candidate) =>
+      (candidate.required as string[]).includes('directAnswer'),
+    )!;
+    expect(finalArgs.required).toEqual([
+      'status',
+      'directAnswer',
+      'confidence',
+      'confidenceReason',
+      'keyFindings',
+      'assumptions',
+      'caveats',
+      'recommendedFollowups',
+    ]);
+    const argProperties = finalArgs.properties as Record<string, Record<string, unknown>>;
+    expect(argProperties.assumptions?.type).toEqual(['array', 'null']);
   });
 
   it('responds to a rejected final_answer with the violations on re-prompt', async () => {
