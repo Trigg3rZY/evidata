@@ -52,9 +52,14 @@ const globalForRuntime = globalThis as typeof globalThis & {
 
 async function build(): Promise<Runtime> {
   // Metadata persists when METADATA_DATA_DIR is set (file-backed pglite — the
-  // self-hosted default); otherwise it's in-memory (dev/demo/smoke, resets on boot).
+  // self-hosted default); METADATA_DATABASE_URL opts into a separately migrated
+  // real Postgres metadata host. Otherwise it's in-memory (dev/demo/smoke).
   const db = await createMetadataDb(
-    process.env.METADATA_DATA_DIR ? { dataDir: process.env.METADATA_DATA_DIR } : {},
+    process.env.METADATA_DATABASE_URL
+      ? { databaseUrl: process.env.METADATA_DATABASE_URL }
+      : process.env.METADATA_DATA_DIR
+        ? { dataDir: process.env.METADATA_DATA_DIR }
+        : {},
   );
   const sample = await createSampleConnector();
 

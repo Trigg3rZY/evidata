@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
+    "db:migrate": "pnpm --filter @evidata/db db:migrate",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
