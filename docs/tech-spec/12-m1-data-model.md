@@ -92,7 +92,7 @@ export const dataSources = meta.table('data_sources', {
 ## 4. Migrations & deploy
 
 - M1 schema changes are generated as ordinary forward-only Drizzle migrations (`drizzle-kit generate`) committed under `packages/db/drizzle`. **As built (M1.8): the default host is file-backed pglite**, which applies the inlined `SCHEMA_SQL` once (idempotent — skipped when `evidata_meta` already exists), so a persisted `METADATA_DATA_DIR` is reused across restarts with no separate database. The migration files below are the source of truth for the real-Postgres host (`08 §9`).
-- They are applied by a **deploy-time `db:migrate` step** (plain Node, unbundled — the file-based migrator works there) against the real `METADATA_DATABASE_URL`, before the app serves traffic. The runtime app never applies DDL (contrast M0's embedded pglite, which exec'd the inlined `SCHEMA_SQL`; see `10 §7`, `08 §9`).
+- They are applied by a **deploy-time `db:migrate` step** (plain Node, unbundled — the file-based migrator works there) against the real `METADATA_DATABASE_URL`, before the app serves traffic. The runtime app never applies DDL for the real Postgres host (contrast embedded pglite, which execs the inlined `SCHEMA_SQL`; see `10 §7`, `08 §9`).
 - The metadata database has **separate credentials** from any business Connection (decision 5); business credentials live only in `connections.credential_blob`, encrypted (`08 §3`).
 
 ## 5. What M2 adds (forward pointer)

@@ -1,5 +1,5 @@
 /**
- * pglite-backed Drizzle client for the MetadataStore (spec 10 §7 / 08 §9).
+ * Drizzle client for the MetadataStore (spec 10 §7 / 08 §9).
  *
  * The metadata store runs in embedded pglite — in-memory by default (dev/demo/
  * smoke), or **file-backed** (`dataDir`) for a persistent self-hosted deploy (the
@@ -10,22 +10,35 @@
  * (`METADATA_DATABASE_URL` + the deploy-time `db:migrate`).
  */
 import { PGlite } from '@electric-sql/pglite';
-import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import type { PgDatabase } from 'drizzle-orm/pg-core/db';
+import type { PgQueryResultHKT } from 'drizzle-orm/pg-core/session';
+import { Pool } from 'pg';
 import { schema } from './schema';
 import { MIGRATIONS } from './schema-sql';
 
-export type MetadataDb = PgliteDatabase<typeof schema>;
+export type MetadataDb = PgDatabase<PgQueryResultHKT, typeof schema>;
+export interface MetadataClient {
+  query<T extends Record<string, unknown> = Record<string, unknown>>(
+    queryText: string,
+    values?: unknown[],
+  ): Promise<{ rows: T[] }>;
+}
 
 export interface MetadataDbHandle {
   db: MetadataDb;
-  client: PGlite;
-  /** Releases the underlying pglite instance. */
+  client: MetadataClient;
+  kind: 'pglite' | 'postgres';
+  /** Releases the underlying pglite instance or node-postgres pool. */
   close: () => Promise<void>;
 }
 
 export interface CreateMetadataDbOptions {
   /** Filesystem path for persistence. Omit for an in-memory instance (tests/demo). */
   dataDir?: string;
+  /** Real Postgres metadata host. Migrations must be applied before runtime. */
+  databaseUrl?: string;
 }
 
 const JOURNAL = '"public"."_evidata_migrations"';
@@ -40,12 +53,26 @@ const JOURNAL = '"public"."_evidata_migrations"';
 export async function createMetadataDb(
   opts: CreateMetadataDbOptions = {},
 ): Promise<MetadataDbHandle> {
+  if (opts.databaseUrl) {
+    const client = new Pool({
+      connectionString: opts.databaseUrl,
+      application_name: 'evidata-meta',
+    });
+    return {
+      db: drizzlePg(client, { schema }),
+      client,
+      kind: 'postgres',
+      close: () => client.end(),
+    };
+  }
+
   const client = opts.dataDir ? new PGlite(opts.dataDir) : new PGlite();
   const db = drizzle(client, { schema });
   await runMigrations(client);
   return {
     db,
     client,
+    kind: 'pglite',
     close: () => client.close(),
   };
 }

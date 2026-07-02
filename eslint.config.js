@@ -33,7 +33,7 @@ export default tseslint.config(
   },
   {
     // Config files are not part of a typed project.
-    files: ['**/*.config.{js,ts,mjs}', 'eslint.config.js'],
+    files: ['**/*.config.{js,ts,mjs}', '**/scripts/*.mjs', 'eslint.config.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
   {
