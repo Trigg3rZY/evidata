@@ -156,7 +156,7 @@ export type AgentStep =
   | { type: 'final'; answer: AgentAnswerDraft };         // app validates → Answer
 ```
 
-M0 provides two implementations: a real provider (env-configured, Anthropic/OpenAI-compatible) and a `FixtureProvider` that replays scripted `AgentStep`s for the Sample scenarios so the smoke suite is hermetic (`03` and `05`).
+M0 provides two implementations: a real provider (registered OpenAI-compatible `ModelProvider`) and a `FixtureProvider` that replays scripted `AgentStep`s for the Sample scenarios so the smoke suite is hermetic (`03` and `05`).
 
 ### 2.5 EvidenceRecorder & MetadataStore
 

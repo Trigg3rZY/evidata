@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHistory, AgentInput, ToolResult } from '@evidata/agent';
-import { OpenAIAgentProvider, openAIConfigFromEnv } from './index';
+import { OpenAIAgentProvider } from './index';
 import type { AssistantMessage, Complete, CompletionRequest, ToolCall } from './types';
 
 const input: AgentInput = {
@@ -394,46 +394,5 @@ describe('OpenAIAgentProvider', () => {
     if (d.kind !== 'final') throw new Error('expected final');
     expect(d.draft.directAnswer).toBe('');
     expect(d.draft.keyFindings).toHaveLength(0);
-  });
-});
-
-describe('openAIConfigFromEnv', () => {
-  it('returns null unless AGENT_PROVIDER=openai and a key is present', () => {
-    expect(openAIConfigFromEnv({})).toBeNull();
-    expect(openAIConfigFromEnv({ AGENT_PROVIDER: 'openai' })).toBeNull();
-    expect(openAIConfigFromEnv({ DEEPSEEK_API_KEY: 'k' })).toBeNull();
-  });
-
-  it('defaults to DeepSeek, and honors overrides', () => {
-    expect(openAIConfigFromEnv({ AGENT_PROVIDER: 'openai', DEEPSEEK_API_KEY: 'k' })).toMatchObject({
-      apiKey: 'k',
-      baseURL: 'https://api.deepseek.com',
-      model: 'deepseek-chat',
-    });
-    expect(
-      openAIConfigFromEnv({
-        AGENT_PROVIDER: 'openai',
-        OPENAI_API_KEY: 'k',
-        OPENAI_BASE_URL: 'https://api.openai.com/v1',
-        AGENT_MODEL: 'gpt-4o-mini',
-      }),
-    ).toMatchObject({ baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini' });
-  });
-
-  it('ignores a non-numeric AGENT_MAX_TOKENS (no max_tokens: NaN)', () => {
-    expect(
-      openAIConfigFromEnv({
-        AGENT_PROVIDER: 'openai',
-        DEEPSEEK_API_KEY: 'k',
-        AGENT_MAX_TOKENS: 'lots',
-      }),
-    ).not.toHaveProperty('maxTokens');
-    expect(
-      openAIConfigFromEnv({
-        AGENT_PROVIDER: 'openai',
-        DEEPSEEK_API_KEY: 'k',
-        AGENT_MAX_TOKENS: '2048',
-      }),
-    ).toMatchObject({ maxTokens: 2048 });
   });
 });

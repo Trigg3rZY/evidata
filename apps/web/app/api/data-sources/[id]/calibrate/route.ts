@@ -2,6 +2,7 @@ import { currentUser } from '@/lib/auth';
 import { getRuntime } from '@/lib/runtime';
 import { AuthoringAccessError } from '@/lib/authoring-service';
 import { CalibrationError } from '@/lib/calibration-service';
+import { VaultUnavailableError } from '@/lib/model-provider-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,8 @@ export async function POST(
     if (e instanceof AuthoringAccessError)
       return Response.json({ error: 'Not found.' }, { status: 404 });
     if (e instanceof CalibrationError) return Response.json({ error: e.message }, { status: 409 });
+    if (e instanceof VaultUnavailableError)
+      return Response.json({ error: 'The credential vault is not configured.' }, { status: 503 });
     throw e;
   }
 }

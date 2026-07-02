@@ -47,7 +47,7 @@ TypeScript full-stack (confirmed). Rationale: a single language across UI and se
 | Sample execution | **pglite** instance seeded with demo data | Behind the `Connector` / `QueryExecutor` interface; M1 adds a `PostgresConnector` implementing the same interface. |
 | SQL safety | `pgsql-ast-parser` (deterministic parse) | Read-only / statement-type checks in the Safety Gate; never regex-only. |
 | Streaming | Server-Sent Events (SSE) | One-directional reasoning stream + final answer; follow-ups are new POSTs. |
-| AI provider | `AgentProvider` port; env-configured real provider + `FixtureProvider` | Provider/model never reach the client; fixtures make smoke tests hermetic. |
+| AI provider | `AgentProvider` port; registered real providers + `FixtureProvider` | Provider/model never reach the client; fixtures make smoke tests hermetic. |
 | Tests | Vitest (unit) + Playwright (e2e/smoke) | Smoke suite is the M0 acceptance gate. |
 
 Everything that will differ in M1/M2 sits behind a port (interface), so M0 code is forward-compatible.

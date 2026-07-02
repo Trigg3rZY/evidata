@@ -177,10 +177,19 @@ export function useInvestigationStream(errorMessages: StreamErrorMessages): UseI
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
+          let message = errorMessagesRef.current.requestFailed;
+          try {
+            const payload = (await res.clone().json()) as { error?: unknown };
+            if (typeof payload.error === 'string' && payload.error.trim()) {
+              message = payload.error;
+            }
+          } catch {
+            // Keep the localized generic request failure for non-JSON errors.
+          }
           setState((s) => ({
             ...s,
             status: 'error',
-            error: errorMessagesRef.current.requestFailed,
+            error: message,
           }));
           return;
         }

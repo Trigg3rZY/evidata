@@ -24,8 +24,8 @@ export interface AskBody {
    *  the client body. Authorizes access to a real published source. */
   userId?: string;
   /** Selected model provider from the shared team pool (epic #106; team-shared #151);
-   *  resolved for any authenticated member. Omit to use the env/fixture provider.
-   *  Client-supplied. */
+   *  resolved for any authenticated member. Omit to use the newest runnable registered
+   *  provider, or the fixture provider only on anonymous Sample asks. Client-supplied. */
   modelProviderId?: string;
 }
 

@@ -23,7 +23,7 @@ export interface ModelItem {
 interface ModelsValue {
   /** The caller's registered models (empty when none / not signed in). */
   models: ReadonlyArray<ModelItem>;
-  /** The model a NEW question runs against; null = the server's default model. */
+  /** The model a NEW question runs against; null = no runnable registered model. */
   activeId: string | null;
   setActiveId: (id: string | null) => void;
   /** Re-fetch the list (e.g. after registering/removing a model in admin). */
@@ -35,10 +35,10 @@ const Ctx = createContext<ModelsValue | null>(null);
 /**
  * Holds the caller's registered model providers + the active selection (epic #106),
  * fetched once and shared across routes so the picker in the top nav and the Ask
- * request agree. `activeId === null` means "use the server's default model"
- * (the env/fixture provider); a non-null id is sent as `modelProviderId` so the
- * turn runs on that BYO-key model. The list is empty when signed out or when no
- * models are registered, in which case the picker hides itself.
+ * request agree. A non-null id is sent as `modelProviderId`; null means there is no
+ * runnable registered model yet, so real Data Source asks fail fast and anonymous
+ * Sample asks stay on the fixture provider. The list is empty when signed out or when
+ * no models are registered, in which case the picker hides itself.
  */
 export function ModelProvider({ children }: { children: ReactNode }) {
   const [models, setModels] = useState<ReadonlyArray<ModelItem>>([]);
@@ -52,8 +52,8 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         // would 404 every Ask, so it must never be selectable.
         const list = (Array.isArray(d) ? d : []).filter((m) => m.runnable);
         setModels(list);
-        // Drop a selection that's gone or no longer runnable (deleted / base URL removed).
-        setActiveId((cur) => (cur && list.some((m) => m.id === cur) ? cur : null));
+        // Keep a live selection; otherwise select the newest runnable registered model.
+        setActiveId((cur) => (cur && list.some((m) => m.id === cur) ? cur : (list[0]?.id ?? null)));
       })
       .catch(() => {});
   }, []);

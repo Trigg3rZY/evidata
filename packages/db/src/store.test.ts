@@ -156,9 +156,9 @@ describe('DrizzleMetadataStore (spec 10)', () => {
 
   it('records an immutable model snapshot for audit, or null when omitted (#116)', async () => {
     const snap = {
-      source: 'env' as const,
-      model: 'deepseek-chat',
-      baseURL: 'https://api.deepseek.com',
+      source: 'registered' as const,
+      model: 'gpt-4o-mini',
+      baseURL: 'https://api.openai.com/v1',
     };
     await store.createInvestigation({
       id: 'inv-snap',

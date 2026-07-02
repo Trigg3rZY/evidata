@@ -3,7 +3,11 @@ import { rerunForCorrection } from './correction-rerun';
 import type { Runtime } from './runtime';
 
 /** A minimal Runtime stub — only the methods rerunForCorrection touches. */
-function mockRuntime(latest: number | null, askKind: 'answer' | 'message' = 'answer') {
+function mockRuntime(
+  latest: number | null,
+  askKind: 'answer' | 'message' = 'answer',
+  modelProviderId: string | null = 'mp-1',
+) {
   const ask = vi.fn().mockResolvedValue({ kind: askKind });
   const thread =
     latest == null
@@ -18,10 +22,16 @@ function mockRuntime(latest: number | null, askKind: 'answer' | 'message' = 'ans
     service: {
       getThread,
       getThreadUnchecked: getThread, // rerun uses the unchecked read (#177)
-      getInvestigationModelProviderId: vi.fn().mockResolvedValue(null),
+      getInvestigationModelProviderId: vi.fn().mockResolvedValue(modelProviderId),
       ask,
     },
-    modelProviders: { resolveConfig: vi.fn() },
+    modelProviders: {
+      resolveConfig: vi.fn().mockResolvedValue({
+        apiKey: 'k',
+        baseURL: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+      }),
+    },
   } as unknown as Runtime;
   return { rt, ask };
 }
@@ -59,7 +69,7 @@ describe('rerunForCorrection (M2-B4 ②)', () => {
     expect(await rerunForCorrection(rt, 'inv-1', 2, 'admin')).toBe(false);
   });
 
-  it('skips a bound model that cannot resolve — no silent env-default fallback (#111)', async () => {
+  it('skips a bound model that cannot resolve — no silent fallback (#111)', async () => {
     const ask = vi.fn().mockResolvedValue({ kind: 'answer' });
     const getThread = vi.fn().mockResolvedValue({
       dataSourceId: 'ds-1',
@@ -75,6 +85,12 @@ describe('rerunForCorrection (M2-B4 ②)', () => {
       },
       modelProviders: { resolveConfig: vi.fn().mockResolvedValue(null) },
     } as unknown as Runtime;
+    expect(await rerunForCorrection(rt, 'inv-1', 2, 'admin')).toBe(false);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('skips an unbound investigation because there is no default model fallback (#170)', async () => {
+    const { rt, ask } = mockRuntime(2, 'answer', null);
     expect(await rerunForCorrection(rt, 'inv-1', 2, 'admin')).toBe(false);
     expect(ask).not.toHaveBeenCalled();
   });

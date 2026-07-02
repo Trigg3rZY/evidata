@@ -62,20 +62,23 @@ Connections/Models sub-nav.
 
 ## 3. Selection & binding (per Investigation)
 
-Decision A: **per-conversation selection + a default**, mirroring the data-source
-picker — not mid-conversation switching, not app-wide-only.
+Decision A: **per-conversation selection + a registered default**, mirroring the
+data-source picker — not mid-conversation switching, not app-wide-only.
 
-- A top-nav `ModelPicker` ("Default model" + the shared pool's runnable models) sends
-  `modelProviderId` on a **new** turn. Hidden when no models are registered.
+- A top-nav `ModelPicker` lists the shared pool's runnable models and sends
+  `modelProviderId` on a **new** turn. It auto-selects the first runnable registered
+  model and hides when no models are registered.
 - **Bound per Investigation (#113):** `investigations.model_provider_id` (migration
   `0005`, nullable, no FK so the audit id survives provider deletion) records the model
   at creation. A **follow-up resolves the stored model** (ignores the client's current
   picker) so a conversation never switches models mid-thread.
-- **No silent fallback (#111):** a selected-but-unresolvable model (deleted or no base
-  URL) returns **404** — only the no-selection case uses the env/fixture default.
-- `null` binding = the deployment's **env-configured default** (simple single-model
-  deploy). It is **not** snapshotted, so a default-bound follow-up uses the current env
-  default; an immutable env-default audit snapshot is tracked as **#116**.
+- **No silent fallback (#111/#170):** a selected-but-unresolvable model (deleted or no
+  base URL) returns **404**. If no `modelProviderId` is sent, the server binds the newest
+  runnable registered model. If no registered model exists, real Data Source asks return
+  a clear **409**; only anonymous Sample asks may use the FixtureProvider.
+- `null` binding = fixture-backed anonymous Sample or a legacy unbound row. Real model
+  runs bind a registered provider id and store an immutable registered-model audit
+  snapshot (#116).
 
 ## 4. Reasoning effort (gated by kind — decision B)
 
@@ -109,9 +112,10 @@ client, logs, or persisted evidence.
   to register connections or models. Without it, create/decrypt surface a clear "not
   configured" error (503). Rotation via `APP_ENCRYPTION_KEYS` + `APP_ENCRYPTION_KEY_ID`
   (`08 §3`).
-- The single-model **env path** still works for simple deploys (`AGENT_PROVIDER=openai`
-  + `OPENAI_API_KEY`/`OPENAI_BASE_URL`/`AGENT_MODEL`); unset → the deterministic
-  FixtureProvider (dev/CI). See `.env.example`.
+- Real model runs are configured by registering a `ModelProvider` in `/admin/models`.
+  The prior single-model env path is removed; unset/empty model registry means
+  anonymous Sample uses the deterministic FixtureProvider, while real Data Source asks
+  fail fast.
 
 ## 7. Deferred (forward-compat)
 
@@ -124,7 +128,8 @@ Gated on having a non-DeepSeek key to exercise:
   reasoning/no-tool models.
 - **Provider status/health** — an owner-gated reachability "Test" shipped in `/admin/models`
   (#119); a per-pick health hint in the picker is still deferred.
-- **Env-default audit snapshot** (#116).
+- **Native provider-level default ordering controls** — today default means newest
+  runnable registered model.
 
 ## 8. Tests
 

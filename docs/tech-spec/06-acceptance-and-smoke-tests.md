@@ -107,7 +107,7 @@ A11y-live     : reasoning container has aria-live="polite"; final answer move do
 ## 7. CI wiring
 
 - `pnpm test:unit` → Vitest (contract tests C1–C5, SafetyGate rule tests, Redactor tests, guardrail unit checks G2–G4).
-- `pnpm test:smoke` → Playwright (E-*, R-matrix, A11y-*) with `AGENT_PROVIDER=fixture`.
+- `pnpm test:smoke` → Playwright (E-*, R-matrix, A11y-*) against the deterministic Sample fixture.
 - Both run on every PR; the smoke suite is the M0 acceptance gate. Merging to `main` requires green.
 
 ## 8. Definition of Done (M0)

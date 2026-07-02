@@ -1,5 +1,5 @@
 // @evidata/provider-openai — OpenAI-compatible AgentProvider (DeepSeek, OpenAI, …).
-export { OpenAIAgentProvider, openAIConfigFromEnv } from './provider';
+export { OpenAIAgentProvider } from './provider';
 export { sdkComplete } from './sdk-transport';
 export { AGENT_TOOLS, buildSystemPrompt } from './tools';
 export type {

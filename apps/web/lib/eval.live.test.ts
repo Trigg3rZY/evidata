@@ -2,9 +2,9 @@
  * Live agent-eval pass (spec 13 §6). Runs the labeled EVAL_CASES against the REAL
  * model and prints routing accuracy / answered-rate / avg queries / tokens.
  *
- * Env-gated: skipped unless AGENT_PROVIDER=openai (+ a key) is set — so CI and a
- * normal `pnpm test` never call the network. Run it deliberately, e.g.:
- *   AGENT_PROVIDER=openai OPENAI_API_KEY=… pnpm --filter @evidata/web test eval.live
+ * Env-gated for this live test only — skipped unless EVIDATA_LIVE_MODEL_API_KEY is
+ * set, so CI and a normal `pnpm test` never call the network. Run deliberately, e.g.:
+ *   EVIDATA_LIVE_MODEL_API_KEY=… pnpm --filter @evidata/web test eval.live
  * It's a measurement tool (the report is the output), not a hard pass/fail gate.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -31,11 +31,24 @@ import {
 import { InvestigationService, type AskResult } from '@evidata/investigation';
 import {
   OpenAIAgentProvider,
-  openAIConfigFromEnv,
+  type OpenAIProviderConfig,
   type ProviderUsage,
 } from '@evidata/provider-openai';
 
-const cfg = openAIConfigFromEnv(process.env);
+function liveConfigFromEnv(env: NodeJS.ProcessEnv): OpenAIProviderConfig | null {
+  const apiKey = env.EVIDATA_LIVE_MODEL_API_KEY;
+  if (!apiKey) return null;
+  const config: OpenAIProviderConfig = {
+    apiKey,
+    baseURL: env.EVIDATA_LIVE_MODEL_BASE_URL ?? 'https://api.deepseek.com',
+    model: env.EVIDATA_LIVE_MODEL ?? 'deepseek-chat',
+  };
+  const maxTokens = Number(env.EVIDATA_LIVE_MODEL_MAX_TOKENS);
+  if (Number.isFinite(maxTokens) && maxTokens > 0) config.maxTokens = maxTokens;
+  return config;
+}
+
+const cfg = liveConfigFromEnv(process.env);
 
 // `queries` comes from the run's ok-query events (a Message carries no queryRuns on
 // AskResult), so a message that ran queries before replying is counted, not hidden.
