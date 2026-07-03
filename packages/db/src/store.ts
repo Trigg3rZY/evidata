@@ -62,6 +62,7 @@ import type {
   SuggestionReviewPatch,
   SuggestionStatus,
   SuggestionView,
+  UpdateConnectionPatch,
   UserRecord,
 } from '@evidata/ports';
 import type { MetadataDb } from './client';
@@ -482,6 +483,17 @@ export class DrizzleMetadataStore implements MetadataStore {
       });
       return { ...c, createdAt: at.toISOString(), updatedAt: at.toISOString() };
     });
+  }
+
+  async updateConnection(
+    id: string,
+    patch: UpdateConnectionPatch,
+  ): Promise<ConnectionRecord | null> {
+    await this.db
+      .update(connections)
+      .set({ ...patch, updatedAt: this.now() })
+      .where(eq(connections.id, id));
+    return this.getConnection(id);
   }
 
   async listConnections(userId: string): Promise<ConnectionSummary[]> {

@@ -850,6 +850,55 @@ describe('DrizzleMetadataStore — createConnectionWithOwnerSource atomicity (#1
     expect(await store.getConnection('conn-ok')).not.toBeNull();
     expect(await store.getDataSourceRole('tx-ok', 'ds-ok')).toBe('owner'); // the load-bearing membership
   });
+
+  it('updates a connection without replacing its draft source', async () => {
+    await store.createUser({
+      id: 'tx-edit',
+      username: 'tx-edit',
+      displayName: 'Edit',
+      passwordHash: 'x',
+    });
+    const blob = { v: 1, keyId: 'k1', iv: 'a', ciphertext: 'b', authTag: 'c' };
+    await store.createConnectionWithOwnerSource({
+      connection: {
+        id: 'conn-edit',
+        kind: 'postgres',
+        name: 'Before',
+        host: 'h',
+        port: 5432,
+        database: 'd',
+        sslMode: 'disable',
+        credentialBlob: blob,
+        health: 'Healthy',
+        createdBy: 'tx-edit',
+      },
+      membership: { id: 'mem-edit', userId: 'tx-edit', connectionId: 'conn-edit', role: 'owner' },
+      dataSource: { id: 'ds-edit', name: 'Before', kind: 'postgres', connectionId: 'conn-edit' },
+      dataSourceMembership: {
+        id: 'dsm-edit',
+        userId: 'tx-edit',
+        dataSourceId: 'ds-edit',
+        role: 'owner',
+      },
+    });
+
+    const updated = await store.updateConnection('conn-edit', {
+      name: 'After',
+      host: 'h2',
+      credentialBlob: { ...blob, ciphertext: 'new' },
+      health: 'Untested',
+    });
+
+    expect(updated).toMatchObject({
+      id: 'conn-edit',
+      name: 'After',
+      host: 'h2',
+      health: 'Untested',
+    });
+    expect(await store.listDataSourcesByConnection('conn-edit')).toEqual([
+      { id: 'ds-edit', name: 'Before' },
+    ]);
+  });
 });
 
 describe('DrizzleMetadataStore — invite claim-time expiry + deleteUser (#147)', () => {

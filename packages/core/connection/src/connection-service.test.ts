@@ -90,6 +90,27 @@ run('ConnectionService (real Postgres + store + vault)', () => {
     expect((await svc.test(ownerId, writable.id)).health).toBe('PermissionInsufficient');
   });
 
+  it('testDraft() probes unsaved params and update() re-encrypts saved credentials', async () => {
+    expect(
+      (
+        await svc.testDraft({
+          name: 'Draft',
+          host: pg.host,
+          port: pg.port,
+          database: pg.database,
+          sslMode: 'disable',
+          user: RO.user,
+          password: RO.password,
+        })
+      ).health,
+    ).toBe('Healthy');
+
+    const conn = await make({ password: 'wrong-password' });
+    expect((await svc.test(ownerId, conn.id)).health).toBe('AuthFailed');
+    await svc.update(ownerId, conn.id, { password: RO.password });
+    expect((await svc.test(ownerId, conn.id)).health).toBe('Healthy');
+  });
+
   it('list() returns only the caller’s connections', async () => {
     await make();
     expect((await svc.list(ownerId)).length).toBeGreaterThan(0);
@@ -137,6 +158,43 @@ describe('ConnectionService bootstrap (M2-B1a, #121)', () => {
     expect(memberships).toHaveLength(1);
     expect(memberships[0]?.role).toBe('owner');
     expect(await store.getDataSourceRole('u1', memberships[0]!.dataSourceId)).toBe('owner');
+    await handle.close();
+  });
+
+  it('update() edits in place, keeps the draft source, and preserves authz', async () => {
+    const handle = await createMetadataDb();
+    const store = new DrizzleMetadataStore(handle.db);
+    const vault = credentialVaultFromEnv({
+      APP_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+    });
+    const svc = new ConnectionService({ store, vault });
+    await store.createFirstUser({ id: 'u2', username: 'u2', displayName: 'U2', passwordHash: 'x' });
+    const conn = await svc.create('u2', {
+      name: 'DB',
+      host: 'h',
+      port: 5432,
+      database: 'd',
+      sslMode: 'disable',
+      user: 'ro',
+      password: 'pw',
+    });
+    await store.setConnectionHealth(conn.id, 'Healthy');
+    const before = await store.getConnection(conn.id);
+    const sources = await store.listDataSourcesByConnection(conn.id);
+
+    const updated = await svc.update('u2', conn.id, { host: 'h2', password: 'pw2' });
+
+    expect(updated).toMatchObject({ id: conn.id, host: 'h2', health: 'Untested' });
+    expect(await store.listDataSourcesByConnection(conn.id)).toEqual(sources);
+    expect((await store.getConnection(conn.id))?.credentialBlob).not.toEqual(
+      before?.credentialBlob,
+    );
+    await expect(svc.update('stranger', conn.id, { host: 'x' })).rejects.toBeInstanceOf(
+      ConnectionAccessError,
+    );
+    await expect(svc.testPatch('stranger', conn.id, { host: 'x' })).rejects.toBeInstanceOf(
+      ConnectionAccessError,
+    );
     await handle.close();
   });
 });

@@ -9,4 +9,5 @@ export type {
   ConnectionServiceDeps,
   CreateConnectionInput,
   IntrospectResult,
+  UpdateConnectionInput,
 } from './connection-service';

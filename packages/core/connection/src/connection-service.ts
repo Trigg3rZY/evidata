@@ -51,6 +51,7 @@ export class SchemaUnavailableError extends Error {
 export type ConnectionStore = Pick<
   MetadataStore,
   | 'createConnectionWithOwnerSource'
+  | 'updateConnection'
   | 'listConnections'
   | 'getConnection'
   | 'setConnectionHealth'
@@ -71,6 +72,8 @@ export interface CreateConnectionInput {
   user: string;
   password: string;
 }
+
+export type UpdateConnectionInput = Partial<CreateConnectionInput>;
 
 export interface ConnectionServiceDeps {
   store: ConnectionStore;
@@ -167,6 +170,10 @@ export class ConnectionService {
     return toSummary(record);
   }
 
+  async testDraft(input: CreateConnectionInput): Promise<{ health: ConnectionHealth }> {
+    return { health: await probe(paramsFromInput(input)) };
+  }
+
   list(userId: string): Promise<ConnectionSummary[]> {
     return this.deps.store.listConnections(userId);
   }
@@ -189,12 +196,56 @@ export class ConnectionService {
     return { affectedDataSources };
   }
 
+  async update(
+    userId: string,
+    id: string,
+    input: UpdateConnectionInput,
+  ): Promise<ConnectionSummary> {
+    const record = await this.authorized(userId, id);
+    const paramsChanged =
+      (input.host !== undefined && input.host !== record.host) ||
+      (input.port !== undefined && input.port !== record.port) ||
+      (input.database !== undefined && input.database !== record.database) ||
+      (input.sslMode !== undefined && input.sslMode !== record.sslMode) ||
+      input.user !== undefined ||
+      input.password !== undefined;
+    const patch = {
+      name: input.name ?? record.name,
+      host: input.host ?? record.host,
+      port: input.port ?? record.port,
+      database: input.database ?? record.database,
+      sslMode: input.sslMode ?? record.sslMode,
+      health: paramsChanged ? ('Untested' as const) : record.health,
+    };
+    const credentialBlob =
+      input.user === undefined && input.password === undefined
+        ? record.credentialBlob
+        : this.encryptCredentials(id, {
+            ...this.credentialsFor(record),
+            ...(input.user === undefined ? {} : { user: input.user }),
+            ...(input.password === undefined ? {} : { password: input.password }),
+          });
+    const updated = await this.deps.store.updateConnection(id, { ...patch, credentialBlob });
+    if (!updated) throw new ConnectionAccessError();
+    await this.evictConnector(id);
+    return toSummary(updated);
+  }
+
   /** Probe connectivity + health; drives the Connection state machine (08 §7). */
   async test(userId: string, id: string): Promise<{ health: ConnectionHealth }> {
     const record = await this.authorized(userId, id);
     const health = await probe(this.paramsFor(record));
     await this.deps.store.setConnectionHealth(id, health);
     return { health };
+  }
+
+  async testPatch(
+    userId: string,
+    id: string,
+    input: UpdateConnectionInput,
+  ): Promise<{ health: ConnectionHealth }> {
+    const record = await this.authorized(userId, id);
+    return { health: await probe(this.paramsForPatch(record, input)) };
   }
 
   /** Capture + store a fresh SchemaSnapshot (app-side; the AI never connects). */
@@ -237,11 +288,7 @@ export class ConnectionService {
   }
 
   private paramsFor(record: ConnectionRecord): PostgresConnectionParams {
-    const vault = this.requireVault();
-    const creds = JSON.parse(vault.decrypt(record.credentialBlob, record.id)) as {
-      user: string;
-      password: string;
-    };
+    const creds = this.credentialsFor(record);
     return {
       host: record.host,
       port: record.port,
@@ -250,6 +297,35 @@ export class ConnectionService {
       password: creds.password,
       ssl: sslFor(record.sslMode),
     };
+  }
+
+  private paramsForPatch(
+    record: ConnectionRecord,
+    input: UpdateConnectionInput,
+  ): PostgresConnectionParams {
+    const creds = this.credentialsFor(record);
+    return {
+      host: input.host ?? record.host,
+      port: input.port ?? record.port,
+      database: input.database ?? record.database,
+      user: input.user ?? creds.user,
+      password: input.password ?? creds.password,
+      ssl: sslFor(input.sslMode ?? record.sslMode),
+    };
+  }
+
+  private credentialsFor(record: ConnectionRecord): { user: string; password: string } {
+    return JSON.parse(this.requireVault().decrypt(record.credentialBlob, record.id)) as {
+      user: string;
+      password: string;
+    };
+  }
+
+  private encryptCredentials(
+    id: string,
+    creds: { user: string; password: string },
+  ): ConnectionRecord['credentialBlob'] {
+    return this.requireVault().encrypt(JSON.stringify(creds), id);
   }
 
   private requireVault(): CredentialVault {
@@ -268,6 +344,17 @@ export class ConnectionService {
 function toSummary(record: ConnectionRecord): ConnectionSummary {
   const { credentialBlob: _omit, ...summary } = record;
   return summary;
+}
+
+function paramsFromInput(input: CreateConnectionInput): PostgresConnectionParams {
+  return {
+    host: input.host,
+    port: input.port,
+    database: input.database,
+    user: input.user,
+    password: input.password,
+    ssl: sslFor(input.sslMode),
+  };
 }
 
 async function probe(params: PostgresConnectionParams): Promise<ConnectionHealth> {
