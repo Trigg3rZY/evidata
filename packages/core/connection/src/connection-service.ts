@@ -225,7 +225,11 @@ export class ConnectionService {
             ...(input.user === undefined ? {} : { user: input.user }),
             ...(input.password === undefined ? {} : { password: input.password }),
           });
-    const updated = await this.deps.store.updateConnection(id, { ...patch, credentialBlob });
+    const updated = await this.deps.store.updateConnection(
+      id,
+      { ...patch, credentialBlob },
+      { demoteDataSources: paramsChanged },
+    );
     if (!updated) throw new ConnectionAccessError();
     await this.evictConnector(id);
     return toSummary(updated);

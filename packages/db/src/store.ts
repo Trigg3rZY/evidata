@@ -488,11 +488,31 @@ export class DrizzleMetadataStore implements MetadataStore {
   async updateConnection(
     id: string,
     patch: UpdateConnectionPatch,
+    opts?: { demoteDataSources?: boolean },
   ): Promise<ConnectionRecord | null> {
-    await this.db
-      .update(connections)
-      .set({ ...patch, updatedAt: this.now() })
-      .where(eq(connections.id, id));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(connections)
+        .set({ ...patch, updatedAt: this.now() })
+        .where(eq(connections.id, id));
+      if (!opts?.demoteDataSources) return;
+      await tx
+        .update(dataSources)
+        .set({ lifecycle: 'draft' })
+        .where(and(eq(dataSources.connectionId, id), eq(dataSources.lifecycle, 'published')));
+      const joined = (
+        await tx
+          .select({ id: dataSourceConnections.dataSourceId })
+          .from(dataSourceConnections)
+          .where(eq(dataSourceConnections.connectionId, id))
+      ).map((r) => r.id);
+      if (joined.length > 0) {
+        await tx
+          .update(dataSources)
+          .set({ lifecycle: 'draft' })
+          .where(and(inArray(dataSources.id, joined), eq(dataSources.lifecycle, 'published')));
+      }
+    });
     return this.getConnection(id);
   }
 

@@ -881,13 +881,33 @@ describe('DrizzleMetadataStore — createConnectionWithOwnerSource atomicity (#1
         role: 'owner',
       },
     });
-
-    const updated = await store.updateConnection('conn-edit', {
-      name: 'After',
-      host: 'h2',
-      credentialBlob: { ...blob, ciphertext: 'new' },
-      health: 'Untested',
+    await store.createDataSource({
+      id: 'ds-edit-join',
+      name: 'Joined',
+      kind: 'postgres',
+      connectionId: null,
     });
+    await store.upsertDataSourceConnection({
+      id: 'dsc-edit',
+      dataSourceId: 'ds-edit-join',
+      connectionId: 'conn-edit',
+      alias: null,
+      includedTables: [],
+      fieldRules: {},
+    });
+    await store.setDataSourceLifecycle('ds-edit', 'published');
+    await store.setDataSourceLifecycle('ds-edit-join', 'published');
+
+    const updated = await store.updateConnection(
+      'conn-edit',
+      {
+        name: 'After',
+        host: 'h2',
+        credentialBlob: { ...blob, ciphertext: 'new' },
+        health: 'Untested',
+      },
+      { demoteDataSources: true },
+    );
 
     expect(updated).toMatchObject({
       id: 'conn-edit',
@@ -898,6 +918,8 @@ describe('DrizzleMetadataStore — createConnectionWithOwnerSource atomicity (#1
     expect(await store.listDataSourcesByConnection('conn-edit')).toEqual([
       { id: 'ds-edit', name: 'Before' },
     ]);
+    expect((await store.getDataSource('ds-edit'))?.lifecycle).toBe('draft');
+    expect((await store.getDataSource('ds-edit-join'))?.lifecycle).toBe('draft');
   });
 });
 

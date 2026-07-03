@@ -181,11 +181,13 @@ describe('ConnectionService bootstrap (M2-B1a, #121)', () => {
     await store.setConnectionHealth(conn.id, 'Healthy');
     const before = await store.getConnection(conn.id);
     const sources = await store.listDataSourcesByConnection(conn.id);
+    await store.setDataSourceLifecycle(sources[0]!.id, 'published');
 
     const updated = await svc.update('u2', conn.id, { host: 'h2', password: 'pw2' });
 
     expect(updated).toMatchObject({ id: conn.id, host: 'h2', health: 'Untested' });
     expect(await store.listDataSourcesByConnection(conn.id)).toEqual(sources);
+    expect((await store.getDataSource(sources[0]!.id))?.lifecycle).toBe('draft');
     expect((await store.getConnection(conn.id))?.credentialBlob).not.toEqual(
       before?.credentialBlob,
     );
