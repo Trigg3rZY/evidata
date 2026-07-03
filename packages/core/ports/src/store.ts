@@ -116,6 +116,7 @@ export interface MetadataStore {
    *  owner membership load-bearing for authz — a partial create would orphan the
    *  source). All-or-nothing. */
   createConnectionWithOwnerSource(input: CreateConnectionBundle): Promise<ConnectionRecord>;
+  updateConnection(id: string, patch: UpdateConnectionPatch): Promise<ConnectionRecord | null>;
   /** Public summaries of the connections this user is a member of (never the blob). */
   listConnections(userId: string): Promise<ConnectionSummary[]>;
   /** Full record incl. the encrypted blob — internal use (test/introspect); never returned by the API. */
@@ -353,6 +354,13 @@ export interface NewConnection {
   health: ConnectionHealth;
   createdBy: string;
 }
+
+export type UpdateConnectionPatch = Partial<
+  Pick<
+    NewConnection,
+    'name' | 'host' | 'port' | 'database' | 'sslMode' | 'credentialBlob' | 'health'
+  >
+>;
 
 /** Full stored connection, incl. the encrypted credential blob (internal use only). */
 export interface ConnectionRecord extends NewConnection {
