@@ -22,6 +22,9 @@ test-results/
 .env
 .env.*
 !.env.example
+.agents/*
+!.agents/skills/
+!.agents/skills/**
 
 # Editor / OS
 .DS_Store
