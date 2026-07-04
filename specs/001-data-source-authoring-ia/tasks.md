@@ -14,23 +14,24 @@
 - [ ] T003 Update `apps/web/components/authoring-panel.tsx` to group existing controls into General, Schema, Policy, Context, Corrections, and Members & Access.
 - [ ] T004 Add desktop section navigation using existing styles and semantic buttons/links.
 - [ ] T005 Add mobile section navigation that does not cover save/publish actions.
-- [ ] T006 Keep readiness and publish/unpublish visible or immediately reachable from every section.
-- [ ] T007 Preserve existing load/save payloads and lifecycle behavior.
-- [ ] T008 Verify desktop and mobile authoring navigation in a real browser.
-- [ ] T009 Run `pnpm typecheck` and `pnpm lint`.
+- [ ] T006 Back section state with a URL hash or search parameter so a direct link or reload restores the selected section.
+- [ ] T007 Keep readiness and publish/unpublish visible or immediately reachable from every section.
+- [ ] T008 Preserve existing load/save payloads and lifecycle behavior.
+- [ ] T009 Verify desktop/mobile authoring navigation and URL-backed section restoration in a real browser.
+- [ ] T010 Run `pnpm typecheck` and `pnpm lint`.
 
 ## Phase 3: PR B - Searchable Grouped Schema Selector (#174)
 
-- [ ] T010 Refactor the Schema section in `apps/web/components/authoring-panel.tsx` so included-table selection is searchable and grouped.
-- [ ] T011 Refactor sensitive-column selection so columns are grouped by included table and searchable.
-- [ ] T012 Preserve the existing "exclude table drops its sensitive columns" behavior.
-- [ ] T013 Add the smallest focused regression check for schema selection state if the logic moves into a helper.
-- [ ] T014 Verify save/reload behavior for included tables and sensitive columns in a real browser.
-- [ ] T015 Run `pnpm typecheck`, `pnpm lint`, and the focused authoring check.
+- [ ] T011 Refactor the Schema section in `apps/web/components/authoring-panel.tsx` so included-table selection is searchable and grouped.
+- [ ] T012 Refactor sensitive-column selection so columns are grouped by included table and searchable.
+- [ ] T013 Preserve the existing "exclude table drops its sensitive columns" behavior.
+- [ ] T014 Add the smallest focused regression check for schema selection state if the logic moves into a helper.
+- [ ] T015 Verify save/reload behavior for included tables and sensitive columns in a real browser.
+- [ ] T016 Run `pnpm typecheck`, `pnpm lint`, and the focused authoring check.
 
 ## Phase 4: Optional QA Cleanup
 
-- [ ] T016 Fix only browser-verified overlap, accessibility, or bilingual/theme issues that block #176/#174 acceptance.
+- [ ] T017 Fix only browser-verified overlap, accessibility, or bilingual/theme issues that block #176/#174 acceptance.
 
 ## Dependencies
 
