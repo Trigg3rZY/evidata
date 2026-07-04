@@ -31,7 +31,7 @@
 
 ## Phase 4: Optional QA Cleanup
 
-- [ ] T017 Fix only browser-verified overlap, accessibility, or bilingual/theme issues that block #176/#174 acceptance.
+- [x] T017 Fix only browser-verified overlap, accessibility, or bilingual/theme issues that block #176/#174 acceptance. No separate PR C was needed; the acceptance-blocking column-label accessibility issue found in PR B review was fixed before #206 merged.
 
 ## Dependencies
 

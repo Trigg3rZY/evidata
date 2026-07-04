@@ -1,8 +1,9 @@
 # Quickstart: Data Source Authoring IA
 
-This feature is specification-only until the maintainer approves the prototype.
+This feature has shipped through PR #204 and PR #206. Use this quickstart for
+regression checks when changing Data Source authoring.
 
-## Prototype Review
+## Prototype Review (Historical)
 
 1. Start from the existing Data Source authoring page.
 2. Produce a prototype image or browser prototype showing:

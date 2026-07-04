@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: User description: "Data Source authoring IA: split the stacked authoring page into General, Schema, Policy, Context, Corrections, and Members & Access sections; replace flat table and sensitive-column checkboxes with searchable controls; keep included tables in database/DDL or name order instead of inferred business groups; keep publish readiness/actions visible; keep the existing authoring payload and metadata schema."
 
