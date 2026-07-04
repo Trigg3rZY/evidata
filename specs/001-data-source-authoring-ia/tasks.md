@@ -20,9 +20,9 @@
 - [ ] T009 Verify desktop/mobile authoring navigation and URL-backed section restoration in a real browser.
 - [ ] T010 Run `pnpm typecheck` and `pnpm lint`.
 
-## Phase 3: PR B - Searchable Grouped Schema Selector (#174)
+## Phase 3: PR B - Searchable Table and Column Selector (#174)
 
-- [ ] T011 Refactor the Schema section in `apps/web/components/authoring-panel.tsx` so included-table selection is searchable and grouped.
+- [ ] T011 Refactor the Schema section in `apps/web/components/authoring-panel.tsx` so included-table selection is searchable while preserving database/DDL order or plain name order.
 - [ ] T012 Refactor sensitive-column selection so columns are grouped by included table and searchable.
 - [ ] T013 Preserve the existing "exclude table drops its sensitive columns" behavior.
 - [ ] T014 Add the smallest focused regression check for schema selection state if the logic moves into a helper.

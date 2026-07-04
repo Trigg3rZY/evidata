@@ -6,7 +6,7 @@
 
 ## Summary
 
-Refactor Data Source authoring from one stacked page into sectioned authoring, then replace the Schema section's flat checkbox lists with searchable grouped multicheck controls. Keep the existing authoring payload, service, routes, permissions, and metadata schema.
+Refactor Data Source authoring from one stacked page into sectioned authoring, then replace the Schema section's flat checkbox lists with a searchable included-table list and grouped sensitive-column controls. Keep the existing authoring payload, service, routes, permissions, and metadata schema.
 
 ## Technical Context
 
@@ -68,8 +68,9 @@ apps/web/app/api/data-sources/[id]/authoring/route.ts
 - Mobile uses a compact top section selector.
 - Section state uses URL hash or search params, not database state.
 - Readiness and publish/unpublish stay in a persistent header or equivalent always-visible action area.
-- Schema multicheck uses existing React state, native inputs, and CSS; no combobox dependency until native controls prove insufficient.
+- Schema controls use existing React state, native inputs, and CSS; no combobox dependency until native controls prove insufficient.
 - Search matches table names and column names case-insensitively.
+- Included tables stay in database/DDL order or plain name order; do not infer business scope groups from table names.
 - Data payload remains `{ includedTables, sensitiveColumns, overview, policy }` as handled by existing authoring routes.
 
 ## Data Model Delta
@@ -80,7 +81,7 @@ The feature adds only UI projections:
 
 - `AuthoringSection`
 - `SchemaSearchQuery`
-- `FilteredTableGroup`
+- `FilteredTableList`
 - `SensitiveColumnSelection`
 
 These are local view state derived from the existing authoring draft.
@@ -88,7 +89,7 @@ These are local view state derived from the existing authoring draft.
 ## Implementation Split
 
 - PR A: Sectioned authoring layout, readiness/action placement, desktop/mobile navigation. Refs #176.
-- PR B: Searchable grouped table and sensitive-column selector. Refs #174.
+- PR B: Searchable table list and grouped sensitive-column selector. Refs #174.
 - PR C: Optional QA cleanup only if browser validation finds follow-up issues.
 
 Frontend implementation must be preceded by a maintainer-reviewed prototype image or browser prototype.

@@ -21,7 +21,7 @@ These remain owned by the existing M2 authoring services and routes.
 
 - `AuthoringSection`: one of `general`, `schema`, `policy`, `context`, `corrections`, `members`.
 - `SchemaSearchQuery`: transient search text for tables and columns.
-- `FilteredTableGroup`: derived table plus visible matching columns.
+- `FilteredTableList`: derived visible tables in database/DDL order or plain name order; no inferred business grouping.
 - `SchemaSelectionState`: local `Set<string>` projection of `includedTables`.
 - `SensitiveColumnState`: local `Set<string>` projection of `sensitiveColumns`.
 
