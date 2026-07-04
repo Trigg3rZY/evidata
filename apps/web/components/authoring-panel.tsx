@@ -127,6 +127,13 @@ export function AuthoringPanel({
 
   if (hidden || !data || !policy) return null;
 
+  const selectSection = (section: AuthoringSection): void => {
+    setActiveSection(section);
+    const next = new URL(window.location.href);
+    next.hash = `${SECTION_HASH_PREFIX}${section}`;
+    window.history.pushState(null, '', `${next.pathname}${next.search}${next.hash}`);
+  };
+
   const edited = (): void => {
     setDirty(true);
     setStatus('idle');
@@ -205,6 +212,7 @@ export function AuthoringPanel({
         setOverview(r.draft.overview.trim());
         setDirty(true);
         setStatus('idle');
+        selectSection('general');
       }
       setCalibResult({ glossaryAdded: r.glossaryAdded, mappingsAdded: r.mappingsAdded });
       setContextRefresh((n) => n + 1); // surface the new suggestions in the review
@@ -239,13 +247,6 @@ export function AuthoringPanel({
   ];
   const activeLabel =
     sectionItems.find((section) => section.key === activeSection)?.label ?? sectionItems[0]!.label;
-
-  const selectSection = (section: AuthoringSection): void => {
-    setActiveSection(section);
-    const next = new URL(window.location.href);
-    next.hash = `${SECTION_HASH_PREFIX}${section}`;
-    window.history.pushState(null, '', `${next.pathname}${next.search}${next.hash}`);
-  };
 
   const sectionHref = (section: AuthoringSection): string => `#${SECTION_HASH_PREFIX}${section}`;
 
