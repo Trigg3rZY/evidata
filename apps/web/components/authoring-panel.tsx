@@ -8,6 +8,25 @@ import { ContextReview } from '@/components/context-review';
 import { CorrectionsPanel } from '@/components/corrections-panel';
 import { MembersPanel } from '@/components/members-panel';
 
+const AUTHORING_SECTION_KEYS = [
+  'general',
+  'schema',
+  'policy',
+  'context',
+  'corrections',
+  'members',
+] as const;
+type AuthoringSection = (typeof AUTHORING_SECTION_KEYS)[number];
+const DEFAULT_SECTION: AuthoringSection = 'general';
+const SECTION_HASH_PREFIX = 'authoring-';
+
+function sectionFromHash(hash: string): AuthoringSection | null {
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!raw.startsWith(SECTION_HASH_PREFIX)) return null;
+  const key = raw.slice(SECTION_HASH_PREFIX.length);
+  return AUTHORING_SECTION_KEYS.find((section) => section === key) ?? null;
+}
+
 /**
  * Owner-only authoring panel for the Data Sources detail page (M2-S3, spec 09 §5/§7):
  * scope tables, mark sensitive columns, write an overview, set the Policy, and
@@ -48,6 +67,20 @@ export function AuthoringPanel({
   const [calibError, setCalibError] = useState(false);
   // Bumped after calibration so the context review re-fetches the new suggestions.
   const [contextRefresh, setContextRefresh] = useState(0);
+  const [activeSection, setActiveSection] = useState<AuthoringSection>(DEFAULT_SECTION);
+
+  useEffect(() => {
+    const syncFromHash = (): void => {
+      setActiveSection(sectionFromHash(window.location.hash) ?? DEFAULT_SECTION);
+    };
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    window.addEventListener('popstate', syncFromHash);
+    return () => {
+      window.removeEventListener('hashchange', syncFromHash);
+      window.removeEventListener('popstate', syncFromHash);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +229,188 @@ export function AuthoringPanel({
 
   const isPublished = data.lifecycle === 'published';
   const canPublish = !busy && !dirty && data.readiness.ready;
+  const sectionItems: Array<{ key: AuthoringSection; label: string }> = [
+    { key: 'general', label: t('authoringGeneral') },
+    { key: 'schema', label: t('authoringSchema') },
+    { key: 'policy', label: t('authoringPolicy') },
+    { key: 'context', label: t('authoringContext') },
+    { key: 'corrections', label: t('correctionsLabel') },
+    { key: 'members', label: t('membersLabel') },
+  ];
+  const activeLabel =
+    sectionItems.find((section) => section.key === activeSection)?.label ?? sectionItems[0]!.label;
+
+  const selectSection = (section: AuthoringSection): void => {
+    setActiveSection(section);
+    const next = new URL(window.location.href);
+    next.hash = `${SECTION_HASH_PREFIX}${section}`;
+    window.history.pushState(null, '', `${next.pathname}${next.search}${next.hash}`);
+  };
+
+  const sectionHref = (section: AuthoringSection): string => `#${SECTION_HASH_PREFIX}${section}`;
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case 'schema':
+        return (
+          <>
+            <fieldset>
+              <legend className="text-xs font-medium text-muted-foreground">
+                {t('authoringIncludedTables')}
+              </legend>
+              <p className="mt-1 text-xs text-muted-foreground">{t('authoringIncludedHint')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tables.map((tbl) => (
+                  <label
+                    key={tbl.name}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={included.has(tbl.name)}
+                      onChange={() => toggleTable(tbl.name)}
+                    />
+                    <span className="font-mono">{tbl.name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {included.size > 0 && (
+              <fieldset className="mt-4">
+                <legend className="text-xs font-medium text-muted-foreground">
+                  {t('authoringSensitiveColumns')}
+                </legend>
+                <p className="mt-1 text-xs text-muted-foreground">{t('authoringSensitiveHint')}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {tables
+                    .filter((tbl) => included.has(tbl.name))
+                    .flatMap((tbl) =>
+                      tbl.columns.map((col) => {
+                        const ref = `${tbl.name}.${col.name}`;
+                        return (
+                          <label
+                            key={ref}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={sensitive.has(ref)}
+                              onChange={() => toggleSensitive(ref)}
+                            />
+                            <span className="font-mono">{ref}</span>
+                          </label>
+                        );
+                      }),
+                    )}
+                </div>
+              </fieldset>
+            )}
+          </>
+        );
+      case 'policy':
+        return (
+          <fieldset>
+            <legend className="sr-only">{t('authoringPolicy')}</legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs">
+                <span className="text-muted-foreground">{t('authoringRowLimit')}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={policy.rowLimit}
+                  onChange={(e) => setPolicyField('rowLimit', Number(e.target.value) || 1)}
+                  className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="text-xs">
+                <span className="text-muted-foreground">{t('authoringTimeoutMs')}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={policy.timeoutMs}
+                  onChange={(e) => setPolicyField('timeoutMs', Number(e.target.value) || 1)}
+                  className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+            </div>
+            <div className="mt-3 flex flex-col gap-1.5">
+              <label className="inline-flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={policy.confirmOnBroadScan}
+                  onChange={(e) => setPolicyField('confirmOnBroadScan', e.target.checked)}
+                />
+                {t('authoringConfirmBroadScan')}
+              </label>
+              <label className="inline-flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={policy.confirmOnSensitiveAccess}
+                  onChange={(e) => setPolicyField('confirmOnSensitiveAccess', e.target.checked)}
+                />
+                {t('authoringConfirmSensitive')}
+              </label>
+            </div>
+          </fieldset>
+        );
+      case 'context':
+        return (
+          <>
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void calibrate()}
+                  disabled={calibrating || tables.length === 0}
+                >
+                  {calibrating ? t('authoringCalibrating') : t('authoringCalibrate')}
+                </Button>
+                <span className="text-xs text-muted-foreground">{t('authoringCalibrateHint')}</span>
+              </div>
+              {calibResult && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('authoringCalibrateDone')} · {calibResult.glossaryAdded}{' '}
+                  {t('authoringCalibrateGlossary')} · {calibResult.mappingsAdded}{' '}
+                  {t('authoringCalibrateMappings')}
+                </p>
+              )}
+              {calibError && (
+                <p className="mt-2 text-xs text-destructive">{t('authoringCalibrateError')}</p>
+              )}
+            </div>
+            <div className="mt-4">
+              <ContextReview id={id} refreshKey={contextRefresh} />
+            </div>
+          </>
+        );
+      case 'corrections':
+        return <CorrectionsPanel id={id} />;
+      case 'members':
+        return <MembersPanel key={id} id={id} />;
+      case 'general':
+      default:
+        return (
+          <div>
+            <label htmlFor="ds-overview" className="text-xs font-medium text-muted-foreground">
+              {t('authoringOverview')}
+            </label>
+            <textarea
+              id="ds-overview"
+              rows={5}
+              value={overview}
+              onChange={(e) => {
+                setOverview(e.target.value);
+                edited();
+              }}
+              placeholder={t('authoringOverviewPlaceholder')}
+              className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        );
+    }
+  };
 
   return (
     <section className="mt-8 border-t border-border pt-6">
@@ -212,201 +427,101 @@ export function AuthoringPanel({
         </span>
       </div>
 
-      {/* AI calibration (B2): draft Suggested context from the schema. */}
-      <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void calibrate()}
-            disabled={calibrating || tables.length === 0}
-          >
-            {calibrating ? t('authoringCalibrating') : t('authoringCalibrate')}
-          </Button>
-          <span className="text-xs text-muted-foreground">{t('authoringCalibrateHint')}</span>
-        </div>
-        {calibResult && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t('authoringCalibrateDone')} · {calibResult.glossaryAdded}{' '}
-            {t('authoringCalibrateGlossary')} · {calibResult.mappingsAdded}{' '}
-            {t('authoringCalibrateMappings')}
-          </p>
-        )}
-        {calibError && (
-          <p className="mt-2 text-xs text-destructive">{t('authoringCalibrateError')}</p>
-        )}
-      </div>
-
-      {/* Context review (B3): promote Suggested glossary/mappings → Verified. */}
-      <ContextReview id={id} refreshKey={contextRefresh} />
-
-      {/* Correction-loop review (B4): querier-raised corrections from blocked answers. */}
-      <CorrectionsPanel id={id} />
-
-      {/* Included tables */}
-      <fieldset className="mt-4">
-        <legend className="text-xs font-medium text-muted-foreground">
-          {t('authoringIncludedTables')}
-        </legend>
-        <p className="mt-1 text-xs text-muted-foreground">{t('authoringIncludedHint')}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {tables.map((tbl) => (
-            <label
-              key={tbl.name}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
-            >
-              <input
-                type="checkbox"
-                checked={included.has(tbl.name)}
-                onChange={() => toggleTable(tbl.name)}
-              />
-              <span className="font-mono">{tbl.name}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      {/* Sensitive columns (only for included tables) */}
-      {included.size > 0 && (
-        <fieldset className="mt-4">
-          <legend className="text-xs font-medium text-muted-foreground">
-            {t('authoringSensitiveColumns')}
-          </legend>
-          <p className="mt-1 text-xs text-muted-foreground">{t('authoringSensitiveHint')}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {tables
-              .filter((tbl) => included.has(tbl.name))
-              .flatMap((tbl) =>
-                tbl.columns.map((col) => {
-                  const ref = `${tbl.name}.${col.name}`;
-                  return (
-                    <label
-                      key={ref}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={sensitive.has(ref)}
-                        onChange={() => toggleSensitive(ref)}
-                      />
-                      <span className="font-mono">{ref}</span>
-                    </label>
-                  );
-                }),
-              )}
+      <div className="mt-3 rounded-md border border-border bg-card/95 p-3 shadow-sm md:sticky md:top-2 md:z-10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 text-xs">
+            <p className={data.readiness.ready ? 'text-status-answered' : 'text-muted-foreground'}>
+              {data.readiness.ready
+                ? t('authoringReady')
+                : `${t('authoringNotReady')} ${data.readiness.missing.join(' · ')}`}
+            </p>
+            {dirty && <p className="mt-1 text-muted-foreground">{t('authoringUnsaved')}</p>}
+            {status === 'error' && (
+              <p className="mt-1 text-destructive">{t('authoringSaveError')}</p>
+            )}
           </div>
-        </fieldset>
-      )}
-
-      {/* Overview */}
-      <div className="mt-4">
-        <label htmlFor="ds-overview" className="text-xs font-medium text-muted-foreground">
-          {t('authoringOverview')}
-        </label>
-        <textarea
-          id="ds-overview"
-          rows={3}
-          value={overview}
-          onChange={(e) => {
-            setOverview(e.target.value);
-            edited();
-          }}
-          placeholder={t('authoringOverviewPlaceholder')}
-          className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void save()}
+              disabled={status === 'saving'}
+            >
+              {status === 'saving'
+                ? t('authoringSaving')
+                : status === 'saved'
+                  ? t('authoringSaved')
+                  : t('authoringSave')}
+            </Button>
+            {isPublished ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void setLifecycle('draft')}
+                disabled={busy}
+              >
+                {t('authoringUnpublish')}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => void setLifecycle('published')}
+                disabled={!canPublish}
+              >
+                {t('authoringPublish')}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Policy */}
-      <fieldset className="mt-4">
-        <legend className="text-xs font-medium text-muted-foreground">
-          {t('authoringPolicy')}
-        </legend>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <label className="text-xs">
-            <span className="text-muted-foreground">{t('authoringRowLimit')}</span>
-            <input
-              type="number"
-              min={1}
-              value={policy.rowLimit}
-              onChange={(e) => setPolicyField('rowLimit', Number(e.target.value) || 1)}
-              className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </label>
-          <label className="text-xs">
-            <span className="text-muted-foreground">{t('authoringTimeoutMs')}</span>
-            <input
-              type="number"
-              min={1}
-              value={policy.timeoutMs}
-              onChange={(e) => setPolicyField('timeoutMs', Number(e.target.value) || 1)}
-              className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </label>
-        </div>
-        <div className="mt-2 flex flex-col gap-1.5">
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={policy.confirmOnBroadScan}
-              onChange={(e) => setPolicyField('confirmOnBroadScan', e.target.checked)}
-            />
-            {t('authoringConfirmBroadScan')}
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={policy.confirmOnSensitiveAccess}
-              onChange={(e) => setPolicyField('confirmOnSensitiveAccess', e.target.checked)}
-            />
-            {t('authoringConfirmSensitive')}
-          </label>
-        </div>
-      </fieldset>
+      <label htmlFor="authoring-section" className="sr-only">
+        {t('authoringSections')}
+      </label>
+      <select
+        id="authoring-section"
+        value={activeSection}
+        onChange={(e) => selectSection(e.target.value as AuthoringSection)}
+        className="mt-4 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+      >
+        {sectionItems.map((section) => (
+          <option key={section.key} value={section.key}>
+            {section.label}
+          </option>
+        ))}
+      </select>
 
-      {/* Actions */}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => void save()}
-          disabled={status === 'saving'}
-        >
-          {status === 'saving'
-            ? t('authoringSaving')
-            : status === 'saved'
-              ? t('authoringSaved')
-              : t('authoringSave')}
-        </Button>
-        {isPublished ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void setLifecycle('draft')}
-            disabled={busy}
-          >
-            {t('authoringUnpublish')}
-          </Button>
-        ) : (
-          <Button size="sm" onClick={() => void setLifecycle('published')} disabled={!canPublish}>
-            {t('authoringPublish')}
-          </Button>
-        )}
-        {status === 'error' && (
-          <span className="text-xs text-destructive">{t('authoringSaveError')}</span>
-        )}
+      <div className="mt-4 grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)]">
+        <nav className="hidden md:block" aria-label={t('authoringSections')}>
+          <div className="sticky top-24 space-y-1">
+            {sectionItems.map((section) => (
+              <a
+                key={section.key}
+                href={sectionHref(section.key)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  selectSection(section.key);
+                }}
+                aria-current={activeSection === section.key ? 'page' : undefined}
+                className={`block rounded-md px-3 py-2 text-sm ${
+                  activeSection === section.key
+                    ? 'bg-muted font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                }`}
+              >
+                {section.label}
+              </a>
+            ))}
+          </div>
+        </nav>
+
+        <div id={sectionHref(activeSection).slice(1)} className="min-w-0">
+          <div className="rounded-md border border-border bg-card p-4">
+            <h3 className="mb-4 text-sm font-medium">{activeLabel}</h3>
+            {renderSection()}
+          </div>
+        </div>
       </div>
-
-      {!isPublished && !data.readiness.ready && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t('authoringNotReady')} {data.readiness.missing.join(' · ')}
-        </p>
-      )}
-
-      {/* Members & access (B1b-2): list/remove members, mint + revoke invite links.
-          Keyed by `id` so switching sources remounts it with fresh state — no member
-          rows or minted invite link from the previous source can linger under the new
-          one (Codex P2: a stale access link is sensitive). */}
-      <MembersPanel key={id} id={id} />
     </section>
   );
 }

@@ -9,7 +9,7 @@ This feature is specification-only until the maintainer approves the prototype.
    - desktop left section nav
    - mobile section selector
    - persistent readiness/publish area
-   - Schema searchable grouped table selector
+   - Schema searchable table selector in database/DDL or name order
    - Schema searchable grouped sensitive-column selector
 3. Get maintainer approval before implementation.
 
