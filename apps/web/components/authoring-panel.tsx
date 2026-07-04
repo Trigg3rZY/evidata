@@ -68,6 +68,8 @@ export function AuthoringPanel({
   // Bumped after calibration so the context review re-fetches the new suggestions.
   const [contextRefresh, setContextRefresh] = useState(0);
   const [activeSection, setActiveSection] = useState<AuthoringSection>(DEFAULT_SECTION);
+  const [tableSearch, setTableSearch] = useState('');
+  const [columnSearch, setColumnSearch] = useState('');
 
   useEffect(() => {
     const syncFromHash = (): void => {
@@ -251,6 +253,25 @@ export function AuthoringPanel({
   const sectionHref = (section: AuthoringSection): string => `#${SECTION_HASH_PREFIX}${section}`;
 
   const renderSection = () => {
+    const tableQuery = tableSearch.trim().toLowerCase();
+    const columnQuery = columnSearch.trim().toLowerCase();
+    const visibleTables = tableQuery
+      ? tables.filter((tbl) => tbl.name.toLowerCase().includes(tableQuery))
+      : tables;
+    const includedTables = tables.filter((tbl) => included.has(tbl.name));
+    const visibleColumnGroups = includedTables
+      .map((tbl) => {
+        const tableMatches = columnQuery && tbl.name.toLowerCase().includes(columnQuery);
+        const columns =
+          columnQuery && !tableMatches
+            ? tbl.columns.filter((col) =>
+                `${tbl.name}.${col.name}`.toLowerCase().includes(columnQuery),
+              )
+            : tbl.columns;
+        return { columns, table: tbl };
+      })
+      .filter((group) => group.columns.length > 0);
+
     switch (activeSection) {
       case 'schema':
         return (
@@ -260,50 +281,117 @@ export function AuthoringPanel({
                 {t('authoringIncludedTables')}
               </legend>
               <p className="mt-1 text-xs text-muted-foreground">{t('authoringIncludedHint')}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {tables.map((tbl) => (
-                  <label
-                    key={tbl.name}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={included.has(tbl.name)}
-                      onChange={() => toggleTable(tbl.name)}
-                    />
-                    <span className="font-mono">{tbl.name}</span>
-                  </label>
-                ))}
+              <label htmlFor="authoring-table-search" className="sr-only">
+                {t('authoringSearchTables')}
+              </label>
+              <input
+                id="authoring-table-search"
+                type="search"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder={t('authoringSearchTables')}
+                className="mt-2 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {included.size}/{tables.length} {t('authoringTablesIncluded')}
+              </p>
+              <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border">
+                {visibleTables.length > 0 ? (
+                  visibleTables.map((tbl) => (
+                    <label
+                      key={tbl.name}
+                      className={`flex min-w-0 items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-0 ${
+                        included.has(tbl.name) ? 'bg-muted/40' : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={included.has(tbl.name)}
+                        onChange={() => toggleTable(tbl.name)}
+                      />
+                      <span className="min-w-0 flex-1 break-all font-mono">{tbl.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {tbl.columns.length}
+                      </span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                    {t('authoringNoTableMatches')}
+                  </p>
+                )}
               </div>
             </fieldset>
 
             {included.size > 0 && (
-              <fieldset className="mt-4">
+              <fieldset className="mt-5">
                 <legend className="text-xs font-medium text-muted-foreground">
                   {t('authoringSensitiveColumns')}
                 </legend>
                 <p className="mt-1 text-xs text-muted-foreground">{t('authoringSensitiveHint')}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {tables
-                    .filter((tbl) => included.has(tbl.name))
-                    .flatMap((tbl) =>
-                      tbl.columns.map((col) => {
-                        const ref = `${tbl.name}.${col.name}`;
-                        return (
-                          <label
-                            key={ref}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={sensitive.has(ref)}
-                              onChange={() => toggleSensitive(ref)}
-                            />
-                            <span className="font-mono">{ref}</span>
-                          </label>
-                        );
-                      }),
-                    )}
+                <label htmlFor="authoring-column-search" className="sr-only">
+                  {t('authoringSearchColumns')}
+                </label>
+                <input
+                  id="authoring-column-search"
+                  type="search"
+                  value={columnSearch}
+                  onChange={(e) => setColumnSearch(e.target.value)}
+                  placeholder={t('authoringSearchColumns')}
+                  className="mt-2 w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <div className="mt-2 max-h-80 overflow-y-auto rounded-md border border-border">
+                  {visibleColumnGroups.length > 0 ? (
+                    visibleColumnGroups.map(({ columns, table }) => {
+                      const selected = table.columns.filter((col) =>
+                        sensitive.has(`${table.name}.${col.name}`),
+                      ).length;
+                      return (
+                        <details
+                          key={table.name}
+                          open
+                          className="border-b border-border last:border-0"
+                        >
+                          <summary className="cursor-pointer px-3 py-2 text-sm">
+                            <span className="break-all font-mono">{table.name}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {selected}/{table.columns.length} {t('authoringColumnsSelected')}
+                            </span>
+                          </summary>
+                          <div className="border-t border-border">
+                            {columns.map((col) => {
+                              const ref = `${table.name}.${col.name}`;
+                              return (
+                                <label
+                                  key={ref}
+                                  className={`flex min-w-0 items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-0 ${
+                                    sensitive.has(ref) ? 'bg-muted/40' : ''
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={sensitive.has(ref)}
+                                    onChange={() => toggleSensitive(ref)}
+                                  />
+                                  <span className="min-w-0 flex-1 break-all font-mono">
+                                    <span className="sr-only">{table.name}.</span>
+                                    {col.name}
+                                  </span>
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {col.dataType}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      );
+                    })
+                  ) : (
+                    <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      {t('authoringNoColumnMatches')}
+                    </p>
+                  )}
                 </div>
               </fieldset>
             )}
