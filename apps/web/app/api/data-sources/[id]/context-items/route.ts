@@ -19,10 +19,13 @@ interface ActionBody {
   action?: unknown;
   kind?: unknown;
   itemId?: unknown;
+  term?: unknown;
   definition?: unknown;
+  fromRef?: unknown;
+  toRef?: unknown;
 }
 
-/** Promote (→Verified), reject (delete), or edit a glossary definition (M2-B3). */
+/** Add, promote (→Verified), reject (delete), or edit context items (M2-B3/#188). */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -32,18 +35,33 @@ export async function POST(
   const action = body?.action;
   const kind = body?.kind === 'mapping' ? 'mapping' : 'glossary';
   const itemId = typeof body?.itemId === 'string' ? body.itemId : '';
+  const term = typeof body?.term === 'string' ? body.term : '';
+  const definition = typeof body?.definition === 'string' ? body.definition : '';
+  const fromRef = typeof body?.fromRef === 'string' ? body.fromRef : '';
+  const toRef = typeof body?.toRef === 'string' ? body.toRef : '';
 
   return run(req, async (userId, rt) => {
-    if (!itemId) throw new VerificationValidationError('itemId is required.');
-    if (action === 'promote') {
+    if (action === 'add') {
+      if (kind === 'mapping') {
+        await rt.verification.addEntityMapping(userId, id, { fromRef, toRef });
+      } else {
+        await rt.verification.addGlossaryTerm(userId, id, { term, definition });
+      }
+    } else if (action === 'promote') {
+      if (!itemId) throw new VerificationValidationError('itemId is required.');
       await rt.verification.promote(userId, id, kind, itemId);
     } else if (action === 'reject') {
+      if (!itemId) throw new VerificationValidationError('itemId is required.');
       await rt.verification.reject(userId, id, kind, itemId);
     } else if (action === 'edit') {
-      const definition = typeof body?.definition === 'string' ? body.definition : '';
-      await rt.verification.editGlossary(userId, id, itemId, definition);
+      if (!itemId) throw new VerificationValidationError('itemId is required.');
+      if (kind === 'mapping') {
+        await rt.verification.editEntityMapping(userId, id, itemId, { fromRef, toRef });
+      } else {
+        await rt.verification.editGlossaryTerm(userId, id, itemId, { term, definition });
+      }
     } else {
-      throw new VerificationValidationError('action must be promote, reject, or edit.');
+      throw new VerificationValidationError('action must be add, promote, reject, or edit.');
     }
     return { ok: true };
   });

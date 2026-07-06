@@ -856,6 +856,19 @@ export class DrizzleMetadataStore implements MetadataStore {
       );
   }
 
+  async updateGlossaryTerm(
+    dataSourceId: string,
+    id: string,
+    input: { term: string; definition: string },
+  ): Promise<void> {
+    await this.db
+      .update(businessGlossaryTerms)
+      .set({ term: input.term, definition: input.definition })
+      .where(
+        and(eq(businessGlossaryTerms.id, id), eq(businessGlossaryTerms.dataSourceId, dataSourceId)),
+      );
+  }
+
   async deleteGlossaryTerm(dataSourceId: string, id: string): Promise<void> {
     await this.db
       .delete(businessGlossaryTerms)
@@ -872,6 +885,17 @@ export class DrizzleMetadataStore implements MetadataStore {
     await this.db
       .update(entityMappings)
       .set({ status })
+      .where(and(eq(entityMappings.id, id), eq(entityMappings.dataSourceId, dataSourceId)));
+  }
+
+  async updateEntityMapping(
+    dataSourceId: string,
+    id: string,
+    input: { fromRef: string; toRef: string },
+  ): Promise<void> {
+    await this.db
+      .update(entityMappings)
+      .set({ fromRef: input.fromRef, toRef: input.toRef })
       .where(and(eq(entityMappings.id, id), eq(entityMappings.dataSourceId, dataSourceId)));
   }
 

@@ -124,10 +124,81 @@ describe('VerificationService (M2-B3, #122)', () => {
     );
   });
 
+  it('adds verified glossary terms and mappings manually', async () => {
+    const manual = new VerificationService(store, (prefix) => `${prefix}_manual`);
+
+    await manual.addGlossaryTerm('owner', 'ds-a', {
+      term: '  active user  ',
+      definition: ' logged in within 30 days ',
+    });
+    const term = (await store.getGlossaryTerms('ds-a')).find((g) => g.id === 'gls_manual');
+    expect(term).toMatchObject({
+      term: 'active user',
+      definition: 'logged in within 30 days',
+      status: 'verified',
+      provenance: 'admin',
+    });
+
+    await manual.addEntityMapping('owner', 'ds-a', {
+      fromRef: ' invoices.customer_ref ',
+      toRef: ' accounts.id ',
+    });
+    const mapping = (await store.getEntityMappings('ds-a')).find((m) => m.id === 'map_manual');
+    expect(mapping).toMatchObject({
+      fromRef: 'invoices.customer_ref',
+      toRef: 'accounts.id',
+      status: 'verified',
+      provenance: 'admin',
+    });
+  });
+
+  it('edits glossary terms and mappings without changing status', async () => {
+    await svc.editGlossaryTerm('owner', 'ds-a', 'gA2', {
+      term: 'net revenue',
+      definition: 'recognized revenue minus refunds',
+    });
+    expect((await store.getGlossaryTerms('ds-a')).find((t) => t.id === 'gA2')).toMatchObject({
+      term: 'net revenue',
+      definition: 'recognized revenue minus refunds',
+      status: 'verified',
+    });
+
+    await svc.editEntityMapping('owner', 'ds-a', 'mA1', {
+      fromRef: 'invoices.customer_ref',
+      toRef: 'accounts.id',
+    });
+    expect((await store.getEntityMappings('ds-a')).find((m) => m.id === 'mA1')).toMatchObject({
+      fromRef: 'invoices.customer_ref',
+      toRef: 'accounts.id',
+      status: 'verified',
+    });
+  });
+
+  it('rejects empty manual context fields', async () => {
+    await expect(
+      svc.addGlossaryTerm('owner', 'ds-a', { term: '  ', definition: 'x' }),
+    ).rejects.toBeInstanceOf(VerificationValidationError);
+    await expect(
+      svc.addEntityMapping('owner', 'ds-a', { fromRef: 'x', toRef: '  ' }),
+    ).rejects.toBeInstanceOf(VerificationValidationError);
+    await expect(
+      svc.editEntityMapping('owner', 'ds-a', 'mA1', { fromRef: '  ', toRef: 'accounts.id' }),
+    ).rejects.toBeInstanceOf(VerificationValidationError);
+  });
+
   it('scopes mutations by dataSourceId — an id from another source is a no-op', async () => {
     // Promote ds-b's term while addressing ds-a → must NOT change ds-b's term.
     await svc.promote('owner', 'ds-a', 'glossary', 'gB1');
     expect(await status('ds-b', 'gB1')).toBe('suggested');
+
+    await svc.editGlossaryTerm('owner', 'ds-a', 'gB1', {
+      term: 'should not update',
+      definition: 'foreign row',
+    });
+    expect((await store.getGlossaryTerms('ds-b')).find((t) => t.id === 'gB1')).toMatchObject({
+      term: 'churn',
+      definition: 'draft',
+    });
   });
 
   it('rejects (deletes) an item', async () => {
@@ -150,5 +221,8 @@ describe('VerificationService (M2-B3, #122)', () => {
     await expect(svc.promote('stranger', 'ds-a', 'glossary', 'gA1')).rejects.toBeInstanceOf(
       AuthoringAccessError,
     );
+    await expect(
+      svc.addGlossaryTerm('stranger', 'ds-a', { term: 'x', definition: 'y' }),
+    ).rejects.toBeInstanceOf(AuthoringAccessError);
   });
 });

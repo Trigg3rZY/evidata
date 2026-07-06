@@ -174,9 +174,19 @@ export interface MetadataStore {
   // --- Verification (M2-B3): promote Suggested→Verified, edit, or reject. All scoped
   // by dataSourceId so an id from another source can't be touched. ---
   setGlossaryStatus(dataSourceId: string, id: string, status: GlossaryStatus): Promise<void>;
+  updateGlossaryTerm(
+    dataSourceId: string,
+    id: string,
+    input: { term: string; definition: string },
+  ): Promise<void>;
   updateGlossaryDefinition(dataSourceId: string, id: string, definition: string): Promise<void>;
   deleteGlossaryTerm(dataSourceId: string, id: string): Promise<void>;
   setEntityMappingStatus(dataSourceId: string, id: string, status: GlossaryStatus): Promise<void>;
+  updateEntityMapping(
+    dataSourceId: string,
+    id: string,
+    input: { fromRef: string; toRef: string },
+  ): Promise<void>;
   deleteEntityMapping(dataSourceId: string, id: string): Promise<void>;
   /** Transition a DataSource's lifecycle (draft → published → archived). */
   setDataSourceLifecycle(dataSourceId: string, lifecycle: DataSourceLifecycle): Promise<void>;

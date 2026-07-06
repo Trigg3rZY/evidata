@@ -7,7 +7,14 @@
  * (owner/admin) via the Data Source role matrix (spec 09 §6). Every mutation is scoped
  * by dataSourceId, so an item id from another source can't be touched.
  */
-import type { EntityMappingRecord, GlossaryTermRecord, MetadataStore } from '@evidata/ports';
+import { randomUUID } from 'node:crypto';
+import type {
+  EntityMappingRecord,
+  GlossaryTermRecord,
+  MetadataStore,
+  NewEntityMapping,
+  NewGlossaryTerm,
+} from '@evidata/ports';
 import { requireDataSourceCapability } from './authoring-service';
 
 export type ContextItemKind = 'glossary' | 'mapping';
@@ -31,15 +38,28 @@ type VerificationStore = Pick<
   | 'getDataSourceRole'
   | 'getGlossaryTerms'
   | 'getEntityMappings'
+  | 'addGlossaryTerms'
+  | 'addEntityMappings'
   | 'setGlossaryStatus'
+  | 'updateGlossaryTerm'
   | 'updateGlossaryDefinition'
   | 'deleteGlossaryTerm'
   | 'setEntityMappingStatus'
+  | 'updateEntityMapping'
   | 'deleteEntityMapping'
 >;
 
+const requiredText = (value: string, message: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) throw new VerificationValidationError(message);
+  return trimmed;
+};
+
 export class VerificationService {
-  constructor(private readonly store: VerificationStore) {}
+  constructor(
+    private readonly store: VerificationStore,
+    private readonly newId: (prefix: string) => string = (prefix) => `${prefix}_${randomUUID()}`,
+  ) {}
 
   /** All glossary terms + mappings for the source (every status, with ids). */
   async list(userId: string, dataSourceId: string): Promise<ContextItems> {
@@ -49,6 +69,46 @@ export class VerificationService {
       this.store.getEntityMappings(dataSourceId),
     ]);
     return { glossary, mappings };
+  }
+
+  /** Owner/admin-authored glossary terms are verified immediately. */
+  async addGlossaryTerm(
+    userId: string,
+    dataSourceId: string,
+    input: { term: string; definition: string },
+  ): Promise<void> {
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
+    const term = requiredText(input.term, 'A term is required.');
+    const definition = requiredText(input.definition, 'A definition is required.');
+    const row: NewGlossaryTerm = {
+      id: this.newId('gls'),
+      dataSourceId,
+      term,
+      definition,
+      status: 'verified',
+      provenance: 'admin',
+    };
+    await this.store.addGlossaryTerms([row]);
+  }
+
+  /** Owner/admin-authored entity mappings are verified immediately. */
+  async addEntityMapping(
+    userId: string,
+    dataSourceId: string,
+    input: { fromRef: string; toRef: string },
+  ): Promise<void> {
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
+    const fromRef = requiredText(input.fromRef, 'A from reference is required.');
+    const toRef = requiredText(input.toRef, 'A to reference is required.');
+    const row: NewEntityMapping = {
+      id: this.newId('map'),
+      dataSourceId,
+      fromRef,
+      toRef,
+      status: 'verified',
+      provenance: 'admin',
+    };
+    await this.store.addEntityMappings([row]);
   }
 
   /** Promote a Suggested item to Verified (it becomes visible to the Ask model). */
@@ -83,8 +143,38 @@ export class VerificationService {
     definition: string,
   ): Promise<void> {
     await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
-    const def = definition.trim();
-    if (!def) throw new VerificationValidationError('A definition is required.');
-    await this.store.updateGlossaryDefinition(dataSourceId, id, def);
+    await this.store.updateGlossaryDefinition(
+      dataSourceId,
+      id,
+      requiredText(definition, 'A definition is required.'),
+    );
+  }
+
+  /** Edit a glossary term + definition without changing its status. */
+  async editGlossaryTerm(
+    userId: string,
+    dataSourceId: string,
+    id: string,
+    input: { term: string; definition: string },
+  ): Promise<void> {
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
+    await this.store.updateGlossaryTerm(dataSourceId, id, {
+      term: requiredText(input.term, 'A term is required.'),
+      definition: requiredText(input.definition, 'A definition is required.'),
+    });
+  }
+
+  /** Edit an entity mapping without changing its status. */
+  async editEntityMapping(
+    userId: string,
+    dataSourceId: string,
+    id: string,
+    input: { fromRef: string; toRef: string },
+  ): Promise<void> {
+    await requireDataSourceCapability(this.store, userId, dataSourceId, 'author');
+    await this.store.updateEntityMapping(dataSourceId, id, {
+      fromRef: requiredText(input.fromRef, 'A from reference is required.'),
+      toRef: requiredText(input.toRef, 'A to reference is required.'),
+    });
   }
 }
