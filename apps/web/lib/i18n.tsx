@@ -137,7 +137,7 @@ const dict = {
     // Context verification (B3): glossary + mappings review.
     authoringContext: 'Context',
     authoringContextHint: 'Only Verified items are visible to the AI.',
-    authoringContextEmpty: 'No glossary or mappings yet — use “Draft with AI”.',
+    authoringContextEmpty: 'No glossary or mappings yet.',
     authoringGlossary: 'Glossary',
     authoringMappings: 'Mappings',
     authoringVerified: 'Verified',
@@ -145,6 +145,12 @@ const dict = {
     authoringVerify: 'Verify',
     authoringReject: 'Reject',
     authoringEdit: 'Edit',
+    authoringAddTerm: 'Add term',
+    authoringAddMapping: 'Add mapping',
+    authoringTerm: 'Term',
+    authoringDefinition: 'Definition',
+    authoringFromRef: 'From',
+    authoringToRef: 'To',
     // M2-B4 correction loop (#123): the review queue of querier-raised corrections.
     correctionsLabel: 'Corrections',
     correctionsHint:
@@ -314,7 +320,7 @@ const dict = {
     // Context verification (B3): glossary + mappings review.
     authoringContext: '上下文',
     authoringContextHint: '只有已核验的条目对 AI 可见。',
-    authoringContextEmpty: '还没有术语或映射——可用「用 AI 起草」。',
+    authoringContextEmpty: '还没有术语或映射。',
     authoringGlossary: '术语',
     authoringMappings: '映射',
     authoringVerified: '已核验',
@@ -322,6 +328,12 @@ const dict = {
     authoringVerify: '核验',
     authoringReject: '拒绝',
     authoringEdit: '编辑',
+    authoringAddTerm: '添加术语',
+    authoringAddMapping: '添加映射',
+    authoringTerm: '术语',
+    authoringDefinition: '定义',
+    authoringFromRef: '来源',
+    authoringToRef: '目标',
     // M2-B4 correction loop (#123): the review queue of querier-raised corrections.
     correctionsLabel: '待审修正',
     correctionsHint: '查询者从被阻断的回答里反馈的。核验对应条目即可解决并重新回答。',

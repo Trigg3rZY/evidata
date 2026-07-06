@@ -52,8 +52,12 @@ type SuggestionStore = Pick<
   // delegated to VerificationService (the accept path)
   | 'getGlossaryTerms'
   | 'getEntityMappings'
+  | 'addGlossaryTerms'
+  | 'addEntityMappings'
   | 'setGlossaryStatus'
   | 'setEntityMappingStatus'
+  | 'updateGlossaryTerm'
+  | 'updateEntityMapping'
   | 'deleteGlossaryTerm'
   | 'deleteEntityMapping'
   | 'updateGlossaryDefinition'
