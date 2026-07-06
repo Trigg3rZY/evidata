@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { ModelPicker } from '@/components/model-picker';
 
@@ -11,6 +11,8 @@ export function Composer({
   disabled,
   placeholder,
   stopLabel,
+  draft,
+  draftVersion,
 }: {
   onSubmit: (question: string) => void;
   onStop?: () => void;
@@ -18,8 +20,18 @@ export function Composer({
   disabled?: boolean;
   placeholder: string;
   stopLabel: string;
+  draft?: string;
+  draftVersion?: number;
 }) {
   const [value, setValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!draft) return;
+    setValue(draft);
+    textareaRef.current?.focus();
+    textareaRef.current?.setSelectionRange(draft.length, draft.length);
+  }, [draft, draftVersion]);
 
   const submit = (): void => {
     const question = value.trim();
@@ -32,6 +44,7 @@ export function Composer({
   return (
     <div className="rounded-2xl border border-border bg-card focus-within:border-primary focus-within:ring-2 focus-within:ring-ring">
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

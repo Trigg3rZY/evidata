@@ -88,6 +88,8 @@ export function Thread({
     initialInvestigationId ?? null,
   );
   const [loading, setLoading] = useState(Boolean(initialInvestigationId));
+  const [composerDraft, setComposerDraft] = useState('');
+  const [composerDraftVersion, setComposerDraftVersion] = useState(0);
   // Set while a Rerun is in flight, so the settle effect replaces the latest
   // exchange's answer in place instead of appending a new turn (issue #56).
   const rerunRef = useRef(false);
@@ -173,6 +175,10 @@ export function Thread({
     setRegenerating(true);
     void ask(q, dataSourceId, lang, investigationId ?? undefined, true, modelProviderId);
   };
+  const narrowQuestion = (): void => {
+    setComposerDraft(t('narrowQuestionDraft'));
+    setComposerDraftVersion((v) => v + 1);
+  };
   const isEmpty = history.length === 0 && status === 'idle';
 
   return (
@@ -209,6 +215,7 @@ export function Thread({
                   <AnswerView
                     answer={ex.answer}
                     onFollowup={submit}
+                    onNarrowQuestion={narrowQuestion}
                     onInspect={onInspect}
                     onRerun={isLast ? () => rerun(ex.question) : undefined}
                     labels={labels}
@@ -239,7 +246,12 @@ export function Thread({
             <UserBubble text={question} />
             {answer ? (
               <>
-                <AnswerView answer={answer} onFollowup={submit} labels={labels} />
+                <AnswerView
+                  answer={answer}
+                  onFollowup={submit}
+                  onNarrowQuestion={narrowQuestion}
+                  labels={labels}
+                />
                 {usage && <UsageFooter usage={usage} />}
               </>
             ) : message ? (
@@ -270,6 +282,8 @@ export function Thread({
           disabled={status === 'streaming' || loading}
           placeholder={t('composerPlaceholder')}
           stopLabel={t('stop')}
+          draft={composerDraft}
+          draftVersion={composerDraftVersion}
         />
       </div>
     </div>
