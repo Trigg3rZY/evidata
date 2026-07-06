@@ -17,6 +17,8 @@ import type {
   DataSourceConnectionRecord,
   MetadataStore,
   PolicyRecord,
+  SchemaColumn,
+  SchemaSnapshot,
   SafetyContext,
 } from '@evidata/ports';
 import { canDataSource } from './authz';
@@ -92,7 +94,8 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
     // an error) so an unauthorized id is indistinguishable from a missing one.
     if (!userId || !(await this.canQuery(id, userId))) return null;
 
-    // Freshest captured schema for what the model sees.
+    // Freshest captured schema, scoped to what the published source allows the
+    // querier/model to see. Authoring reads the full snapshot separately.
     const schema = await this.store.getLatestSnapshot(binding.connectionId);
     if (!schema) return null;
     const connection = await this.store.getConnection(binding.connectionId);
@@ -114,7 +117,7 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
       id: ds.id,
       name: ds.name,
       connector,
-      schema,
+      schema: scopeSchema(schema, binding.includedTables),
       safetyContext: buildSafetyContext(policy, binding),
       context: buildContext(ctx?.overview ?? '', glossary, mappings),
     };
@@ -132,6 +135,25 @@ export class PublishedDataSourceResolver implements DataSourceResolver {
       return null;
     }
   }
+}
+
+function scopeSchema(schema: SchemaSnapshot, includedTables: string[]): SchemaSnapshot {
+  const included = new Set(includedTables);
+  return {
+    ...schema,
+    tables: schema.tables
+      .filter((t) => included.has(t.name))
+      .map((t) => ({
+        ...t,
+        columns: t.columns.map((c) => scopeColumn(c, included)),
+      })),
+  };
+}
+
+function scopeColumn(column: SchemaColumn, included: ReadonlySet<string>): SchemaColumn {
+  if (!column.references || included.has(column.references.table)) return column;
+  const { references: _refs, ...rest } = column;
+  return rest;
 }
 
 function buildSafetyContext(
