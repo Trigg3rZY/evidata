@@ -177,7 +177,7 @@ export function buildSystemPrompt(input: AgentInput): string {
     '- Greeting / small talk / "what can you do?": call reply (a short, friendly message). NEVER run a query for these.',
     '- A request to write, draft, or explain a SQL statement (even a write like DELETE/UPDATE): call draft_sql — produce the SQL as text; it is NOT executed.',
     "- A question unrelated to this data source (general knowledge, other systems): call reply with a brief decline saying it's outside this data source's scope.",
-    '- A question ABOUT the data (including what data it contains): gather evidence with run_sql, then final_answer.',
+    '- A question ABOUT the data or this data source itself (including "what is this database?", "describe this source", or "which tables does it have?"): gather evidence with run_sql over the authorized tables (for example light counts/samples), then final_answer. Do NOT call cannot_answer just because the question is broad or meta.',
     'Do NOT put any figure, statistic, or claim about the data into reply or draft_sql — those require run_sql + final_answer.',
     'Rules:',
     '- You may ONLY read. Propose a single read-only SELECT via the run_sql tool; the app enforces a SQL safety gate and rejects any write.',

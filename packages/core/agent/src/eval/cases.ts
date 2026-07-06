@@ -81,6 +81,13 @@ export const EVAL_CASES: EvalCase[] = [
     expect: { route: 'reply', maxQueries: 0 },
   },
   {
+    id: 'meta-en',
+    intent: 'meta',
+    question: 'What is this database?',
+    lang: 'en',
+    expect: { route: 'answer', status: 'Answered' },
+  },
+  {
     id: 'meta-zh',
     intent: 'meta',
     question: '这个数据源里有哪些表?',
