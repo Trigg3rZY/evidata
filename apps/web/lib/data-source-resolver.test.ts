@@ -19,7 +19,27 @@ const snapshot: SchemaSnapshot = {
   dataSourceId: 'ds-x',
   capturedAt: '2026-06-18T00:00:00.000Z',
   partial: false,
-  tables: [{ name: 'accounts', columns: [] }],
+  tables: [
+    { name: 'accounts', columns: [] },
+    { name: 'campaigns', columns: [] },
+    {
+      name: 'invoices',
+      columns: [
+        {
+          name: 'account_id',
+          dataType: 'integer',
+          nullable: false,
+          references: { table: 'accounts', column: 'id' },
+        },
+        {
+          name: 'campaign_id',
+          dataType: 'integer',
+          nullable: false,
+          references: { table: 'campaigns', column: 'id' },
+        },
+      ],
+    },
+  ],
 };
 
 const fakeConnector = {
@@ -148,7 +168,17 @@ describe('PublishedDataSourceResolver (M2-S2, spec 09 §2)', () => {
     expect([...rt!.safetyContext.sensitiveColumns]).toEqual(['accounts.email']);
     expect(rt!.safetyContext.policy.rowLimit).toBe(500);
     expect(rt!.safetyContext.policy.statementTimeoutMs).toBe(7000);
-    expect(rt!.schema.tables[0]?.name).toBe('accounts');
+    expect(rt!.schema.tables.map((t) => t.name)).toEqual(['accounts', 'invoices']);
+    expect(
+      rt!.schema.tables
+        .find((t) => t.name === 'invoices')
+        ?.columns.find((c) => c.name === 'account_id')?.references?.table,
+    ).toBe('accounts');
+    expect(
+      rt!.schema.tables
+        .find((t) => t.name === 'invoices')
+        ?.columns.find((c) => c.name === 'campaign_id')?.references,
+    ).toBeUndefined();
     // VERIFIED-only context handed to the model (suggested items are excluded).
     expect(rt!.context.overview).toBe('Billing data.');
     expect(rt!.context.glossary).toEqual([
