@@ -17,16 +17,21 @@ const CORRECTION_KINDS = new Set(['notify_admin_verify', 'pick_definition']);
 export const shouldFileSuggestion = (action: Pick<UnblockAction, 'kind' | 'createsSuggestion'>) =>
   action.createsSuggestion === true || CORRECTION_KINDS.has(action.kind);
 
+export const canRevealMutationDraft = (action: Pick<UnblockAction, 'kind' | 'draftSql'>) =>
+  action.kind === 'view_mutation_draft' && Boolean(action.draftSql);
+
 export function UnblockPathView({
   unblock,
   investigationId,
   onFollowup,
+  onNarrowQuestion,
   labels,
 }: {
   unblock: UnblockPath;
   /** The investigation this answer belongs to — the correction is filed against it. */
   investigationId?: string;
   onFollowup: (question: string) => void;
+  onNarrowQuestion?: (() => void) | undefined;
   labels: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
 }) {
   const [noted, setNoted] = useState<Set<number>>(new Set());
@@ -62,7 +67,12 @@ export function UnblockPathView({
 
   const handle = (action: UnblockAction, index: number): void => {
     if (action.kind === 'view_mutation_draft') {
+      if (!canRevealMutationDraft(action)) return;
       toggleDraft(index); // reveal the proposed write read-only — it never executes
+      return;
+    }
+    if (action.kind === 'narrow_question') {
+      onNarrowQuestion?.();
       return;
     }
     if (shouldFileSuggestion(action)) {
@@ -96,6 +106,10 @@ export function UnblockPathView({
               key={i}
               variant="outline"
               size="sm"
+              disabled={
+                (action.kind === 'view_mutation_draft' && !canRevealMutationDraft(action)) ||
+                (action.kind === 'narrow_question' && !onNarrowQuestion)
+              }
               onClick={() => handle(action, i)}
               {...(action.kind === 'view_mutation_draft'
                 ? { 'aria-expanded': openDraft.has(i) }
@@ -109,7 +123,7 @@ export function UnblockPathView({
 
       {/* Proposed write(s), shown read-only — rejected by the gate, never executed. */}
       {unblock.nextSteps.map((action, i) =>
-        action.kind === 'view_mutation_draft' && action.draftSql && openDraft.has(i) ? (
+        canRevealMutationDraft(action) && openDraft.has(i) ? (
           <div key={i} className="mt-2 overflow-hidden rounded-md border border-border bg-card">
             <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
               <Lock className="h-3 w-3" aria-hidden />

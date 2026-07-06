@@ -17,12 +17,14 @@ import { UnblockPathView } from './unblock-path';
 export function AnswerView({
   answer,
   onFollowup,
+  onNarrowQuestion,
   onInspect,
   onRerun,
   labels,
 }: {
   answer: Answer;
   onFollowup: (question: string) => void;
+  onNarrowQuestion?: () => void;
   /** Open an evidence item in the inspector (right pane); chips are static without it. */
   onInspect?: ((evidence: Evidence) => void) | undefined;
   /** Regenerate this answer in place (latest answer only). */
@@ -132,6 +134,7 @@ export function AnswerView({
           unblock={answer.unblock}
           investigationId={answer.investigationId}
           onFollowup={onFollowup}
+          onNarrowQuestion={onNarrowQuestion}
           labels={labels.unblock}
         />
       )}
