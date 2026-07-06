@@ -20,6 +20,12 @@ export const shouldFileSuggestion = (action: Pick<UnblockAction, 'kind' | 'creat
 export const canRevealMutationDraft = (action: Pick<UnblockAction, 'kind' | 'draftSql'>) =>
   action.kind === 'view_mutation_draft' && Boolean(action.draftSql);
 
+type CorrectionAck = 'recorded' | 'sample';
+type CorrectionStatus = CorrectionAck | 'pending';
+
+export const correctionAckFromResponse = (res: Pick<Response, 'ok'> | null): CorrectionAck =>
+  res?.ok ? 'recorded' : 'sample';
+
 export function UnblockPathView({
   unblock,
   investigationId,
@@ -32,9 +38,14 @@ export function UnblockPathView({
   investigationId?: string;
   onFollowup: (question: string) => void;
   onNarrowQuestion?: (() => void) | undefined;
-  labels: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
+  labels: {
+    whatsMissing: string;
+    recordedForAdmin: string;
+    sampleNotReviewed: string;
+    notExecuted: string;
+  };
 }) {
-  const [noted, setNoted] = useState<Set<number>>(new Set());
+  const [correctionStatus, setCorrectionStatus] = useState<Record<number, CorrectionStatus>>({});
   const [openDraft, setOpenDraft] = useState<Set<number>>(new Set());
 
   const toggleDraft = (index: number): void =>
@@ -45,24 +56,23 @@ export function UnblockPathView({
       return next;
     });
 
-  // File a correction against the investigation's review queue when we can (an
-  // authenticated member of a real source), then ALWAYS acknowledge locally — so the
-  // built-in Sample / anonymous path (where the correction route 401s, and there's no
-  // owner to review anyway) keeps the prior "recorded for an Admin" ack instead of a
-  // dead button.
+  // File a correction against the investigation's review queue when we can; Sample /
+  // anonymous paths are acknowledged separately because nothing is persisted there.
   const fileCorrection = async (action: UnblockAction, index: number): Promise<void> => {
-    setNoted((prev) => new Set(prev).add(index));
-    if (investigationId) {
-      await fetch(`/api/investigations/${encodeURIComponent(investigationId)}/suggestions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          kind: action.kind,
-          description: unblock.whatsMissing.map((m) => m.description).join('; '),
-          targetRef: unblock.whatsMissing[0]?.description ?? null,
-        }),
-      }).catch(() => null);
-    }
+    if (correctionStatus[index] === 'pending') return;
+    setCorrectionStatus((prev) => ({ ...prev, [index]: 'pending' }));
+    const res = investigationId
+      ? await fetch(`/api/investigations/${encodeURIComponent(investigationId)}/suggestions`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            kind: action.kind,
+            description: unblock.whatsMissing.map((m) => m.description).join('; '),
+            targetRef: unblock.whatsMissing[0]?.description ?? null,
+          }),
+        }).catch(() => null)
+      : null;
+    setCorrectionStatus((prev) => ({ ...prev, [index]: correctionAckFromResponse(res) }));
   };
 
   const handle = (action: UnblockAction, index: number): void => {
@@ -92,14 +102,15 @@ export function UnblockPathView({
         ))}
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
-        {unblock.nextSteps.map((action, i) =>
-          noted.has(i) ? (
+        {unblock.nextSteps.map((action, i) => {
+          const status = correctionStatus[i];
+          return status && status !== 'pending' ? (
             <span
               key={i}
               className="inline-flex items-center gap-1.5 rounded-md bg-status-answered-bg px-3 py-1.5 text-xs font-medium text-status-answered"
             >
               <Check className="h-3.5 w-3.5" aria-hidden />
-              {labels.recordedForAdmin}
+              {status === 'recorded' ? labels.recordedForAdmin : labels.sampleNotReviewed}
             </span>
           ) : (
             <Button
@@ -107,6 +118,7 @@ export function UnblockPathView({
               variant="outline"
               size="sm"
               disabled={
+                status === 'pending' ||
                 (action.kind === 'view_mutation_draft' && !canRevealMutationDraft(action)) ||
                 (action.kind === 'narrow_question' && !onNarrowQuestion)
               }
@@ -117,8 +129,8 @@ export function UnblockPathView({
             >
               {action.label}
             </Button>
-          ),
-        )}
+          );
+        })}
       </div>
 
       {/* Proposed write(s), shown read-only — rejected by the gate, never executed. */}
