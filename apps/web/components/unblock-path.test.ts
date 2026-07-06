@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { canRevealMutationDraft, shouldFileSuggestion } from './unblock-path';
+import {
+  canRevealMutationDraft,
+  correctionAckFromResponse,
+  shouldFileSuggestion,
+} from './unblock-path';
 
 describe('shouldFileSuggestion', () => {
   it('files request_access instead of only acknowledging it locally', () => {
@@ -25,5 +29,13 @@ describe('canRevealMutationDraft', () => {
     ).toBe(true);
     expect(canRevealMutationDraft({ kind: 'view_mutation_draft' })).toBe(false);
     expect(canRevealMutationDraft({ kind: 'narrow_question' })).toBe(false);
+  });
+});
+
+describe('correctionAckFromResponse', () => {
+  it('only says a correction was recorded when the route accepted it', () => {
+    expect(correctionAckFromResponse({ ok: true })).toBe('recorded');
+    expect(correctionAckFromResponse({ ok: false })).toBe('sample');
+    expect(correctionAckFromResponse(null)).toBe('sample');
   });
 });

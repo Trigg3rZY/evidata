@@ -90,6 +90,8 @@ const dict = {
     usageQueries: 'queries',
     unblockWhatsMissing: "What's missing",
     unblockRecordedForAdmin: 'Recorded for an Admin',
+    unblockSampleNotReviewed:
+      "Sample corrections aren't reviewed. Connect a real Data Source to test this loop.",
     // Client-side stream failures (the server's own error frame is separate).
     errorRequestFailed: 'The request could not be started.',
     errorNetworkInterrupted: 'A network error interrupted the answer.',
@@ -275,6 +277,7 @@ const dict = {
     usageQueries: '次查询',
     unblockWhatsMissing: '缺少什么',
     unblockRecordedForAdmin: '已记录,待管理员处理',
+    unblockSampleNotReviewed: '示例数据源的修正不会被审核。连接真实数据源后再测试这个流程。',
     errorRequestFailed: '无法发起请求。',
     errorNetworkInterrupted: '网络错误中断了回答。',
     // M2-S3 authoring (owner-only).
@@ -442,7 +445,12 @@ export interface AnswerLabels {
   whatIDid: string;
   evidence: string;
   assumptions: string;
-  unblock: { whatsMissing: string; recordedForAdmin: string; notExecuted: string };
+  unblock: {
+    whatsMissing: string;
+    recordedForAdmin: string;
+    sampleNotReviewed: string;
+    notExecuted: string;
+  };
   actions: { copy: string; copied: string; rerun: string };
 }
 
@@ -471,6 +479,7 @@ export function answerLabels(t: (key: MessageKey) => string): AnswerLabels {
     unblock: {
       whatsMissing: t('unblockWhatsMissing'),
       recordedForAdmin: t('unblockRecordedForAdmin'),
+      sampleNotReviewed: t('unblockSampleNotReviewed'),
       notExecuted: t('notExecuted'),
     },
     actions: { copy: t('actionCopy'), copied: t('actionCopied'), rerun: t('actionRerun') },
