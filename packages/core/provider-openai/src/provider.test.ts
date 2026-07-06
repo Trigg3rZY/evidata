@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHistory, AgentInput, ToolResult } from '@evidata/agent';
-import { OpenAIAgentProvider } from './index';
+import { buildSystemPrompt, OpenAIAgentProvider } from './index';
 import type { AssistantMessage, Complete, CompletionRequest, ToolCall } from './types';
 
 const input: AgentInput = {
@@ -52,6 +52,14 @@ const structuredProvider = (complete: Complete) =>
   );
 
 describe('OpenAIAgentProvider', () => {
+  it('treats meta/about-source questions as answerable with evidence (#185)', () => {
+    const prompt = buildSystemPrompt(input);
+    expect(prompt).toContain('what is this database?');
+    expect(prompt).toContain(
+      'Do NOT call cannot_answer just because the question is broad or meta',
+    );
+  });
+
   it('maps run_sql → query, feeds the redacted result back, then final_answer → final', async () => {
     const { complete, calls } = scripted([
       {
