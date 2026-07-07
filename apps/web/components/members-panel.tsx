@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 
 type Role = 'owner' | 'admin' | 'querier';
+type Lifecycle = 'draft' | 'published' | 'archived';
 
 interface Member {
   userId: string;
@@ -27,7 +28,7 @@ interface PendingInvite {
  * The server is the authority on owner-grant / last-owner; the UI just surfaces those
  * refusals as friendly messages.
  */
-export function MembersPanel({ id }: { id: string }) {
+export function MembersPanel({ id, lifecycle }: { id: string; lifecycle: Lifecycle }) {
   const { t } = useI18n();
   const [members, setMembers] = useState<Member[] | null>(null);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
@@ -220,6 +221,9 @@ export function MembersPanel({ id }: { id: string }) {
             {busy ? t('membersInviteCreating') : t('membersInviteCreate')}
           </Button>
         </div>
+        {lifecycle === 'draft' && inviteRole === 'querier' && (
+          <p className="mt-2 text-xs text-muted-foreground">{t('membersDraftQuerierHint')}</p>
+        )}
         {link && (
           <div className="mt-3">
             <p className="text-xs text-muted-foreground">{t('membersLinkHint')}</p>

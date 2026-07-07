@@ -10,7 +10,12 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import type { AuthService } from '@evidata/auth';
-import type { DataSourceMemberView, DataSourceRole, MetadataStore } from '@evidata/ports';
+import type {
+  DataSourceLifecycle,
+  DataSourceMemberView,
+  DataSourceRole,
+  MetadataStore,
+} from '@evidata/ports';
 import { AuthoringAccessError, requireDataSourceCapability } from './authoring-service';
 
 const DEFAULT_TTL_DAYS = 7;
@@ -48,7 +53,17 @@ export interface SignupInput {
   password: string;
 }
 
-export interface RedeemResult {
+interface InviteSourceInfo {
+  dataSourceName: string;
+  dataSourceLifecycle: DataSourceLifecycle;
+}
+
+export interface CreateInviteResult extends InviteSourceInfo {
+  token: string;
+  expiresAt: string;
+}
+
+export interface RedeemResult extends InviteSourceInfo {
   dataSourceId: string;
   role: DataSourceRole;
   /** A new session token when redemption created/authenticated a user (signup path). */
@@ -91,8 +106,8 @@ export class InviteService {
     dataSourceId: string,
     role: DataSourceRole,
     ttlDays = DEFAULT_TTL_DAYS,
-  ): Promise<{ token: string; expiresAt: string }> {
-    const { role: callerRole } = await requireDataSourceCapability(
+  ): Promise<CreateInviteResult> {
+    const { ds, role: callerRole } = await requireDataSourceCapability(
       this.deps.store,
       userId,
       dataSourceId,
@@ -110,7 +125,12 @@ export class InviteService {
       createdBy: userId,
       expiresAt,
     });
-    return { token, expiresAt: expiresAt.toISOString() };
+    return {
+      token,
+      expiresAt: expiresAt.toISOString(),
+      dataSourceName: ds.name,
+      dataSourceLifecycle: ds.lifecycle,
+    };
   }
 
   /** Redeem a token: grant the role to the signed-in user, or sign up a new one. */
@@ -124,6 +144,8 @@ export class InviteService {
     if (new Date(invite.expiresAt).getTime() <= this.now().getTime()) {
       throw new InviteError('expired');
     }
+    const ds = await this.deps.store.getDataSource(invite.dataSourceId);
+    if (!ds) throw new InviteError('not_found');
 
     // Resolve the redeeming user: the current session, or a fresh signup-on-redeem.
     let userId = opts.currentUserId;
@@ -160,6 +182,8 @@ export class InviteService {
     return {
       dataSourceId: invite.dataSourceId,
       role: existing ?? invite.role,
+      dataSourceName: ds.name,
+      dataSourceLifecycle: ds.lifecycle,
       ...(sessionToken ? { sessionToken } : {}),
     };
   }

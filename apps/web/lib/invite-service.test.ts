@@ -35,6 +35,12 @@ beforeAll(async () => {
     displayName: 'Existing',
     passwordHash: 'x',
   });
+  await store.createUser({
+    id: 'draft-viewer',
+    username: 'draft-viewer',
+    displayName: 'Draft Viewer',
+    passwordHash: 'x',
+  });
 
   await store.createConnection({
     id: 'c1',
@@ -82,6 +88,19 @@ describe('InviteService (M2-B1b, #121)', () => {
     // …but an admin can mint admin/querier invites.
     const inv = await svc().create('admin', 'ds', 'querier');
     expect(typeof inv.token).toBe('string');
+  });
+
+  it('returns source name and lifecycle on invite create and redeem (#189)', async () => {
+    const inv = await svc().create('owner', 'ds', 'querier');
+    expect(inv).toMatchObject({ dataSourceName: 'DS', dataSourceLifecycle: 'draft' });
+
+    const res = await svc().redeem(inv.token, { currentUserId: 'draft-viewer' });
+    expect(res).toMatchObject({
+      dataSourceId: 'ds',
+      role: 'querier',
+      dataSourceName: 'DS',
+      dataSourceLifecycle: 'draft',
+    });
   });
 
   it('signup-on-redeem: anonymous creates an account + gets the role + a session', async () => {

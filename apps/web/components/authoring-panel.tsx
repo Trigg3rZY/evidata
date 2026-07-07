@@ -477,7 +477,7 @@ export function AuthoringPanel({
       case 'corrections':
         return <CorrectionsPanel id={id} />;
       case 'members':
-        return <MembersPanel key={id} id={id} />;
+        return <MembersPanel key={id} id={id} lifecycle={data.lifecycle} />;
       case 'general':
       default:
         return (
