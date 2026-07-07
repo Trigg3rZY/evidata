@@ -8,6 +8,7 @@ import { AppShell } from '@/components/app-shell';
 import { Field } from '@/components/field';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useI18n } from '@/lib/i18n';
 
 interface ConnSummary {
   id: string;
@@ -34,6 +35,7 @@ const EMPTY = {
 
 /** Admin → Connections (spec 08 §6): manage real database Connections. */
 export default function ConnectionsAdminPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState<ConnSummary[]>([]);
@@ -130,7 +132,7 @@ export default function ConnectionsAdminPage() {
       return;
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    setFormErr(body?.error ?? 'Could not save the connection.');
+    setFormErr(body?.error ?? t('adminConnectionsSaveError'));
   };
 
   const testDraft = async (): Promise<void> => {
@@ -155,25 +157,27 @@ export default function ConnectionsAdminPage() {
         ? {
             ok: true,
             ...(body?.health ? { health: body.health } : {}),
-            message: `Health: ${healthLabel(body?.health)}`,
+            message: `${t('adminHealthPrefix')} ${healthLabel(body?.health, t)}`,
           }
-        : { ok: false, message: body?.error ?? 'Test failed.' },
+        : { ok: false, message: body?.error ?? t('adminConnectionsTestFailed') },
     );
   };
 
   const test = async (id: string): Promise<void> => {
-    setNote((n) => ({ ...n, [id]: 'Testing...' }));
+    setNote((n) => ({ ...n, [id]: t('adminTesting') }));
     const res = await fetch(`/api/connections/${id}/test`, { method: 'POST' });
     const body = (await res.json().catch(() => null)) as { health?: string; error?: string } | null;
     setNote((n) => ({
       ...n,
-      [id]: res.ok ? `Health: ${healthLabel(body?.health)}` : (body?.error ?? 'Failed'),
+      [id]: res.ok
+        ? `${t('adminHealthPrefix')} ${healthLabel(body?.health, t)}`
+        : (body?.error ?? t('adminFailed')),
     }));
     if (res.ok) await load();
   };
 
   const introspect = async (id: string): Promise<void> => {
-    setNote((n) => ({ ...n, [id]: 'Introspecting...' }));
+    setNote((n) => ({ ...n, [id]: `${t('adminActionIntrospect')}…` }));
     const res = await fetch(`/api/connections/${id}/introspect`, { method: 'POST' });
     const body = (await res.json().catch(() => null)) as {
       tableCount?: number;
@@ -183,8 +187,10 @@ export default function ConnectionsAdminPage() {
     setNote((n) => ({
       ...n,
       [id]: res.ok
-        ? `${body?.tableCount ?? 0} tables${body?.partial ? ' (partial)' : ''}`
-        : (body?.error ?? 'Failed'),
+        ? `${body?.tableCount ?? 0} ${t('adminConnectionsTables')}${
+            body?.partial ? ` ${t('adminConnectionsPartial')}` : ''
+          }`
+        : (body?.error ?? t('adminFailed')),
     }));
   };
 
@@ -206,21 +212,21 @@ export default function ConnectionsAdminPage() {
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl px-6 py-8">
           <header className="flex items-center justify-between gap-4 border-b border-border pb-4">
-            <h1 className="text-xl font-medium">Connections</h1>
+            <h1 className="text-xl font-medium">{t('adminConnectionsTitle')}</h1>
             <Button onClick={openNew}>
               <Plus className="h-4 w-4" aria-hidden />
-              New connection
+              {t('adminConnectionsNew')}
             </Button>
           </header>
 
           <AdminNav />
 
           {!ready ? (
-            <p className="mt-6 text-sm text-muted-foreground">...</p>
+            <p className="mt-6 text-sm text-muted-foreground">{t('adminLoading')}</p>
           ) : (
             <section className="mt-6 flex flex-col gap-3">
               {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No connections yet.</p>
+                <p className="text-sm text-muted-foreground">{t('adminConnectionsEmpty')}</p>
               ) : (
                 items.map((c) => (
                   <div key={c.id} className="rounded-lg border border-border p-4">
@@ -234,28 +240,28 @@ export default function ConnectionsAdminPage() {
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${healthClass(c.health)}`}
                       >
-                        {healthLabel(c.health)}
+                        {healthLabel(c.health, t)}
                       </span>
                     </div>
-                    {healthHint(c.health) && (
-                      <p className="mt-2 text-xs text-status-partial">{healthHint(c.health)}</p>
+                    {healthHint(c.health, t) && (
+                      <p className="mt-2 text-xs text-status-partial">{healthHint(c.health, t)}</p>
                     )}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => void test(c.id)}>
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                        Test
+                        {t('adminActionTest')}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
-                        Edit
+                        {t('adminActionEdit')}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => void introspect(c.id)}>
                         <Search className="h-3.5 w-3.5" aria-hidden />
-                        Introspect
+                        {t('adminActionIntrospect')}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setPendingDelete(c.id)}>
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                        Delete
+                        {t('adminActionDelete')}
                       </Button>
                       {note[c.id] && (
                         <span className="text-xs text-muted-foreground">{note[c.id]}</span>
@@ -280,13 +286,13 @@ export default function ConnectionsAdminPage() {
           >
             <header className="flex items-center justify-between border-b border-border px-6 py-4">
               <h2 id="connection-drawer-title" className="text-base font-medium">
-                {drawer.mode === 'new' ? 'New connection' : 'Edit connection'}
+                {drawer.mode === 'new' ? t('adminConnectionsNew') : t('adminConnectionsEdit')}
               </h2>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Close"
+                aria-label={t('close')}
                 onClick={closeDrawer}
               >
                 <X className="h-4 w-4" aria-hidden />
@@ -296,32 +302,32 @@ export default function ConnectionsAdminPage() {
             <form onSubmit={(e) => void save(e)} className="flex min-h-0 flex-1 flex-col">
               <div className="flex-1 space-y-3 overflow-y-auto px-6 py-4">
                 <Field
-                  label="Name"
+                  label={t('adminFieldName')}
                   value={form.name}
                   onChange={(v) => setForm({ ...form, name: v })}
                   required
                 />
                 <Field
-                  label="Host"
+                  label={t('adminFieldHost')}
                   value={form.host}
                   onChange={(v) => setForm({ ...form, host: v })}
                   required
                 />
                 <Field
-                  label="Port"
+                  label={t('adminFieldPort')}
                   type="number"
                   value={form.port}
                   onChange={(v) => setForm({ ...form, port: v })}
                   required
                 />
                 <Field
-                  label="Database"
+                  label={t('adminFieldDatabase')}
                   value={form.database}
                   onChange={(v) => setForm({ ...form, database: v })}
                   required
                 />
                 <Field
-                  label="SSL mode"
+                  label={t('adminFieldSslMode')}
                   value={form.sslMode}
                   onChange={(v) => setForm({ ...form, sslMode: v })}
                 >
@@ -341,24 +347,24 @@ export default function ConnectionsAdminPage() {
                   )}
                 </Field>
                 <Field
-                  label="Read-only role"
+                  label={t('adminFieldReadOnlyRole')}
                   value={form.user}
                   onChange={(v) => setForm({ ...form, user: v })}
                   required={drawer.mode === 'new'}
                   autoComplete="off"
                   {...(drawer.mode === 'edit'
-                    ? { placeholder: 'Leave blank to keep saved role' }
+                    ? { placeholder: t('adminConnectionsRolePlaceholder') }
                     : {})}
                 />
                 <Field
-                  label="Password"
+                  label={t('adminFieldPassword')}
                   type="password"
                   value={form.password}
                   onChange={(v) => setForm({ ...form, password: v })}
                   required={drawer.mode === 'new'}
                   autoComplete="off"
                   {...(drawer.mode === 'edit'
-                    ? { placeholder: 'Leave blank to keep saved password' }
+                    ? { placeholder: t('adminConnectionsPasswordPlaceholder') }
                     : {})}
                 />
                 {testResult && (
@@ -371,8 +377,8 @@ export default function ConnectionsAdminPage() {
                     role="status"
                   >
                     <div>{testResult.message}</div>
-                    {healthHint(testResult.health) && (
-                      <div className="mt-1 text-xs">{healthHint(testResult.health)}</div>
+                    {healthHint(testResult.health, t) && (
+                      <div className="mt-1 text-xs">{healthHint(testResult.health, t)}</div>
                     )}
                   </div>
                 )}
@@ -388,10 +394,10 @@ export default function ConnectionsAdminPage() {
                   disabled={testingDraft}
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden />
-                  {testingDraft ? 'Testing...' : 'Test connection'}
+                  {testingDraft ? t('adminTesting') : t('adminConnectionsTest')}
                 </Button>
                 <Button type="submit" className="w-full sm:w-auto" disabled={saving}>
-                  {saving ? 'Saving...' : 'Save connection'}
+                  {saving ? t('adminSaving') : t('adminConnectionsSave')}
                 </Button>
                 <Button
                   type="button"
@@ -399,7 +405,7 @@ export default function ConnectionsAdminPage() {
                   className="w-full sm:w-auto"
                   onClick={closeDrawer}
                 >
-                  Cancel
+                  {t('commonCancel')}
                 </Button>
               </footer>
             </form>
@@ -409,10 +415,10 @@ export default function ConnectionsAdminPage() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete this connection?"
-        description="This action cannot be undone."
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
+        title={t('adminConnectionsDeleteTitle')}
+        description={t('adminConnectionsDeleteDescription')}
+        confirmLabel={t('adminActionDelete')}
+        cancelLabel={t('commonCancel')}
         onConfirm={() => void confirmRemove()}
         onCancel={() => setPendingDelete(null)}
       />
@@ -420,14 +426,18 @@ export default function ConnectionsAdminPage() {
   );
 }
 
-function healthLabel(health?: string): string {
-  if (health === 'PermissionInsufficient') return 'Role can write';
-  return health || 'Unknown';
+function healthLabel(health: string | undefined, t: ReturnType<typeof useI18n>['t']): string {
+  if (health === 'Healthy') return t('adminHealthHealthy');
+  if (health === 'Untested') return t('adminHealthUntested');
+  if (health === 'AuthFailed') return t('adminHealthAuthFailed');
+  if (health === 'Unreachable') return t('adminHealthUnreachable');
+  if (health === 'PermissionInsufficient') return t('adminHealthRoleCanWrite');
+  return health || t('adminHealthUnknown');
 }
 
-function healthHint(health?: string): string | null {
+function healthHint(health: string | undefined, t: ReturnType<typeof useI18n>['t']): string | null {
   if (health !== 'PermissionInsufficient') return null;
-  return 'This role can write. Use a read-only role; this warning does not block use.';
+  return t('adminConnectionsRoleCanWriteHint');
 }
 
 function healthClass(health: string): string {
