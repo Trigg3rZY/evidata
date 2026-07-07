@@ -32,7 +32,12 @@ export async function POST(req: Request): Promise<Response> {
       ...(user ? { currentUserId: user.id } : {}),
       ...(signup ? { signup } : {}),
     });
-    const payload = { dataSourceId: result.dataSourceId, role: result.role };
+    const payload = {
+      dataSourceId: result.dataSourceId,
+      role: result.role,
+      dataSourceName: result.dataSourceName,
+      dataSourceLifecycle: result.dataSourceLifecycle,
+    };
     // A signup-on-redeem returns a fresh session → set the cookie so they're logged in.
     return result.sessionToken
       ? Response.json(payload, { headers: { 'set-cookie': sessionCookie(result.sessionToken) } })

@@ -7,6 +7,14 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 
 type Me = { user: { id: string; username: string; displayName: string } } | null;
+type Role = 'owner' | 'admin' | 'querier';
+type Lifecycle = 'draft' | 'published' | 'archived';
+
+interface RedeemSuccess {
+  dataSourceName: string;
+  dataSourceLifecycle: Lifecycle;
+  role: Role;
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -36,6 +44,7 @@ function InviteRedeem() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [joined, setJoined] = useState<RedeemSuccess | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +79,9 @@ function InviteRedeem() {
     }
   };
 
+  const roleLabel = (role: Role): string =>
+    role === 'owner' ? t('roleOwner') : role === 'admin' ? t('roleAdmin') : t('roleQuerier');
+
   const redeem = async (signup?: {
     username: string;
     displayName: string;
@@ -85,6 +97,12 @@ function InviteRedeem() {
     // On success the signup path set the session cookie; a hard load to '/' makes the
     // auth-scoped providers reflect the joined user. Keep `busy` set while navigating.
     if (res?.ok) {
+      const body = (await res.json()) as RedeemSuccess;
+      if (body.dataSourceLifecycle === 'draft') {
+        setJoined(body);
+        setBusy(false);
+        return;
+      }
       window.location.href = '/';
       return;
     }
@@ -107,6 +125,24 @@ function InviteRedeem() {
     return (
       <Shell>
         <p className="text-sm text-muted-foreground">…</p>
+      </Shell>
+    );
+  }
+
+  if (joined) {
+    return (
+      <Shell>
+        <div>
+          <h1 className="text-xl font-medium">{t('inviteJoinedTitle')}</h1>
+          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">{t('inviteJoinedSource')}</dt>
+            <dd className="font-medium">{joined.dataSourceName}</dd>
+            <dt className="text-muted-foreground">{t('inviteJoinedRole')}</dt>
+            <dd>{roleLabel(joined.role)}</dd>
+          </dl>
+          <p className="mt-3 text-sm text-muted-foreground">{t('inviteUnpublishedHint')}</p>
+        </div>
+        <Button onClick={() => (window.location.href = '/')}>{t('inviteGoHome')}</Button>
       </Shell>
     );
   }
