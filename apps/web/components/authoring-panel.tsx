@@ -35,9 +35,13 @@ function sectionFromHash(hash: string): AuthoringSection | null {
  */
 export function AuthoringPanel({
   id,
+  correctionCount = 0,
+  onCorrectionsChange,
   onLifecycleChange,
 }: {
   id: string;
+  correctionCount?: number;
+  onCorrectionsChange?: () => void;
   onLifecycleChange?: () => void;
 }) {
   const { t } = useI18n();
@@ -475,7 +479,12 @@ export function AuthoringPanel({
           </>
         );
       case 'corrections':
-        return <CorrectionsPanel id={id} />;
+        return (
+          <CorrectionsPanel
+            id={id}
+            {...(onCorrectionsChange ? { onQueueChange: onCorrectionsChange } : {})}
+          />
+        );
       case 'members':
         return <MembersPanel key={id} id={id} lifecycle={data.lifecycle} />;
       case 'general':
@@ -576,6 +585,9 @@ export function AuthoringPanel({
         {sectionItems.map((section) => (
           <option key={section.key} value={section.key}>
             {section.label}
+            {section.key === 'corrections' && correctionCount > 0
+              ? ` · ${correctionCount} ${t('correctionsLabel')}`
+              : ''}
           </option>
         ))}
       </select>
@@ -598,7 +610,17 @@ export function AuthoringPanel({
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                 }`}
               >
-                {section.label}
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <span className="truncate">{section.label}</span>
+                  {section.key === 'corrections' && correctionCount > 0 && (
+                    <span
+                      aria-label={`${correctionCount} ${t('correctionsLabel')}`}
+                      className="shrink-0 rounded-full bg-status-partial-bg px-1.5 text-[10px] font-medium text-status-partial"
+                    >
+                      {correctionCount}
+                    </span>
+                  )}
+                </span>
               </a>
             ))}
           </div>

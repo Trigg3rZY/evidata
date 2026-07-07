@@ -36,7 +36,13 @@ interface MappingItem {
  * the affected investigation is re-answered, B4 ②), or dismisses it. Rendered inside the
  * AuthoringPanel (already owner/admin-gated); self-hides on its own 404 / an empty queue.
  */
-export function CorrectionsPanel({ id }: { id: string }) {
+export function CorrectionsPanel({
+  id,
+  onQueueChange,
+}: {
+  id: string;
+  onQueueChange?: () => void;
+}) {
   const { t } = useI18n();
   const [items, setItems] = useState<Suggestion[] | null>(null);
   const [glossary, setGlossary] = useState<GlossaryItem[]>([]);
@@ -81,8 +87,12 @@ export function CorrectionsPanel({ id }: { id: string }) {
       },
     ).catch(() => null);
     setBusy(false);
-    if (res?.ok) await load();
-    else setError(t('correctionsError'));
+    if (res?.ok) {
+      await load();
+      onQueueChange?.();
+    } else {
+      setError(t('correctionsError'));
+    }
   };
 
   const accept = (s: Suggestion): void => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Database, Lock } from 'lucide-react';
 import type { DataSourceOverview } from '@evidata/investigation';
@@ -9,6 +9,22 @@ import { useDataSources } from '@/lib/data-source-context';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { AuthoringPanel } from '@/components/authoring-panel';
+
+async function loadCorrectionCounts(ids: string[]): Promise<Record<string, number>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return {};
+  const pairs = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const res = await fetch(`/api/data-sources/${encodeURIComponent(id)}/suggestions`).catch(
+        () => null,
+      );
+      if (!res?.ok) return [id, 0] as const;
+      const body = (await res.json().catch(() => [])) as unknown;
+      return [id, Array.isArray(body) ? body.length : 0] as const;
+    }),
+  );
+  return Object.fromEntries(pairs);
+}
 
 /**
  * The Data Sources view (issue #69, spec 04 §1): a list of sources + a read-only
@@ -69,6 +85,22 @@ export function DataSourceView() {
     };
   }, [railReload]);
 
+  const authorableIds = useMemo(() => authorable.map((a) => a.id), [authorable]);
+  const [correctionCounts, setCorrectionCounts] = useState<Record<string, number>>({});
+  const refreshCorrectionCounts = useCallback(async (): Promise<void> => {
+    setCorrectionCounts(await loadCorrectionCounts(authorableIds));
+  }, [authorableIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCorrectionCounts(authorableIds).then((counts) => {
+      if (!cancelled) setCorrectionCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authorableIds]);
+
   const railSources = useMemo(() => {
     const m = new Map<string, { id: string; name: string; lifecycle?: string }>();
     for (const d of dataSources) m.set(d.id, { ...d });
@@ -82,6 +114,8 @@ export function DataSourceView() {
 
   const displayName = (id: string, name: string) =>
     id !== SAMPLE_DATA_SOURCE_ID ? name : t('sample');
+
+  const correctionCountLabel = (count: number): string => `${count} ${t('correctionsLabel')}`;
 
   const useSource = (): void => {
     setActiveId(effectiveId);
@@ -105,25 +139,40 @@ export function DataSourceView() {
           {t('dataSources')}
         </div>
         <div className="flex-1 overflow-y-auto">
-          {railSources.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => setViewId(d.id)}
-              aria-current={d.id === effectiveId ? 'true' : undefined}
-              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                d.id === effectiveId ? 'bg-accent' : ''
-              }`}
-            >
-              <Database className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="truncate">{displayName(d.id, d.name)}</span>
-              {d.lifecycle === 'draft' && (
-                <span className="ml-auto shrink-0 rounded border border-border px-1 text-[10px] text-muted-foreground">
-                  {t('authoringDraft')}
-                </span>
-              )}
-            </button>
-          ))}
+          {railSources.map((d) => {
+            const correctionCount = correctionCounts[d.id] ?? 0;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setViewId(d.id)}
+                aria-current={d.id === effectiveId ? 'true' : undefined}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  d.id === effectiveId ? 'bg-accent' : ''
+                }`}
+              >
+                <Database className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{displayName(d.id, d.name)}</span>
+                {(correctionCount > 0 || d.lifecycle === 'draft') && (
+                  <span className="flex shrink-0 items-center gap-1">
+                    {correctionCount > 0 && (
+                      <span
+                        aria-label={correctionCountLabel(correctionCount)}
+                        className="rounded-full bg-status-partial-bg px-1.5 text-[10px] font-medium text-status-partial"
+                      >
+                        {correctionCount}
+                      </span>
+                    )}
+                    {d.lifecycle === 'draft' && (
+                      <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">
+                        {t('authoringDraft')}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </nav>
 
@@ -146,6 +195,9 @@ export function DataSourceView() {
                   <option key={d.id} value={d.id}>
                     {displayName(d.id, d.name)}
                     {d.lifecycle === 'draft' ? ` (${t('authoringDraft')})` : ''}
+                    {(correctionCounts[d.id] ?? 0) > 0
+                      ? ` · ${correctionCountLabel(correctionCounts[d.id]!)}`
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -260,7 +312,12 @@ export function DataSourceView() {
 
               {/* Owner-only authoring (self-hides for non-owners / the Sample). */}
               {!isSample && (
-                <AuthoringPanel id={overview.id} onLifecycleChange={onLifecycleChange} />
+                <AuthoringPanel
+                  id={overview.id}
+                  correctionCount={correctionCounts[overview.id] ?? 0}
+                  onCorrectionsChange={() => void refreshCorrectionCounts()}
+                  onLifecycleChange={onLifecycleChange}
+                />
               )}
             </>
           ) : draftEntry ? (
@@ -275,7 +332,12 @@ export function DataSourceView() {
                   <span className="text-xs text-muted-foreground">{t('authoringDraft')}</span>
                 </div>
               </header>
-              <AuthoringPanel id={effectiveId} onLifecycleChange={onLifecycleChange} />
+              <AuthoringPanel
+                id={effectiveId}
+                correctionCount={correctionCounts[effectiveId] ?? 0}
+                onCorrectionsChange={() => void refreshCorrectionCounts()}
+                onLifecycleChange={onLifecycleChange}
+              />
             </>
           ) : (
             <p className="text-sm text-muted-foreground">…</p>
