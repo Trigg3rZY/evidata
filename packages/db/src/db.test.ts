@@ -281,6 +281,59 @@ describe('file-backed metadata persistence (spec 08 §9)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('hides legacy authenticated NULL-owner investigations during upgrade (#182)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'evidata-owner-upgrade-'));
+    const legacyOwnerMigration = '0011_backfill_legacy_unknown_owners';
+    const legacyOwner = '__legacy_unknown_owner__';
+    try {
+      const old = new PGlite(dir);
+      await old.exec(
+        `CREATE TABLE IF NOT EXISTS "public"."_evidata_migrations" (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`,
+      );
+      for (const m of MIGRATIONS) {
+        if (m.name === legacyOwnerMigration) break;
+        await old.exec(`BEGIN;\n${m.sql}\nCOMMIT;`);
+        await old.query(`INSERT INTO "public"."_evidata_migrations" (name) VALUES ($1)`, [m.name]);
+      }
+      await old.exec(`INSERT INTO "evidata_meta"."data_sources" ("id", "name", "kind", "created_at")
+VALUES ('real_ds', 'Real DS', 'postgres', '2026-01-01T00:00:00Z');
+INSERT INTO "evidata_meta"."investigations" ("id", "data_source_id", "title", "created_at", "updated_at")
+VALUES
+  ('legacy-real', 'real_ds', 'real source', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+  ('legacy-sample', 'sample', 'sample before owner migration', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+  ('anon-sample', 'sample', 'post-owner anonymous sample', now(), now());
+INSERT INTO "evidata_meta"."investigations" ("id", "data_source_id", "title", "model_provider_id", "created_at", "updated_at")
+VALUES ('legacy-model', 'sample', 'model-bound sample', 'mp_legacy', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+INSERT INTO "evidata_meta"."investigations" ("id", "data_source_id", "title", "model_snapshot", "created_at", "updated_at")
+VALUES ('legacy-snapshot', 'sample', 'snapshot-bound sample', '{"source":"registered"}'::jsonb, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`);
+      await old.close();
+
+      const h = await createMetadataDb({ dataDir: dir });
+      const rows = await h.client.query<{ id: string; owner_id: string | null }>(
+        `SELECT id, owner_id FROM "evidata_meta"."investigations" ORDER BY id`,
+      );
+      expect(Object.fromEntries(rows.rows.map((r) => [r.id, r.owner_id]))).toEqual({
+        'anon-sample': null,
+        'legacy-model': legacyOwner,
+        'legacy-real': legacyOwner,
+        'legacy-sample': legacyOwner,
+        'legacy-snapshot': legacyOwner,
+      });
+
+      const store = new DrizzleMetadataStore(h.db);
+      const anonList = (await store.listInvestigations()).map((i) => i.id);
+      expect(anonList).toEqual(['anon-sample']);
+      expect(await store.getInvestigation('anon-sample')).not.toBeNull();
+      expect(await store.getInvestigation('legacy-real')).toBeNull();
+      expect(await store.getInvestigation('legacy-model')).toBeNull();
+      expect(await store.getInvestigation('legacy-sample')).toBeNull();
+      expect(await store.getInvestigation('legacy-snapshot')).toBeNull();
+      await h.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('M1 metadata schema (spec 12)', () => {
