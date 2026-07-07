@@ -3,18 +3,24 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { useI18n } from '@/lib/i18n';
+
 /** Sub-nav between the Admin sections (Connections / Models). Both share the
  *  top-nav "Admin" tab, so this row tells the user which admin view they're in
  *  and lets them switch. Active state follows the current path. */
-const TABS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: '/admin/connections', label: 'Connections' },
-  { href: '/admin/models', label: 'Models' },
+const TABS: ReadonlyArray<{
+  href: string;
+  labelKey: 'adminConnectionsTitle' | 'adminModelsTitle';
+}> = [
+  { href: '/admin/connections', labelKey: 'adminConnectionsTitle' },
+  { href: '/admin/models', labelKey: 'adminModelsTitle' },
 ];
 
 export function AdminNav() {
+  const { t } = useI18n();
   const pathname = usePathname();
   return (
-    <nav className="mt-4 flex gap-1" aria-label="Admin sections">
+    <nav className="mt-4 flex gap-1" aria-label={t('adminNavAria')}>
       {TABS.map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (
@@ -28,7 +34,7 @@ export function AdminNav() {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {tab.label}
+            {t(tab.labelKey)}
           </Link>
         );
       })}

@@ -6,6 +6,7 @@ import { AdminNav } from '@/components/admin-nav';
 import { AppShell } from '@/components/app-shell';
 import { Field } from '@/components/field';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 import { EFFORT_LEVELS, MODEL_KINDS, kindSupportsEffort } from '@/lib/model-kinds';
 
 interface ModelParams {
@@ -55,6 +56,7 @@ const EMPTY = {
  *  member selects from these; only the member who configured one may delete it.
  *  Mirrors the Connections admin. */
 export default function ModelsAdminPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState<ProviderSummary[]>([]);
@@ -120,17 +122,12 @@ export default function ModelsAdminPage() {
       await load();
     } else {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setCreateErr(body?.error ?? 'Could not register the model.');
+      setCreateErr(body?.error ?? t('adminModelsCreateError'));
     }
   };
 
   const remove = async (id: string): Promise<void> => {
-    if (
-      !window.confirm(
-        'Delete this shared model? Members can no longer select it, and its stored API key is removed.',
-      )
-    )
-      return;
+    if (!window.confirm(t('adminModelsDeleteConfirm'))) return;
     const res = await fetch(`/api/model-providers/${id}`, { method: 'DELETE' });
     if (res.ok) await load();
   };
@@ -161,19 +158,21 @@ export default function ModelsAdminPage() {
   };
 
   const testChip = (id: string) => {
-    if (testing.has(id)) return <span className="text-xs text-muted-foreground">Testing…</span>;
+    if (testing.has(id)) {
+      return <span className="text-xs text-muted-foreground">{t('adminTesting')}</span>;
+    }
     const r = testResults[id];
     if (!r) return null;
     const label =
       r.status === 'ok'
-        ? 'Reachable'
+        ? t('adminModelsReachable')
         : r.status === 'unauthorized'
-          ? 'Invalid API key'
+          ? t('adminModelsInvalidApiKey')
           : r.status === 'unreachable'
-            ? 'Unreachable'
+            ? t('adminHealthUnreachable')
             : r.status === 'unconfigured'
-              ? 'No base URL'
-              : `Error${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
+              ? t('adminModelsNoBaseUrl')
+              : `${t('adminModelsError')}${r.httpStatus ? ` (${r.httpStatus})` : ''}`;
     return (
       <span
         className={`rounded-full border border-border px-2 py-0.5 text-xs ${
@@ -190,18 +189,18 @@ export default function ModelsAdminPage() {
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-6 py-8">
           <header className="border-b border-border pb-4">
-            <h1 className="text-xl font-medium">Models</h1>
+            <h1 className="text-xl font-medium">{t('adminModelsTitle')}</h1>
           </header>
 
           <AdminNav />
 
           {!ready ? (
-            <p className="mt-6 text-sm text-muted-foreground">…</p>
+            <p className="mt-6 text-sm text-muted-foreground">{t('adminLoading')}</p>
           ) : (
             <>
               <section className="mt-6 flex flex-col gap-3">
                 {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No models yet.</p>
+                  <p className="text-sm text-muted-foreground">{t('adminModelsEmpty')}</p>
                 ) : (
                   items.map((m) => (
                     <div key={m.id} className="rounded-lg border border-border p-4">
@@ -218,9 +217,9 @@ export default function ModelsAdminPage() {
                           {!m.runnable && (
                             <span
                               className="rounded-full border border-border px-2 py-0.5 text-xs text-status-blocked"
-                              title="No base URL resolves — add a Base URL to use this model."
+                              title={t('adminModelsNeedsBaseUrlTitle')}
                             >
-                              Needs base URL
+                              {t('adminModelsNeedsBaseUrl')}
                             </span>
                           )}
                           {m.params.effort && (
@@ -234,10 +233,10 @@ export default function ModelsAdminPage() {
                             onClick={() => void test(m.id)}
                             disabled={testing.has(m.id)}
                           >
-                            Test
+                            {t('adminActionTest')}
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => void remove(m.id)}>
-                            Delete
+                            {t('adminActionDelete')}
                           </Button>
                         </div>
                       </div>
@@ -247,25 +246,21 @@ export default function ModelsAdminPage() {
               </section>
 
               <section className="mt-8">
-                <h2 className="text-sm font-medium">Register a model</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Configure a model for the whole team — the key is encrypted at rest and never
-                  returned, and every member can select it. Leave Base URL empty to use the vendor
-                  default; an OpenAI-compatible or self-hosted endpoint needs an explicit one.
-                </p>
+                <h2 className="text-sm font-medium">{t('adminModelsRegister')}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">{t('adminModelsHelp')}</p>
                 <form
                   onSubmit={(e) => void create(e)}
                   className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
                 >
                   <Field
-                    label="Name"
+                    label={t('adminFieldName')}
                     value={form.name}
                     onChange={(v) => setForm({ ...form, name: v })}
                     required
-                    placeholder="Team DeepSeek"
+                    placeholder={t('adminModelsNamePlaceholder')}
                   />
                   <Field
-                    label="Kind"
+                    label={t('adminModelsKind')}
                     value={form.kind}
                     onChange={(v) => setForm({ ...form, kind: v })}
                   >
@@ -293,7 +288,7 @@ export default function ModelsAdminPage() {
                     )}
                   </Field>
                   <Field
-                    label="Model"
+                    label={t('model')}
                     value={form.model}
                     onChange={(v) => setForm({ ...form, model: v })}
                     required
@@ -301,14 +296,14 @@ export default function ModelsAdminPage() {
                     autoComplete="off"
                   />
                   <Field
-                    label="Base URL (optional)"
+                    label={t('adminModelsBaseUrl')}
                     value={form.baseUrl}
                     onChange={(v) => setForm({ ...form, baseUrl: v })}
                     placeholder="https://…/v1"
                     autoComplete="off"
                   />
                   <Field
-                    label="API key"
+                    label={t('adminModelsApiKey')}
                     type="password"
                     value={form.apiKey}
                     onChange={(v) => setForm({ ...form, apiKey: v })}
@@ -316,7 +311,7 @@ export default function ModelsAdminPage() {
                     autoComplete="off"
                   />
                   <Field
-                    label="Tool choice (optional)"
+                    label={t('adminModelsToolChoice')}
                     value={form.toolChoice}
                     onChange={(v) => setForm({ ...form, toolChoice: v })}
                   >
@@ -336,7 +331,7 @@ export default function ModelsAdminPage() {
                     )}
                   </Field>
                   <Field
-                    label="Temperature (optional)"
+                    label={t('adminModelsTemperature')}
                     type="number"
                     value={form.temperature}
                     onChange={(v) => setForm({ ...form, temperature: v })}
@@ -344,7 +339,7 @@ export default function ModelsAdminPage() {
                   />
                   {kindSupportsEffort(form.kind) && (
                     <Field
-                      label="Effort (optional)"
+                      label={t('adminModelsEffort')}
                       value={form.effort}
                       onChange={(v) => setForm({ ...form, effort: v })}
                     >
@@ -366,14 +361,14 @@ export default function ModelsAdminPage() {
                     </Field>
                   )}
                   <Field
-                    label="Max tokens (optional)"
+                    label={t('adminModelsMaxTokens')}
                     type="number"
                     value={form.maxTokens}
                     onChange={(v) => setForm({ ...form, maxTokens: v })}
                   />
                   <div className="flex items-center gap-3 sm:col-span-2">
                     <Button type="submit" disabled={creating}>
-                      {creating ? 'Registering…' : 'Register model'}
+                      {creating ? t('adminModelsRegistering') : t('adminModelsRegisterAction')}
                     </Button>
                     {createErr && <span className="text-sm text-status-blocked">{createErr}</span>}
                   </div>
