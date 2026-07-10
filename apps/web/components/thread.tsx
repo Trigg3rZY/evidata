@@ -63,8 +63,7 @@ export function Thread({
   onClear: () => void;
   /** When set, load and render this Investigation's saved thread (a follow-up continues it). */
   initialInvestigationId?: string | null;
-  /** The active source for a NEW question (owned by the shell, shown in the top nav). A
-   *  follow-up ignores it server-side — the source is bound to the Investigation. */
+  /** The active source for a NEW question. A follow-up uses the Investigation binding. */
   dataSourceId: string;
   /** Selected model for the turn (epic #106); null/undefined = the server default.
    *  Sent per turn as `modelProviderId`. (Per-investigation binding lands later.) */
@@ -90,6 +89,8 @@ export function Thread({
   const [loading, setLoading] = useState(Boolean(initialInvestigationId));
   const [composerDraft, setComposerDraft] = useState('');
   const [composerDraftVersion, setComposerDraftVersion] = useState(0);
+  const [boundDataSourceId, setBoundDataSourceId] = useState<string | null>(null);
+  const pendingDataSourceId = useRef(dataSourceId);
   // Set while a Rerun is in flight, so the settle effect replaces the latest
   // exchange's answer in place instead of appending a new turn (issue #56).
   const rerunRef = useRef(false);
@@ -108,7 +109,10 @@ export function Thread({
         if (cancelled) return;
         // Don't clobber a turn the user already started before the load returned
         // (the composer is also disabled while loading) — only seed an empty thread.
-        if (thread) setHistory((h) => (h.length === 0 ? exchangesFrom(thread) : h));
+        if (thread) {
+          setHistory((h) => (h.length === 0 ? exchangesFrom(thread) : h));
+          setBoundDataSourceId(thread.dataSourceId);
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -154,6 +158,7 @@ export function Thread({
     // and the history rail refreshes (a new thread appears / order updates).
     if (answer) {
       setInvestigationId(answer.investigationId);
+      setBoundDataSourceId(pendingDataSourceId.current);
       onCreated?.();
     }
     reset();
@@ -166,14 +171,23 @@ export function Thread({
       onClear();
       return;
     }
-    void ask(q, dataSourceId, lang, investigationId ?? undefined, false, modelProviderId);
+    const sourceId = boundDataSourceId ?? dataSourceId;
+    if (!investigationId) pendingDataSourceId.current = sourceId;
+    void ask(q, sourceId, lang, investigationId ?? undefined, false, modelProviderId);
   };
   // Regenerate the latest answer in place (issues #56/#64): same question, rerun=true.
   // `regenerating` swaps the latest answer for live progress until the new one lands.
   const rerun = (q: string): void => {
     rerunRef.current = true;
     setRegenerating(true);
-    void ask(q, dataSourceId, lang, investigationId ?? undefined, true, modelProviderId);
+    void ask(
+      q,
+      boundDataSourceId ?? dataSourceId,
+      lang,
+      investigationId ?? undefined,
+      true,
+      modelProviderId,
+    );
   };
   const narrowQuestion = (): void => {
     setComposerDraft(t('narrowQuestionDraft'));
@@ -284,6 +298,8 @@ export function Thread({
           stopLabel={t('stop')}
           draft={composerDraft}
           draftVersion={composerDraftVersion}
+          boundDataSourceId={boundDataSourceId ?? undefined}
+          dataSourceLoading={Boolean(initialInvestigationId && !boundDataSourceId)}
         />
       </div>
     </div>

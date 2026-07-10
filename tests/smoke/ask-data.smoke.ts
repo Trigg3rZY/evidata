@@ -23,6 +23,13 @@ test('acme-bill-up: an evidence-backed Answered result with collapsible SQL', as
   // The streamed answer settles to Answered with the seeded 38% figure.
   await expect(page.getByText('Answered', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/38%/)).toBeVisible();
+  // The source moves into the composer: it is selectable for a new thread, then shown
+  // as the Investigation's immutable binding after the first Answer (#175).
+  await expect(page.getByRole('combobox', { name: 'Data source' })).toHaveCount(0);
+  await expect(page.locator('[title="Data source: Sample Data Source"]')).toBeVisible();
+  await expect(
+    page.getByRole('banner').getByText('Sample Data Source', { exact: true }),
+  ).toHaveCount(0);
 
   // Evidence is collapsed by default (issue #48): open the section, then E1, to
   // reveal the policy-bounded SQL.

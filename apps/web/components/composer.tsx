@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
+import { DataSourcePicker } from '@/components/data-source-picker';
 import { ModelPicker } from '@/components/model-picker';
 
 export function Composer({
@@ -13,6 +14,8 @@ export function Composer({
   stopLabel,
   draft,
   draftVersion,
+  boundDataSourceId,
+  dataSourceLoading,
 }: {
   onSubmit: (question: string) => void;
   onStop?: () => void;
@@ -22,6 +25,8 @@ export function Composer({
   stopLabel: string;
   draft?: string;
   draftVersion?: number;
+  boundDataSourceId?: string | undefined;
+  dataSourceLoading?: boolean | undefined;
 }) {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -61,9 +66,13 @@ export function Composer({
         aria-label={placeholder}
         className="w-full resize-none rounded-2xl bg-transparent px-4 pt-3 text-sm outline-none placeholder:text-muted-foreground"
       />
-      {/* Bottom action row: the model picker sits in the composer's bottom-right,
-          just left of Send (#154) — closest to the act of asking, like Claude/Cursor. */}
+      {/* A new thread picks its source here; saved threads show their immutable binding. */}
       <div className="flex items-center justify-end gap-2 px-3 pb-2">
+        <DataSourcePicker
+          boundDataSourceId={boundDataSourceId}
+          disabled={disabled}
+          loading={dataSourceLoading}
+        />
         <ModelPicker />
         {streaming ? (
           <button
