@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Database, Plus } from 'lucide-react';
-import { SAMPLE_DATA_SOURCE_ID } from '@evidata/connector-sample';
+import { Plus } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Button } from '@/components/ui/button';
-import { useDataSources } from '@/lib/data-source-context';
 import { useI18n } from '@/lib/i18n';
 
 interface NavUser {
@@ -16,9 +14,8 @@ interface NavUser {
 
 /**
  * The app-shell top bar (issues #65/#69): brand (→ Ask Data), section tabs, and a
- * data-source indicator so the user always sees *which* source they're querying —
- * the chip links into the Data Sources view, where selection lives. Lang/theme are
- * here for M0; they belong in a settings menu later.
+ * primary navigation, plus language/theme/session controls. The conversation's
+ * data-source binding is shown beside the send action, where it applies.
  */
 export function TopNav({
   active,
@@ -28,8 +25,6 @@ export function TopNav({
   onNewChat?: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
-  const { dataSources, activeId } = useDataSources();
-  const src = dataSources.find((d) => d.id === activeId);
   // Login status (issue #91): undefined = loading, null = signed out. The Sample
   // Ask path is open, so signed-out is a normal state — show a Sign in link then.
   const [user, setUser] = useState<NavUser | null | undefined>(undefined);
@@ -55,9 +50,6 @@ export function TopNav({
     // signed-out visitor or the next account in this tab (Codex P1).
     window.location.href = '/login';
   };
-  // The sample keeps its localized name; any real source shows its own name.
-  const srcName = src && src.id !== SAMPLE_DATA_SOURCE_ID ? src.name : t('sample');
-
   const tab = (key: 'ask' | 'data-sources' | 'admin', href: string, label: string) => (
     <Link
       href={href}
@@ -93,13 +85,6 @@ export function TopNav({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href="/data-sources"
-          className="hidden min-w-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
-        >
-          <Database className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="truncate">{srcName}</span>
-        </Link>
         {onNewChat && (
           <Button variant="ghost" size="icon" className="md:hidden" onClick={onNewChat}>
             <Plus className="h-4 w-4" aria-hidden />
