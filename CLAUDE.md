@@ -10,3 +10,17 @@ private/per-session memory.
 > Maintainer-personal preferences (e.g. conversation language, how learning notes
 > are captured) are intentionally **not** in this shared repo — they live in the
 > operator's private assistant memory.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses Matt Pocock's five default state labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses a single-context layout. See `docs/agents/domain.md`.
